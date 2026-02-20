@@ -21,7 +21,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
-import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Briefcase, Building2, Calendar, CheckCircle2, CheckSquare, ClipboardList, EyeOff, FileText, Phone, Plus, Search, Trash2, User, Users, X, XCircle } from "lucide-react"
+import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Briefcase, Building2, Calendar, CheckCircle2, ClipboardList, EyeOff, FileText, Phone, Plus, Search, Trash2, User, X, XCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -32,10 +32,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { REQUEST_STATUSES } from "@/lib/constants"
+import SalesTabNav from "@/components/layout/sales-tab-nav"
 import QuoteEditorSheet from "./quote-editor-sheet"
 import type { QuotationWithItems } from "@/types"
 
@@ -1222,7 +1221,6 @@ function CustomerPanel({
 
 export function RequestKanbanBoard({ columns: initialColumns, totalCount, customers, hiddenItems: initialHiddenItems }: Props) {
   const router = useRouter()
-  const supabase = createClient()
 
   // 드래그로 카드 이동 시 화면에 바로 반영하기 위해 state로 관리
   const [columns, setColumns] = useState(initialColumns)
@@ -1320,7 +1318,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   }, [selectedItem, loadQuotations, router])
 
   // 의뢰 필드 수정 + 자동저장
-  const updateRequestField = useCallback(async (field: string, value: any) => {
+  const updateRequestField = useCallback(async (field: string, value: string | null) => {
     if (!selectedItem) return
 
     setSaveMessage("저장 중...")
@@ -1447,20 +1445,26 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     destCol.count = destCol.items.length
 
     // 화면에 바로 반영 (낙관적 업데이트)
+    const prevColumns = columns
     setColumns(newColumns)
 
-    // DB에 상태 업데이트
-    const { error } = await supabase
-      .from("requests")
-      .update({ status: destination.droppableId })
-      .eq("id", draggableId)
+    // DB에 상태 업데이트 (API 라우트 경유)
+    try {
+      const res = await fetch("/api/requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: draggableId, status: destination.droppableId }),
+      })
 
-    if (error) {
-      // 실패 시 원래대로 되돌리기
-      setColumns(initialColumns)
-    } else {
-      // 성공 시 서버 데이터 새로고침
-      router.refresh()
+      if (!res.ok) {
+        // 실패 시 직전 상태로 되돌리기
+        setColumns(prevColumns)
+      } else {
+        // 성공 시 서버 데이터 새로고침
+        router.refresh()
+      }
+    } catch {
+      setColumns(prevColumns)
     }
   }
 
@@ -1473,6 +1477,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     const targetId = deleteTarget.id
 
     // 화면에서 먼저 제거 (낙관적 업데이트)
+    const prevColumns = columns
     const newColumns = columns.map((col) => {
       const filtered = col.items.filter((item) => item.id !== targetId)
       return { ...col, items: filtered, count: filtered.length }
@@ -1491,13 +1496,13 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
       if (!res.ok) {
         alert("삭제 실패: " + (result.error || "알 수 없는 오류"))
-        setColumns(initialColumns)
+        setColumns(prevColumns)
       } else {
         router.refresh()
       }
-    } catch (e: any) {
-      alert("네트워크 오류: " + e.message)
-      setColumns(initialColumns)
+    } catch {
+      alert("삭제 중 오류가 발생했습니다")
+      setColumns(prevColumns)
     }
     setIsDeleting(false)
   }
@@ -1505,6 +1510,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   // 카드 숨기기 핸들러
   const handleHide = async (item: RequestItem) => {
     // 화면에서 먼저 숨김 (낙관적 업데이트)
+    const prevColumns = columns
+    const prevHidden = hiddenItems
     const newColumns = columns.map((col) => {
       const filtered = col.items.filter((i) => i.id !== item.id)
       return { ...col, items: filtered, count: filtered.length }
@@ -1519,21 +1526,23 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         body: JSON.stringify({ id: item.id, hidden: true }),
       })
       if (!res.ok) {
-        // 실패 시 되돌리기
-        setColumns(initialColumns)
-        setHiddenItems(initialHiddenItems)
+        // 실패 시 직전 상태로 되돌리기
+        setColumns(prevColumns)
+        setHiddenItems(prevHidden)
       } else {
         router.refresh()
       }
     } catch {
-      setColumns(initialColumns)
-      setHiddenItems(initialHiddenItems)
+      setColumns(prevColumns)
+      setHiddenItems(prevHidden)
     }
   }
 
   // 카드 복원 핸들러 (숨김 해제)
   const handleUnhide = async (item: RequestItem) => {
     // 화면에서 먼저 복원 (낙관적 업데이트)
+    const prevColumns = columns
+    const prevHidden = hiddenItems
     setHiddenItems((prev) => prev.filter((i) => i.id !== item.id))
     const newColumns = columns.map((col) => {
       if (col.status === item.status) {
@@ -1550,14 +1559,14 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         body: JSON.stringify({ id: item.id, hidden: false }),
       })
       if (!res.ok) {
-        setColumns(initialColumns)
-        setHiddenItems(initialHiddenItems)
+        setColumns(prevColumns)
+        setHiddenItems(prevHidden)
       } else {
         router.refresh()
       }
     } catch {
-      setColumns(initialColumns)
-      setHiddenItems(initialHiddenItems)
+      setColumns(prevColumns)
+      setHiddenItems(prevHidden)
     }
   }
 
@@ -1582,8 +1591,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         setIsCreateOpen(false)
         router.refresh()
       }
-    } catch (e: any) {
-      alert("네트워크 오류: " + e.message)
+    } catch {
+      alert("의뢰 생성 중 오류가 발생했습니다")
     }
     setIsCreating(false)
   }
@@ -1592,27 +1601,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     <div className="flex flex-col h-full overflow-auto">
       {/* 페이지 헤더 + 탭 네비게이션 */}
       <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
-        <nav className="flex items-center gap-6">
-          {[
-            { label: "의뢰", href: "/requests", icon: CheckSquare },
-            { label: "고객", href: "/clients", icon: Users },
-            { label: "견적서", href: "/quotes", icon: FileText },
-          ].map((tab) => (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className={cn(
-                "flex items-center gap-1.5 text-lg font-bold transition-colors",
-                tab.href === "/requests"
-                  ? "text-gray-900"
-                  : "text-gray-300 hover:text-gray-500"
-              )}
-            >
-              <tab.icon className="h-5 w-5" />
-              {tab.label}
-            </Link>
-          ))}
-        </nav>
+        <SalesTabNav />
         <p className="text-sm text-gray-500">총 {totalCount}건</p>
       </div>
 

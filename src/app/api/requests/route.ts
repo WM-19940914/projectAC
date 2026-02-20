@@ -26,15 +26,17 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("[POST /api/requests]", error.message)
+      return NextResponse.json({ error: "의뢰 생성에 실패했습니다" }, { status: 500 })
     }
 
     // 페이지 캐시 강제 갱신
     revalidatePath("/requests")
 
     return NextResponse.json({ success: true, data })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e: unknown) {
+    console.error("[POST /api/requests]", e)
+    return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
 
@@ -50,7 +52,7 @@ export async function PATCH(req: NextRequest) {
 
     // 허용 필드만 추출
     const allowedFields = ["hidden", "title", "customer_id", "inquiry_date", "memo", "status"]
-    const updateData: Record<string, any> = {}
+    const updateData: Record<string, unknown> = {}
     for (const key of allowedFields) {
       if (key in fields) {
         updateData[key] = fields[key]
@@ -73,13 +75,15 @@ export async function PATCH(req: NextRequest) {
       .eq("id", id)
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("[PATCH /api/requests]", error.message)
+      return NextResponse.json({ error: "의뢰 수정에 실패했습니다" }, { status: 500 })
     }
 
     revalidatePath("/requests")
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e: unknown) {
+    console.error("[PATCH /api/requests]", e)
+    return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
 
@@ -96,14 +100,16 @@ export async function DELETE(req: NextRequest) {
     const { error } = await supabase.from("requests").delete().eq("id", id)
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("[DELETE /api/requests]", error.message)
+      return NextResponse.json({ error: "의뢰 삭제에 실패했습니다" }, { status: 500 })
     }
 
     // 페이지 캐시 강제 갱신 → F5 새로고침해도 최신 데이터 표시
     revalidatePath("/requests")
 
     return NextResponse.json({ success: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+  } catch (e: unknown) {
+    console.error("[DELETE /api/requests]", e)
+    return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }

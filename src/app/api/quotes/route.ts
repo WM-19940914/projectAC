@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
         .single()
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
+        console.error("[/api/quotes]", error.message)
+      return NextResponse.json({ error: "견적서 처리에 실패했습니다" }, { status: 500 })
       }
       return NextResponse.json({ data })
     }
@@ -49,12 +50,14 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("[/api/quotes]", error.message)
+      return NextResponse.json({ error: "견적서 처리에 실패했습니다" }, { status: 500 })
     }
 
     return NextResponse.json({ data: data || [] })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "알 수 없는 오류" }, { status: 500 })
+    console.error("[/api/quotes]", e)
+    return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
 
@@ -143,7 +146,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: quotation })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "알 수 없는 오류" }, { status: 500 })
+    console.error("[/api/quotes]", e)
+    return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
 
@@ -224,7 +228,8 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "알 수 없는 오류" }, { status: 500 })
+    console.error("[/api/quotes]", e)
+    return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
 
@@ -241,7 +246,8 @@ export async function DELETE(req: NextRequest) {
     const { error } = await supabase.from("quotations").delete().eq("id", id)
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      console.error("[/api/quotes]", error.message)
+      return NextResponse.json({ error: "견적서 처리에 실패했습니다" }, { status: 500 })
     }
 
     revalidatePath("/quotes")
@@ -249,6 +255,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "알 수 없는 오류" }, { status: 500 })
+    console.error("[/api/quotes]", e)
+    return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }

@@ -34,8 +34,7 @@ import {
   Save,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { CheckSquare, Users } from "lucide-react"
+import SalesTabNav from "@/components/layout/sales-tab-nav"
 
 // ----- 타입 -----
 interface CustomerItem {
@@ -440,27 +439,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
       {/* 페이지 헤더 + 탭 네비게이션 */}
       <div className="flex items-center justify-between px-6 py-4 border-b">
         <div className="flex items-center gap-6">
-          <nav className="flex items-center gap-6">
-            {[
-              { label: "의뢰", href: "/requests", icon: CheckSquare },
-              { label: "고객", href: "/clients", icon: Users },
-              { label: "견적서", href: "/quotes", icon: FileText },
-            ].map((tab) => (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={cn(
-                  "flex items-center gap-1.5 text-lg font-bold transition-colors",
-                  tab.href === "/clients"
-                    ? "text-gray-900"
-                    : "text-gray-300 hover:text-gray-500"
-                )}
-              >
-                <tab.icon className="h-5 w-5" />
-                {tab.label}
-              </Link>
-            ))}
-          </nav>
+          <SalesTabNav />
           <p className="text-sm text-gray-500">총 {filteredCustomers.length}개 업체</p>
         </div>
         <button

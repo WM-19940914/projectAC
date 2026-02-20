@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useCallback,
   type ReactNode,
@@ -46,7 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
+  // supabase 인스턴스를 한 번만 생성 (매 렌더마다 재생성 방지)
+  const supabase = useMemo(() => createClient(), [])
 
   /** 사용자 프로필 조회 */
   const fetchProfile = useCallback(
@@ -122,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: {
-          name,
+          full_name: name,
           role: "sales",
         },
       },

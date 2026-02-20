@@ -7,7 +7,7 @@ export interface Profile {
   id: string;
   email: string;
   full_name: string;
-  role: 'admin' | 'sales';
+  role: 'admin' | 'sales' | 'viewer';
   phone?: string;
   avatar_url?: string;
   is_active: boolean;
@@ -33,6 +33,7 @@ export interface Customer {
   latitude?: number;
   longitude?: number;
   memo?: string;
+  deleted_at?: string;
   created_by?: string;
   created_at: string;
   updated_at: string;

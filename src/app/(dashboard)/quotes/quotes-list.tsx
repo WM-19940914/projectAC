@@ -1,12 +1,11 @@
 "use client"
 
 import { useCallback, useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { CheckSquare, FileText, Search, Users } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { FileText, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency, formatShortDate } from "@/lib/format"
+import SalesTabNav from "@/components/layout/sales-tab-nav"
 import QuoteEditorSheet from "../requests/quote-editor-sheet"
 import type { QuotationWithItems } from "@/types"
 
@@ -83,27 +82,7 @@ export default function QuotesList({ quotations }: Props) {
     <div className="flex flex-col h-full">
       {/* 페이지 헤더 + 탭 네비게이션 */}
       <div className="flex items-center justify-between px-6 py-4 border-b">
-        <nav className="flex items-center gap-6">
-          {[
-            { label: "의뢰", href: "/requests", icon: CheckSquare },
-            { label: "고객", href: "/clients", icon: Users },
-            { label: "견적서", href: "/quotes", icon: FileText },
-          ].map((tab) => (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className={cn(
-                "flex items-center gap-1.5 text-lg font-bold transition-colors",
-                tab.href === "/quotes"
-                  ? "text-gray-900"
-                  : "text-gray-300 hover:text-gray-500"
-              )}
-            >
-              <tab.icon className="h-5 w-5" />
-              {tab.label}
-            </Link>
-          ))}
-        </nav>
+        <SalesTabNav />
         <p className="text-sm text-gray-500">총 {quotations.length}건</p>
       </div>
 
