@@ -42,12 +42,15 @@ src/
 ├── app/                    # 페이지 (App Router)
 │   ├── (auth)/             # 로그인/회원가입
 │   ├── (dashboard)/        # 대시보드 레이아웃
+│   ├── api/                # API 라우트 (admin 권한 CRUD)
+│   │   ├── requests/       # 의뢰 삭제 API
+│   │   └── customers/      # 고객 추가/수정/삭제 API
 │   └── layout.tsx          # 루트 레이아웃
 ├── components/
 │   ├── ui/                 # shadcn/ui 공통 컴포넌트
 │   └── layout/             # 사이드바, 헤더 등
 ├── lib/
-│   ├── supabase/           # Supabase 클라이언트 (client/server)
+│   ├── supabase/           # Supabase 클라이언트 (client/server/admin)
 │   ├── constants.ts        # 상수 (상태값, 메뉴 등)
 │   ├── utils.ts            # 유틸리티 함수
 │   ├── validators.ts       # Zod 스키마
@@ -55,6 +58,8 @@ src/
 ├── types/                  # TypeScript 타입 정의
 ├── hooks/                  # 커스텀 훅
 └── providers/              # Context Provider (Auth, Query)
+scripts/                    # 데이터 임포트 스크립트
+supabase/migrations/        # DB 마이그레이션 SQL
 ```
 
 ## 폰트 시스템 (필수 준수)
@@ -88,3 +93,40 @@ src/
 - shadcn/ui 컴포넌트 우선 사용
 - 새 페이지는 `src/app/(dashboard)/` 아래에 생성
 - 색상은 반드시 **디자인 컬러 팔레트** 5색만 사용
+
+## DB 연동 패턴 (필수 준수)
+클라이언트 컴포넌트에서 Supabase 직접 호출하면 **RLS 정책에 막힐 수 있다.**
+반드시 아래 패턴을 따른다:
+
+### 데이터 조회 (READ)
+- **서버 컴포넌트** (`page.tsx`)에서 `createAdminClient()`로 조회
+- `export const dynamic = "force-dynamic"` 필수 (캐시 방지)
+
+### 데이터 변경 (CREATE / UPDATE / DELETE)
+- **API 라우트** (`src/app/api/`)에서 `createAdminClient()`로 처리
+- 변경 후 반드시 `revalidatePath("해당경로")` 호출 (캐시 갱신)
+- 클라이언트에서는 `fetch("/api/...")` 로 호출
+
+```typescript
+// 예시: src/app/api/customers/route.ts
+import { createAdminClient } from "@/lib/supabase/admin"
+import { revalidatePath } from "next/cache"
+
+export async function DELETE(req) {
+  const { id } = await req.json()
+  const supabase = createAdminClient()
+  await supabase.from("customers").delete().eq("id", id)
+  revalidatePath("/clients")  // ← 이거 빠지면 F5 새로고침 시 삭제된 데이터 다시 나타남
+  return NextResponse.json({ success: true })
+}
+```
+
+### 주의사항
+- `createClient()` (클라이언트용) → RLS 적용됨, 조회만 가능할 수 있음
+- `createAdminClient()` (서버용) → RLS 우회, 서버에서만 사용
+- `revalidatePath` 없으면 Next.js가 캐시된 데이터를 보여줌
+
+## 추가 라이브러리
+- **드래그앤드롭:** `@hello-pangea/dnd` (칸반보드에서 사용)
+- **엑셀 처리:** `xlsx` (데이터 임포트/엑스포트)
+- **환경변수:** `dotenv` (스크립트에서 .env.local 로드)
