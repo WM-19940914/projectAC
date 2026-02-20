@@ -15,6 +15,7 @@ export default async function ClientsPage() {
       phone, email, business_number, representative,
       address, memo, created_at
     `)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
   return <CustomerList customers={customers || []} />

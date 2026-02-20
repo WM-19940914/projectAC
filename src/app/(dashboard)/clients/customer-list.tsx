@@ -34,6 +34,8 @@ import {
   Save,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { CheckSquare, Users } from "lucide-react"
 
 // ----- 타입 -----
 interface CustomerItem {
@@ -88,6 +90,24 @@ function InlineEdit({
   const [isEditing, setIsEditing] = useState(false)
   const [tempValue, setTempValue] = useState(value)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  // ref로 최신 값 추적 (언마운트 시 저장용)
+  const tempRef = useRef(tempValue)
+  const valueRef = useRef(value)
+  const onConfirmRef = useRef(onConfirm)
+  const isEditingRef = useRef(isEditing)
+  tempRef.current = tempValue
+  valueRef.current = value
+  onConfirmRef.current = onConfirm
+  isEditingRef.current = isEditing
+
+  // 편집 중 언마운트되면 자동저장
+  useEffect(() => {
+    return () => {
+      if (isEditingRef.current && tempRef.current !== valueRef.current) {
+        onConfirmRef.current(tempRef.current)
+      }
+    }
+  }, [])
 
   // 바깥 클릭하면 저장 후 닫기
   useEffect(() => {
@@ -182,6 +202,24 @@ function InlineMemo({
   const [isEditing, setIsEditing] = useState(false)
   const [tempValue, setTempValue] = useState(value)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  // ref로 최신 값 추적 (언마운트 시 저장용)
+  const tempRef = useRef(tempValue)
+  const valueRef = useRef(value)
+  const onConfirmRef = useRef(onConfirm)
+  const isEditingRef = useRef(isEditing)
+  tempRef.current = tempValue
+  valueRef.current = value
+  onConfirmRef.current = onConfirm
+  isEditingRef.current = isEditing
+
+  // 편집 중 언마운트되면 자동저장
+  useEffect(() => {
+    return () => {
+      if (isEditingRef.current && tempRef.current !== valueRef.current) {
+        onConfirmRef.current(tempRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!isEditing) return
@@ -399,11 +437,31 @@ export function CustomerList({ customers: initialCustomers }: Props) {
 
   return (
     <div className="flex flex-col">
-      {/* 페이지 헤더 */}
+      {/* 페이지 헤더 + 탭 네비게이션 */}
       <div className="flex items-center justify-between px-6 py-4 border-b">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 font-heading">고객</h1>
-          <p className="text-[15px] text-gray-500 mt-0.5">총 {filteredCustomers.length}개 업체</p>
+        <div className="flex items-center gap-6">
+          <nav className="flex items-center gap-6">
+            {[
+              { label: "의뢰", href: "/requests", icon: CheckSquare },
+              { label: "고객", href: "/clients", icon: Users },
+              { label: "견적서", href: "/quotes", icon: FileText },
+            ].map((tab) => (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={cn(
+                  "flex items-center gap-1.5 text-lg font-bold transition-colors",
+                  tab.href === "/clients"
+                    ? "text-gray-900"
+                    : "text-gray-300 hover:text-gray-500"
+                )}
+              >
+                <tab.icon className="h-5 w-5" />
+                {tab.label}
+              </Link>
+            ))}
+          </nav>
+          <p className="text-sm text-gray-500">총 {filteredCustomers.length}개 업체</p>
         </div>
         <button
           onClick={handleAddNew}

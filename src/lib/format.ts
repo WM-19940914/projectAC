@@ -39,6 +39,19 @@ export function formatDate(dateStr: string): string {
 }
 
 /**
+ * 날짜+시간 포맷 (2025년 1월 1일 오후 3시 30분)
+ */
+export function formatDateTime(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const date = parseISO(dateStr);
+    return format(date, 'yyyy년 M월 d일 a h시 m분', { locale: ko });
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
  * 짧은 날짜 (2025.01.01)
  */
 export function formatShortDate(dateStr: string): string {

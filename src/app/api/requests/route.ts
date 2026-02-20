@@ -38,19 +38,38 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 의뢰 숨김/복원 API (hidden 토글)
+// 의뢰 수정 API (hidden 토글 + 필드 업데이트)
 export async function PATCH(req: NextRequest) {
   try {
-    const { id, hidden } = await req.json()
+    const body = await req.json()
+    const { id, ...fields } = body
 
     if (!id) {
       return NextResponse.json({ error: "id가 필요합니다" }, { status: 400 })
     }
 
+    // 허용 필드만 추출
+    const allowedFields = ["hidden", "title", "customer_id", "inquiry_date", "memo", "status"]
+    const updateData: Record<string, any> = {}
+    for (const key of allowedFields) {
+      if (key in fields) {
+        updateData[key] = fields[key]
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: "수정할 필드가 없습니다" }, { status: 400 })
+    }
+
+    // hidden 필드는 boolean 변환
+    if ("hidden" in updateData) {
+      updateData.hidden = !!updateData.hidden
+    }
+
     const supabase = createAdminClient()
     const { error } = await supabase
       .from("requests")
-      .update({ hidden: !!hidden })
+      .update(updateData)
       .eq("id", id)
 
     if (error) {

@@ -48,7 +48,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// 고객 삭제 API
+// 고객 삭제 API (소프트 삭제: deleted_at 설정)
 export async function DELETE(req: NextRequest) {
   try {
     const { id } = await req.json()
@@ -58,13 +58,17 @@ export async function DELETE(req: NextRequest) {
     }
 
     const supabase = createAdminClient()
-    const { error } = await supabase.from("customers").delete().eq("id", id)
+    const { error } = await supabase
+      .from("customers")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", id)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     revalidatePath("/clients")
+    revalidatePath("/requests")
     return NextResponse.json({ success: true })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })

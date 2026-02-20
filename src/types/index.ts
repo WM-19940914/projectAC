@@ -147,9 +147,13 @@ export interface Expense {
 }
 
 // ----- 견적서 -----
+export type QuotationType = '간이' | '상세';
+export type QuotationItemCategory = '일반' | '장비' | '설치비';
+
 export interface Quotation {
   id: string;
   quotation_number: string;
+  type: QuotationType;
   request_id?: string;
   customer_id?: string;
   title: string;
@@ -172,6 +176,7 @@ export interface Quotation {
 export interface QuotationItem {
   id: string;
   quotation_id: string;
+  category: QuotationItemCategory;
   item_order: number;
   item_name: string;
   specification?: string;
@@ -182,6 +187,11 @@ export interface QuotationItem {
   memo?: string;
   created_at: string;
   updated_at: string;
+}
+
+// 견적서 + 품목 조인 타입
+export interface QuotationWithItems extends Quotation {
+  items: QuotationItem[];
 }
 
 // ----- 입출금내역 -----

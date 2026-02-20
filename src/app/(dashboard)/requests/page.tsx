@@ -15,8 +15,8 @@ function toRequestItem(r: Record<string, unknown>) {
     memo: r.memo as string | null,
     created_at: r.created_at as string,
     customer: Array.isArray(r.customer)
-      ? (r.customer[0] as { id: string; company_name: string } | undefined) ?? null
-      : (r.customer as { id: string; company_name: string } | null),
+      ? (r.customer[0] as { id: string; company_name: string; deleted_at: string | null } | undefined) ?? null
+      : (r.customer as { id: string; company_name: string; deleted_at: string | null } | null),
   }
 }
 
@@ -30,7 +30,7 @@ export default async function RequestsPage() {
     .select(`
       id, title, inquiry_date,
       status, memo, created_at,
-      customer:customers(id, company_name)
+      customer:customers(id, company_name, deleted_at)
     `)
     .neq("status", "숨김")
     .eq("hidden", false)
@@ -42,7 +42,7 @@ export default async function RequestsPage() {
     .select(`
       id, title, inquiry_date,
       status, memo, created_at,
-      customer:customers(id, company_name)
+      customer:customers(id, company_name, deleted_at)
     `)
     .neq("status", "숨김")
     .eq("hidden", true)
@@ -65,17 +65,18 @@ export default async function RequestsPage() {
 
   const totalCount = allItems.length
 
-  // 고객 목록 조회 (의뢰 생성 시 고객 선택용)
+  // 고객 목록 조회 (의뢰 생성 + 고객 상세 표시용, 삭제되지 않은 고객만)
   const { data: customers } = await supabase
     .from("customers")
-    .select("id, company_name")
+    .select("id, company_name, contact_name, phone, email, address, representative, business_number, memo")
+    .is("deleted_at", null)
     .order("company_name")
 
   return (
     <RequestKanbanBoard
       columns={columns}
       totalCount={totalCount}
-      customers={(customers || []) as { id: string; company_name: string }[]}
+      customers={(customers || []) as { id: string; company_name: string; contact_name: string | null; phone: string | null; email: string | null; address: string | null; representative: string | null; business_number: string | null; memo: string | null }[]}
       hiddenItems={hiddenItems}
     />
   )
