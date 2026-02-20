@@ -5,10 +5,26 @@ import { RequestKanbanBoard } from "./kanban-board"
 // 캐시 비활성화 → 항상 최신 데이터 불러오기
 export const dynamic = "force-dynamic"
 
+// Supabase 결과를 RequestItem 형태로 변환하는 헬퍼
+function toRequestItem(r: Record<string, unknown>) {
+  return {
+    id: r.id as string,
+    title: r.title as string,
+    inquiry_date: r.inquiry_date as string | null,
+    status: r.status as string,
+    memo: r.memo as string | null,
+    created_at: r.created_at as string,
+    customer: Array.isArray(r.customer)
+      ? (r.customer[0] as { id: string; company_name: string } | undefined) ?? null
+      : (r.customer as { id: string; company_name: string } | null),
+  }
+}
+
 // ----- 서버 컴포넌트: 데이터 불러오기 -----
 export default async function RequestsPage() {
   const supabase = createAdminClient()
 
+  // 보이는 의뢰 (hidden = false)
   const { data: requests } = await supabase
     .from("requests")
     .select(`
@@ -17,21 +33,23 @@ export default async function RequestsPage() {
       customer:customers(id, company_name)
     `)
     .neq("status", "숨김")
+    .eq("hidden", false)
     .order("created_at", { ascending: false })
 
-  // Supabase 결과를 RequestItem 형태로 변환
-  const allItems = (requests || []).map((r: Record<string, unknown>) => ({
-    id: r.id as string,
-    title: r.title as string,
-    inquiry_date: r.inquiry_date as string | null,
-    status: r.status as string,
-    memo: r.memo as string | null,
-    created_at: r.created_at as string,
-    // Supabase는 단일 관계도 배열로 반환할 수 있어서 첫 번째 요소만 추출
-    customer: Array.isArray(r.customer)
-      ? (r.customer[0] as { id: string; company_name: string } | undefined) ?? null
-      : (r.customer as { id: string; company_name: string } | null),
-  }))
+  // 숨긴 의뢰 (hidden = true)
+  const { data: hiddenRequests } = await supabase
+    .from("requests")
+    .select(`
+      id, title, inquiry_date,
+      status, memo, created_at,
+      customer:customers(id, company_name)
+    `)
+    .neq("status", "숨김")
+    .eq("hidden", true)
+    .order("created_at", { ascending: false })
+
+  const allItems = (requests || []).map(toRequestItem)
+  const hiddenItems = (hiddenRequests || []).map(toRequestItem)
 
   // 상태별 그룹핑
   const columns = REQUEST_STATUSES
@@ -47,5 +65,18 @@ export default async function RequestsPage() {
 
   const totalCount = allItems.length
 
-  return <RequestKanbanBoard columns={columns} totalCount={totalCount} />
+  // 고객 목록 조회 (의뢰 생성 시 고객 선택용)
+  const { data: customers } = await supabase
+    .from("customers")
+    .select("id, company_name")
+    .order("company_name")
+
+  return (
+    <RequestKanbanBoard
+      columns={columns}
+      totalCount={totalCount}
+      customers={(customers || []) as { id: string; company_name: string }[]}
+      hiddenItems={hiddenItems}
+    />
+  )
 }
