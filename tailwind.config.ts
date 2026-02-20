@@ -9,7 +9,19 @@ const config: Config = {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			// 본문: Pretendard (한글 가독성 최고)
+  			sans: ['Pretendard Variable', 'Pretendard', '-apple-system', 'sans-serif'],
+  			// 제목: Plus Jakarta Sans (둥글고 모던한 느낌)
+  			heading: ['var(--font-heading)', 'Pretendard Variable', 'sans-serif'],
+  		},
   		colors: {
+  			// M 프로젝트 커스텀 컬러 팔레트
+  			'sky-aqua': '#42CAFD',
+  			'tropical-teal': '#66B3BA',
+  			'muted-teal': '#8EB19D',
+  			'vanilla-custard': '#F6EFA6',
+  			'soft-blush': '#F0D2D1',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

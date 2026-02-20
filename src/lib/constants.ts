@@ -1,31 +1,31 @@
 // ============================================
-// SAC 프로젝트 - 상수 정의
+// M 프로젝트 - 상수 정의
 // ============================================
 
 // ----- 의뢰 상태 설정 -----
 export const REQUEST_STATUSES = [
-  { value: '견적 문의', label: '견적 문의', color: 'bg-blue-50 text-blue-700', columnColor: 'border-t-blue-400' },
-  { value: '영업중', label: '영업중', color: 'bg-orange-50 text-orange-700', columnColor: 'border-t-orange-400' },
-  { value: '계약 성공', label: '계약 성공', color: 'bg-green-50 text-green-700', columnColor: 'border-t-green-400' },
-  { value: '수주 실패', label: '수주 실패', color: 'bg-red-50 text-red-700', columnColor: 'border-t-red-400' },
+  { value: '견적 문의', label: '견적 문의', color: 'bg-sky-aqua/10 text-sky-aqua', columnColor: 'border-t-sky-aqua' },
+  { value: '영업중', label: '영업중', color: 'bg-tropical-teal/10 text-tropical-teal', columnColor: 'border-t-tropical-teal' },
+  { value: '계약 성공', label: '계약 성공', color: 'bg-muted-teal/10 text-muted-teal', columnColor: 'border-t-muted-teal' },
+  { value: '수주 실패', label: '수주 실패', color: 'bg-soft-blush/30 text-soft-blush', columnColor: 'border-t-soft-blush' },
   { value: '숨김', label: '숨김', color: 'bg-gray-50 text-gray-500', columnColor: 'border-t-gray-300' },
 ] as const;
 
 // ----- 계약 상태 -----
 export const CONTRACT_STATUSES = [
-  { value: '계약 준비 중', label: '계약 준비 중', color: 'bg-blue-50 text-blue-700', columnColor: 'border-t-blue-400' },
-  { value: '계약 진행 중', label: '계약 진행 중', color: 'bg-yellow-50 text-yellow-700', columnColor: 'border-t-yellow-400' },
-  { value: '계약 종료', label: '계약 종료', color: 'bg-green-50 text-green-700', columnColor: 'border-t-green-400' },
-  { value: '계약 중단', label: '계약 중단', color: 'bg-red-50 text-red-700', columnColor: 'border-t-red-400' },
+  { value: '계약 준비 중', label: '계약 준비 중', color: 'bg-sky-aqua/10 text-sky-aqua', columnColor: 'border-t-sky-aqua' },
+  { value: '계약 진행 중', label: '계약 진행 중', color: 'bg-tropical-teal/10 text-tropical-teal', columnColor: 'border-t-tropical-teal' },
+  { value: '계약 종료', label: '계약 종료', color: 'bg-muted-teal/10 text-muted-teal', columnColor: 'border-t-muted-teal' },
+  { value: '계약 중단', label: '계약 중단', color: 'bg-soft-blush/30 text-soft-blush', columnColor: 'border-t-soft-blush' },
   { value: '숨김', label: '숨김', color: 'bg-gray-50 text-gray-500', columnColor: 'border-t-gray-300' },
 ] as const;
 
 // ----- 정산 상태 -----
 export const SETTLEMENT_STATUSES = [
-  { value: '정산 예정', label: '정산 예정', color: 'bg-blue-50 text-blue-700', columnColor: 'border-t-blue-400' },
-  { value: '정산 지연', label: '정산 지연', color: 'bg-orange-50 text-orange-700', columnColor: 'border-t-orange-400' },
-  { value: '정산 완료', label: '정산 완료', color: 'bg-green-50 text-green-700', columnColor: 'border-t-green-400' },
-  { value: '정산 중단', label: '정산 중단', color: 'bg-red-50 text-red-700', columnColor: 'border-t-red-400' },
+  { value: '정산 예정', label: '정산 예정', color: 'bg-sky-aqua/10 text-sky-aqua', columnColor: 'border-t-sky-aqua' },
+  { value: '정산 지연', label: '정산 지연', color: 'bg-vanilla-custard/30 text-vanilla-custard', columnColor: 'border-t-vanilla-custard' },
+  { value: '정산 완료', label: '정산 완료', color: 'bg-muted-teal/10 text-muted-teal', columnColor: 'border-t-muted-teal' },
+  { value: '정산 중단', label: '정산 중단', color: 'bg-soft-blush/30 text-soft-blush', columnColor: 'border-t-soft-blush' },
   { value: '숨김', label: '숨김', color: 'bg-gray-50 text-gray-500', columnColor: 'border-t-gray-300' },
 ] as const;
 
@@ -61,44 +61,34 @@ export const SIDEBAR_MENU = [
     icon: 'LayoutDashboard',
   },
   {
-    title: '고객 관리',
-    href: '/customers',
-    icon: 'Building2',
+    title: '의뢰',
+    href: '/requests',
+    icon: 'CheckSquare',
   },
   {
-    title: '의뢰 관리',
-    href: '/requests',
+    title: '고객',
+    href: '/clients',
+    icon: 'Users',
+  },
+  {
+    title: '견적서',
+    href: '/quotes',
     icon: 'FileText',
   },
   {
-    title: '계약 관리',
+    title: '계약',
     href: '/contracts',
     icon: 'FileSignature',
   },
   {
-    title: '정산 관리',
+    title: '정산',
     href: '/settlements',
-    icon: 'Calculator',
+    icon: 'DollarSign',
   },
   {
-    title: '지출 관리',
+    title: '지출',
     href: '/expenses',
-    icon: 'Receipt',
-  },
-  {
-    title: '견적서',
-    href: '/quotations',
-    icon: 'ClipboardList',
-  },
-  {
-    title: '입출금 내역',
-    href: '/transactions',
-    icon: 'ArrowLeftRight',
-  },
-  {
-    title: '고객 지도',
-    href: '/map',
-    icon: 'Map',
+    icon: 'CreditCard',
   },
 ] as const;
 

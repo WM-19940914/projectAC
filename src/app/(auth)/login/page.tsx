@@ -83,7 +83,7 @@ export default function LoginPage() {
         <CardContent className="space-y-4">
           {/* 서버 에러 메시지 */}
           {serverError && (
-            <div className="p-3 text-sm text-red-500 bg-red-50 dark:bg-red-950 rounded-md">
+            <div className="p-3 text-sm text-soft-blush bg-soft-blush/30 rounded-md">
               {serverError}
             </div>
           )}
@@ -98,7 +98,7 @@ export default function LoginPage() {
               {...register("email")}
             />
             {errors.email && (
-              <p className="text-sm text-red-500">{errors.email.message}</p>
+              <p className="text-sm text-soft-blush">{errors.email.message}</p>
             )}
           </div>
 
@@ -112,7 +112,7 @@ export default function LoginPage() {
               {...register("password")}
             />
             {errors.password && (
-              <p className="text-sm text-red-500">{errors.password.message}</p>
+              <p className="text-sm text-soft-blush">{errors.password.message}</p>
             )}
           </div>
         </CardContent>

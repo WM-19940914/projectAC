@@ -47,7 +47,6 @@ export const customerSchema = z.object({
     .min(1, '회사명을 입력해주세요')
     .max(100, '회사명은 100자 이내로 입력해주세요'),
   contact_name: z.string().max(50, '담당자명은 50자 이내로 입력해주세요').optional().or(z.literal('')),
-  contact_title: z.string().max(50, '직함은 50자 이내로 입력해주세요').optional().or(z.literal('')),
   phone: z.string().optional().or(z.literal('')),
   email: z
     .string()
@@ -83,17 +82,11 @@ export const requestSchema = z.object({
     .string()
     .min(1, '의뢰 제목을 입력해주세요')
     .max(200, '제목은 200자 이내로 입력해주세요'),
-  expected_amount: z
-    .number()
-    .min(0, '금액은 0 이상이어야 합니다')
-    .default(0),
-  currency: z.string().default('KRW'),
   inquiry_date: z.string().optional().or(z.literal('')),
   status: z.enum(['견적 문의', '영업중', '계약 성공', '수주 실패', '숨김']).default('견적 문의'),
   customer_id: z.string().uuid('올바른 고객을 선택해주세요').optional().or(z.literal('')),
   contract_id: z.string().uuid().optional().or(z.literal('')),
   assigned_to: z.string().uuid().optional().or(z.literal('')),
-  folder: z.string().default('기본'),
   memo: z.string().max(2000, '메모는 2000자 이내로 입력해주세요').optional().or(z.literal('')),
 });
 

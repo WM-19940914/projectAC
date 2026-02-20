@@ -20,7 +20,6 @@ export interface Customer {
   id: string;
   company_name: string;
   contact_name?: string;
-  contact_title?: string;
   phone?: string;
   email?: string;
   customer_type: string;
@@ -48,14 +47,11 @@ export type RequestStatus = '견적 문의' | '영업중' | '계약 성공' | '�
 export interface Request {
   id: string;
   title: string;
-  expected_amount: number;
-  currency: string;
   inquiry_date?: string;
   status: RequestStatus;
   customer_id?: string;
   contract_id?: string;
   assigned_to?: string;
-  folder: string;
   memo?: string;
   created_by?: string;
   created_at: string;

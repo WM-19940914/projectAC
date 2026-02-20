@@ -114,9 +114,9 @@ export function getDdayColor(dateStr: string): string {
 
     const diff = differenceInDays(target, today);
 
-    if (diff < 0) return 'text-red-600 font-semibold'; // 기한 초과
-    if (diff <= 3) return 'text-red-500 font-medium';  // 긴급
-    if (diff <= 7) return 'text-orange-500';            // 주의
+    if (diff < 0) return 'text-soft-blush font-semibold'; // 기한 초과
+    if (diff <= 3) return 'text-soft-blush font-medium';  // 긴급
+    if (diff <= 7) return 'text-vanilla-custard';            // 주의
     return 'text-gray-600';                              // 여유
   } catch {
     return 'text-gray-500';

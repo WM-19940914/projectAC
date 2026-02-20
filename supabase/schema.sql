@@ -82,15 +82,12 @@ COMMENT ON TABLE contracts IS '계약 정보 - 정산/지출 합계는 트리거
 CREATE TABLE requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
-  expected_amount BIGINT NOT NULL DEFAULT 0,
-  currency TEXT NOT NULL DEFAULT 'KRW',
   inquiry_date DATE,
   status TEXT NOT NULL DEFAULT '견적 문의'
     CHECK (status IN ('견적 문의', '영업중', '계약 성공', '수주 실패', '숨김')),
   customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
   contract_id UUID REFERENCES contracts(id) ON DELETE SET NULL,
   assigned_to UUID REFERENCES profiles(id),
-  folder TEXT NOT NULL DEFAULT '기본',
   memo TEXT,
   created_by UUID REFERENCES profiles(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -617,7 +614,6 @@ CREATE INDEX idx_requests_status ON requests(status);
 CREATE INDEX idx_requests_assigned_to ON requests(assigned_to);
 CREATE INDEX idx_requests_created_by ON requests(created_by);
 CREATE INDEX idx_requests_created_at ON requests(created_at DESC);
-CREATE INDEX idx_requests_folder ON requests(folder);
 
 -- 계약
 CREATE INDEX idx_contracts_customer_id ON contracts(customer_id);

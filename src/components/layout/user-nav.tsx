@@ -19,7 +19,7 @@ export function UserNav() {
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-8 w-8">
             <AvatarImage src="" alt="사용자 아바타" />
-            <AvatarFallback className="bg-blue-100 text-blue-600 text-sm">
+            <AvatarFallback className="bg-sky-aqua/10 text-sky-aqua text-sm">
               U
             </AvatarFallback>
           </Avatar>
@@ -44,7 +44,7 @@ export function UserNav() {
           <span>설정</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600">
+        <DropdownMenuItem className="cursor-pointer text-soft-blush focus:text-soft-blush">
           <LogOut className="mr-2 h-4 w-4" />
           <span>로그아웃</span>
         </DropdownMenuItem>
