@@ -748,7 +748,9 @@ function ItemsTable({ items, updateItem, addRow, removeRow }: {
           <CellInput value={item.specification} onChange={(v) => updateItem(idx, "specification", v)} placeholder="규격" center />
           <CellInput value={item.unit} onChange={(v) => updateItem(idx, "unit", v)} placeholder="식" center />
           <CellNumber value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} />
-          <CellNumber value={item.unit_price} onChange={(v) => updateItem(idx, "unit_price", v)} />
+          <div className="flex items-center justify-end px-2 text-xs text-gray-900 tabular-nums bg-gray-50">
+            {item.unit_price.toLocaleString()}
+          </div>
           <div className="flex items-center justify-end px-2 text-xs text-gray-900 tabular-nums bg-gray-50">
             {(item.quantity * item.unit_price).toLocaleString()}
           </div>
