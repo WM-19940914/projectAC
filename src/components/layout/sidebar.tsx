@@ -24,6 +24,7 @@ import {
   DollarSign,
   CreditCard,
   Settings,
+  ClipboardList,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
@@ -88,6 +89,7 @@ const accordionGroups: AccordionGroup[] = [
 
 // ----- 하단 링크 -----
 const bottomLinks: MenuItem[] = [
+  { label: "가격표", href: "/price-list", icon: ClipboardList },
   { label: "비즈니스 설정", href: "/settings", icon: Settings },
 ]
 
