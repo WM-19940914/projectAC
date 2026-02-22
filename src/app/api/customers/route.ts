@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     revalidatePath("/clients")
+    revalidatePath("/requests")
     return NextResponse.json({ data })
   } catch (e: unknown) {
     console.error("[POST /api/customers]", e)
@@ -75,7 +76,11 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "고객 수정에 실패했습니다" }, { status: 500 })
     }
 
+    // 캐시 갱신 (고객 데이터를 참조하는 모든 페이지)
+    // 클라이언트는 낙관적 업데이트로 즉시 반영하므로 응답 속도에 영향 없음
     revalidatePath("/clients")
+    revalidatePath("/requests")
+    revalidatePath("/quotes")
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
     console.error("[PATCH /api/customers]", e)

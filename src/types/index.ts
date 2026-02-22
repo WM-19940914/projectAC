@@ -165,6 +165,11 @@ export interface Quotation {
   grand_total: number;
   notes?: string;
   terms?: string;
+  // 견적서 헤더 추가 필드
+  site_name?: string;        // 현장명
+  recipient?: string;        // 수신
+  contact_person?: string;   // 담당자
+  contact_phone?: string;    // 전화번호
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -186,6 +191,15 @@ export interface QuotationItem {
   unit_price: number;
   amount: number;
   memo?: string;
+  // 내부 단가 계산 필드 (AH~AP열)
+  retrieval_price?: number;       // 반출가
+  discount_rate?: number;         // DC율 (%)
+  purchase_unit_price?: number;   // 매입단가
+  purchase_amount?: number;       // 매입금액
+  margin_rate?: number;           // MG율 (%)
+  proposed_price?: number;        // 제안가
+  profit?: number;                // 이윤
+  incentive_rate?: number;        // 장려금률 (%)
   created_at: string;
   updated_at: string;
 }

@@ -8,6 +8,14 @@
   .text-balance {
     text-wrap: balance;
   }
+  /* 스크롤 가능하지만 스크롤바 숨김 (엑셀 열 숨기기처럼 하나의 페이지 느낌) */
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 

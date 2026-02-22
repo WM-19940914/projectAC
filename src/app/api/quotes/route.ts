@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
         .from("quotations")
         .select(`
           *,
-          items:quotation_items(*, id, quotation_id, category, item_order, item_name, specification, unit, quantity, unit_price, amount, memo),
+          items:quotation_items(*),
           customer:customers(id, company_name),
           request:requests(id, title)
         `)
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
       if (error) {
         console.error("[/api/quotes]", error.message)
-      return NextResponse.json({ error: "견적서 처리에 실패했습니다" }, { status: 500 })
+        return NextResponse.json({ error: "견적서 처리에 실패했습니다" }, { status: 500 })
       }
       return NextResponse.json({ data })
     }
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       .from("quotations")
       .select(`
         *,
-        items:quotation_items(id, quotation_id, category, item_order, item_name, specification, unit, quantity, unit_price, amount, memo),
+        items:quotation_items(*),
         customer:customers(id, company_name),
         request:requests(id, title)
       `)
@@ -73,19 +73,13 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // 견적번호 자동 생성: Q-{년도}-{4자리}
-    const year = new Date().getFullYear()
-    const { count } = await supabase
-      .from("quotations")
-      .select("*", { count: "exact", head: true })
-      .like("quotation_number", `Q-${year}-%`)
-
-    const seq = String((count || 0) + 1).padStart(4, "0")
-    const quotationNumber = `Q-${year}-${seq}`
+    // 견적번호는 DB 트리거(generate_quotation_number)가 자동 생성
+    // 형식: Q-YYYYMMDD-NNN (BEFORE INSERT 트리거)
 
     // 합계 계산
     const totalAmount = (items || []).reduce(
-      (sum: number, item: Record<string, unknown>) => sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
+      (sum: number, item: Record<string, unknown>) =>
+        sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
       0
     )
     const taxAmount = Math.round(totalAmount * 0.1)
@@ -95,8 +89,7 @@ export async function POST(req: NextRequest) {
     const { data: quotation, error: headerError } = await supabase
       .from("quotations")
       .insert({
-        quotation_number: quotationNumber,
-        type: "간이",
+        quotation_number: "TEMP", // DB 트리거가 덮어씌움
         title: header.title.trim(),
         request_id: header.request_id || null,
         customer_id: header.customer_id || null,
@@ -107,6 +100,10 @@ export async function POST(req: NextRequest) {
         grand_total: grandTotal,
         notes: header.notes || null,
         terms: header.terms || null,
+        site_name: header.site_name || null,
+        recipient: header.recipient || null,
+        contact_person: header.contact_person || null,
+        contact_phone: header.contact_phone || null,
       })
       .select()
       .single()
@@ -119,7 +116,7 @@ export async function POST(req: NextRequest) {
     if (items && items.length > 0) {
       const itemRows = items.map((item: Record<string, unknown>, index: number) => ({
         quotation_id: quotation.id,
-        category: "일반",
+        category: item.category || "장비",
         item_order: index,
         item_name: item.item_name || "",
         specification: item.specification || null,
@@ -128,6 +125,15 @@ export async function POST(req: NextRequest) {
         unit_price: Number(item.unit_price) || 0,
         amount: (Number(item.quantity) || 1) * (Number(item.unit_price) || 0),
         memo: item.memo || null,
+        // 내부 단가 필드
+        retrieval_price: Number(item.retrieval_price) || 0,
+        discount_rate: Number(item.discount_rate) || 0,
+        purchase_unit_price: Number(item.purchase_unit_price) || 0,
+        purchase_amount: Number(item.purchase_amount) || 0,
+        margin_rate: Number(item.margin_rate) || 0,
+        proposed_price: Number(item.proposed_price) || 0,
+        profit: Number(item.profit) || 0,
+        incentive_rate: Number(item.incentive_rate) || 0,
       }))
 
       const { error: itemsError } = await supabase
@@ -165,7 +171,8 @@ export async function PATCH(req: NextRequest) {
 
     // 합계 재계산
     const totalAmount = (items || []).reduce(
-      (sum: number, item: Record<string, unknown>) => sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
+      (sum: number, item: Record<string, unknown>) =>
+        sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
       0
     )
     const taxAmount = Math.round(totalAmount * 0.1)
@@ -179,7 +186,11 @@ export async function PATCH(req: NextRequest) {
       updated_at: new Date().toISOString(),
     }
 
-    const allowedFields = ["title", "quotation_date", "valid_until", "notes", "terms", "customer_id", "request_id"]
+    const allowedFields = [
+      "title", "quotation_date", "valid_until", "notes", "terms",
+      "customer_id", "request_id",
+      "site_name", "recipient", "contact_person", "contact_phone",
+    ]
     for (const key of allowedFields) {
       if (key in fields) {
         updateData[key] = fields[key] || null
@@ -202,7 +213,7 @@ export async function PATCH(req: NextRequest) {
       if (items.length > 0) {
         const itemRows = items.map((item: Record<string, unknown>, index: number) => ({
           quotation_id: id,
-          category: "일반",
+          category: item.category || "장비",
           item_order: index,
           item_name: item.item_name || "",
           specification: item.specification || null,
@@ -211,6 +222,15 @@ export async function PATCH(req: NextRequest) {
           unit_price: Number(item.unit_price) || 0,
           amount: (Number(item.quantity) || 1) * (Number(item.unit_price) || 0),
           memo: item.memo || null,
+          // 내부 단가 필드
+          retrieval_price: Number(item.retrieval_price) || 0,
+          discount_rate: Number(item.discount_rate) || 0,
+          purchase_unit_price: Number(item.purchase_unit_price) || 0,
+          purchase_amount: Number(item.purchase_amount) || 0,
+          margin_rate: Number(item.margin_rate) || 0,
+          proposed_price: Number(item.proposed_price) || 0,
+          profit: Number(item.profit) || 0,
+          incentive_rate: Number(item.incentive_rate) || 0,
         }))
 
         const { error: itemsError } = await supabase

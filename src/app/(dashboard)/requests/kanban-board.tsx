@@ -25,17 +25,10 @@ import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Briefcase, Building2, Calen
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 import { REQUEST_STATUSES } from "@/lib/constants"
 import SalesTabNav from "@/components/layout/sales-tab-nav"
-import QuoteEditorSheet from "./quote-editor-sheet"
+import QuoteEditorSheet from "../quotes/quote-editor-sheet"
 import type { QuotationWithItems } from "@/types"
 
 // ----- 타입 -----
@@ -179,7 +172,7 @@ function InlineTitle({
           if (e.key === "Escape") { setTempValue(value); setIsEditing(false) }
         }}
         autoFocus
-        className="font-heading text-2xl font-semibold text-left w-full bg-transparent border-b-2 border-sky-aqua focus:outline-none py-1"
+        className="font-sans text-2xl font-semibold text-left w-full bg-transparent border-b-2 border-sky-aqua focus:outline-none py-1"
       />
     )
   }
@@ -187,7 +180,7 @@ function InlineTitle({
   return (
     <h2
       onClick={() => setIsEditing(true)}
-      className="font-heading text-2xl font-semibold text-left cursor-pointer rounded px-1 -mx-1 py-1 hover:bg-sky-aqua/5 transition-colors truncate"
+      className="font-sans text-2xl font-semibold text-left cursor-pointer rounded px-1 -mx-1 py-1 hover:bg-sky-aqua/5 transition-colors truncate"
       title={value}
     >
       {value}
@@ -726,7 +719,7 @@ function CustomerDetailSheet({
                     value={customer.company_name}
                     placeholder="회사명을 입력하세요"
                     onConfirm={(v) => updateField("company_name", v)}
-                    textClass="font-heading text-2xl font-semibold"
+                    textClass="font-sans text-2xl font-semibold"
                     align="left"
                   />
                 </SheetHeader>
@@ -1095,7 +1088,7 @@ function CustomerPanel({
       <Dialog open={isModalOpen} onOpenChange={(open) => !open && closeModal()}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle className="font-heading text-lg">고객 연결</DialogTitle>
+            <DialogTitle className="font-sans text-lg">고객 연결</DialogTitle>
             <DialogDescription className="text-sm text-gray-500">
               기존 고객을 검색하거나, 새로운 고객을 등록하세요.
             </DialogDescription>
@@ -1309,6 +1302,37 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     }
   }, [])
 
+  // 견적서 즉시 생성 후 에디터 열기
+  const handleAddQuote = useCallback(async () => {
+    if (!selectedItem) return
+    try {
+      const payload = {
+        title: `${selectedItem.title} 견적서`,
+        quotation_date: new Date().toISOString().split("T")[0],
+        request_id: selectedItem.id,
+        customer_id: selectedItem.customer?.id || null,
+        items: [],
+      }
+      const res = await fetch("/api/quotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) { const err = await res.json(); alert("견적서 생성 실패: " + (err.error || res.status)); return }
+      const result = await res.json()
+      // 생성된 견적서 상세 fetch → 에디터 열기
+      const detailRes = await fetch(`/api/quotes?id=${result.data.id}`)
+      if (detailRes.ok) {
+        const detail = await detailRes.json()
+        setEditingQuotation(detail.data)
+        setIsQuoteSheetOpen(true)
+        loadQuotations(selectedItem.id)
+      }
+    } catch {
+      alert("견적서 생성 중 오류가 발생했습니다.")
+    }
+  }, [selectedItem, loadQuotations])
+
   // 견적서 저장 후 콜백
   const handleQuoteSaved = useCallback(() => {
     if (selectedItem) {
@@ -1414,9 +1438,15 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [createForm, setCreateForm] = useState({
     title: "",
     customer_id: "",
-    inquiry_date: "",
+    inquiry_date: new Date().toISOString().split("T")[0],
     memo: "",
   })
+  // 의뢰 생성용 고객 연결 모달
+  const [isCreateCustomerModalOpen, setIsCreateCustomerModalOpen] = useState(false)
+  const [createCustomerSearch, setCreateCustomerSearch] = useState("")
+  const [isCreateCustomerMode, setIsCreateCustomerMode] = useState(false)
+  const [createCustomerForm, setCreateCustomerForm] = useState({ company_name: "", contact_name: "", phone: "" })
+  const [isCreatingCustomer, setIsCreatingCustomer] = useState(false)
 
   // 드래그 끝났을 때 실행되는 함수
   const handleDragEnd = async (result: DropResult) => {
@@ -1587,7 +1617,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         alert("생성 실패: " + (result.error || "알 수 없는 오류"))
       } else {
         // 폼 초기화 & 다이얼로그 닫기
-        setCreateForm({ title: "", customer_id: "", inquiry_date: "", memo: "" })
+        setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "" })
         setIsCreateOpen(false)
         router.refresh()
       }
@@ -1598,7 +1628,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   }
 
   return (
-    <div className="flex flex-col h-full overflow-auto">
+    <div className="flex flex-col h-full overflow-auto -m-6 bg-white">
       {/* 페이지 헤더 + 탭 네비게이션 */}
       <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
         <SalesTabNav />
@@ -1840,7 +1870,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="font-heading text-lg">의뢰 삭제</DialogTitle>
+            <DialogTitle className="font-sans text-lg">의뢰 삭제</DialogTitle>
             <DialogDescription className="text-sm text-gray-500 pt-2">
               <span className="font-semibold text-gray-900">
                 &ldquo;{deleteTarget?.title}&rdquo;
@@ -1873,14 +1903,14 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         open={isCreateOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setCreateForm({ title: "", customer_id: "", inquiry_date: "", memo: "" })
+            setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "" })
           }
           setIsCreateOpen(open)
         }}
       >
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle className="font-heading text-lg">새 의뢰 생성</DialogTitle>
+            <DialogTitle className="font-sans text-lg">새 의뢰 생성</DialogTitle>
             <DialogDescription className="text-sm text-gray-500">
               새로운 의뢰를 등록합니다. 제목은 필수입니다.
             </DialogDescription>
@@ -1903,22 +1933,29 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
             {/* 고객 선택 */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">고객</Label>
-              <Select
-                value={createForm.customer_id}
-                onValueChange={(v) => setCreateForm((prev) => ({ ...prev, customer_id: v }))}
+              <Label className="text-sm font-medium">고객 <span className="text-soft-blush">*</span></Label>
+              <button
+                type="button"
+                onClick={() => setIsCreateCustomerModalOpen(true)}
+                className="w-full flex items-center justify-between px-3 py-2.5 border border-gray-200 rounded-lg hover:border-sky-aqua/50 transition-colors"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="고객을 선택하세요 (선택사항)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {localCustomers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.company_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {createForm.customer_id ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
+                      <Building2 className="h-3 w-3 text-tropical-teal" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">
+                      {localCustomers.find((c) => c.id === createForm.customer_id)?.company_name || ""}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-gray-400" />
+                    <span className="text-sm text-gray-500">고객을 연결해주세요</span>
+                  </div>
+                )}
+                <Search className="h-4 w-4 text-gray-300" />
+              </button>
             </div>
 
             {/* 문의 일시 */}
@@ -1948,7 +1985,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
           <DialogFooter className="gap-2 sm:gap-0">
             <button
               onClick={() => {
-                setCreateForm({ title: "", customer_id: "", inquiry_date: "", memo: "" })
+                setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "" })
                 setIsCreateOpen(false)
               }}
               className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
@@ -2093,10 +2130,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         if (selectedItem.customer?.id) setCustomerDetailId(selectedItem.customer.id)
                       }}
                       quotations={quotations}
-                      onAddQuote={() => {
-                        setEditingQuotation(null)
-                        setIsQuoteSheetOpen(true)
-                      }}
+                      onAddQuote={handleAddQuote}
                       onEditQuote={handleEditQuote}
                       onCreateAndLink={async (form) => {
                         // 1. 고객 생성
@@ -2204,10 +2238,180 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
           requestId={selectedItem.id}
           customerId={selectedItem.customer?.id}
           customerName={selectedItem.customer?.company_name}
+          customerData={selectedItem.customer?.id
+            ? localCustomers.find((c) => c.id === selectedItem.customer?.id) ?? null
+            : null
+          }
           quotation={editingQuotation}
           onSaved={handleQuoteSaved}
         />
       )}
+
+      {/* 의뢰 생성용 고객 연결 모달 (카드 상세와 동일한 UX) */}
+      <Dialog open={isCreateCustomerModalOpen} onOpenChange={(open) => {
+        if (!open) {
+          setIsCreateCustomerModalOpen(false)
+          setCreateCustomerSearch("")
+          setIsCreateCustomerMode(false)
+          setCreateCustomerForm({ company_name: "", contact_name: "", phone: "" })
+        }
+      }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="font-sans text-lg">고객 연결</DialogTitle>
+            <DialogDescription className="text-sm text-gray-500">
+              기존 고객을 검색하거나, 새로운 고객을 등록하세요.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* 검색 모드 */}
+          {!isCreateCustomerMode && (
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="회사명, 담당자명으로 검색"
+                  value={createCustomerSearch}
+                  onChange={(e) => setCreateCustomerSearch(e.target.value)}
+                  autoFocus
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                />
+              </div>
+
+              <div className="max-h-[240px] overflow-y-auto border border-gray-200 rounded-lg">
+                {(() => {
+                  const filtered = localCustomers.filter((c) => {
+                    if (!createCustomerSearch.trim()) return true
+                    const q = createCustomerSearch.toLowerCase()
+                    return c.company_name.toLowerCase().includes(q) || (c.contact_name && c.contact_name.toLowerCase().includes(q))
+                  })
+                  return filtered.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-6">검색 결과가 없습니다</p>
+                  ) : (
+                    filtered.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          setCreateForm((prev) => ({ ...prev, customer_id: c.id }))
+                          setIsCreateCustomerModalOpen(false)
+                          setCreateCustomerSearch("")
+                        }}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0",
+                          createForm.customer_id === c.id && "bg-sky-aqua/5"
+                        )}
+                      >
+                        <div className="w-7 h-7 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
+                          <Building2 className="h-3.5 w-3.5 text-tropical-teal" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{c.company_name}</p>
+                          {c.contact_name && (
+                            <p className="text-xs text-gray-500 truncate">{c.contact_name}</p>
+                          )}
+                        </div>
+                      </button>
+                    ))
+                  )
+                })()}
+              </div>
+
+              <button
+                onClick={() => {
+                  if (createCustomerSearch.trim()) {
+                    setCreateCustomerForm((prev) => ({ ...prev, company_name: createCustomerSearch.trim() }))
+                  }
+                  setIsCreateCustomerMode(true)
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-sky-aqua/50 text-sky-aqua text-sm font-medium hover:border-sky-aqua hover:bg-sky-aqua/5 transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                새 고객 등록
+              </button>
+            </div>
+          )}
+
+          {/* 생성 모드 */}
+          {isCreateCustomerMode && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  회사명 <span className="text-soft-blush">*</span>
+                </Label>
+                <Input
+                  placeholder="예: (주)한국건설"
+                  value={createCustomerForm.company_name}
+                  onChange={(e) => setCreateCustomerForm((prev) => ({ ...prev, company_name: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">담당자명</Label>
+                <Input
+                  placeholder="예: 홍길동"
+                  value={createCustomerForm.contact_name}
+                  onChange={(e) => setCreateCustomerForm((prev) => ({ ...prev, contact_name: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">연락처</Label>
+                <Input
+                  placeholder="예: 010-1234-5678"
+                  value={createCustomerForm.phone}
+                  onChange={(e) => setCreateCustomerForm((prev) => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                <button
+                  onClick={() => {
+                    setIsCreateCustomerMode(false)
+                    setCreateCustomerForm({ company_name: "", contact_name: "", phone: "" })
+                  }}
+                  className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  뒤로
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!createCustomerForm.company_name.trim()) return
+                    setIsCreatingCustomer(true)
+                    try {
+                      const payload: Record<string, string> = { company_name: createCustomerForm.company_name.trim() }
+                      if (createCustomerForm.contact_name.trim()) payload.contact_name = createCustomerForm.contact_name.trim()
+                      if (createCustomerForm.phone.trim()) payload.phone = createCustomerForm.phone.trim()
+                      const res = await fetch("/api/customers", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                      })
+                      const result = await res.json()
+                      if (res.ok && result.data) {
+                        setLocalCustomers((prev) => [...prev, result.data])
+                        setCreateForm((prev) => ({ ...prev, customer_id: result.data.id }))
+                        setIsCreateCustomerModalOpen(false)
+                        setCreateCustomerSearch("")
+                        setIsCreateCustomerMode(false)
+                        setCreateCustomerForm({ company_name: "", contact_name: "", phone: "" })
+                      } else {
+                        alert("고객 생성 실패: " + (result.error || ""))
+                      }
+                    } catch {
+                      alert("고객 생성 중 오류가 발생했습니다")
+                    }
+                    setIsCreatingCustomer(false)
+                  }}
+                  disabled={isCreatingCustomer || !createCustomerForm.company_name.trim()}
+                  className="px-4 py-2 text-sm rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors disabled:opacity-50"
+                >
+                  {isCreatingCustomer ? "등록 중..." : "등록 후 연결"}
+                </button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

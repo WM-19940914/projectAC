@@ -10,13 +10,14 @@ const config: Config = {
   theme: {
   	extend: {
   		fontFamily: {
-  			// 본문: Pretendard (한글 가독성 최고)
-  			sans: ['Pretendard Variable', 'Pretendard', '-apple-system', 'sans-serif'],
-  			// 제목: Plus Jakarta Sans (둥글고 모던한 느낌)
-  			heading: ['var(--font-heading)', 'Pretendard Variable', 'sans-serif'],
+  			sans: [
+  				'Pretendard Variable',
+  				'Pretendard',
+  				'-apple-system',
+  				'sans-serif'
+  			],
   		},
   		colors: {
-  			// M 프로젝트 커스텀 컬러 팔레트
   			'sky-aqua': '#42CAFD',
   			'tropical-teal': '#66B3BA',
   			'muted-teal': '#8EB19D',
@@ -67,6 +68,28 @@ const config: Config = {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
+  		},
+  		keyframes: {
+  			'accordion-down': {
+  				from: {
+  					height: '0'
+  				},
+  				to: {
+  					height: 'var(--radix-accordion-content-height)'
+  				}
+  			},
+  			'accordion-up': {
+  				from: {
+  					height: 'var(--radix-accordion-content-height)'
+  				},
+  				to: {
+  					height: '0'
+  				}
+  			}
+  		},
+  		animation: {
+  			'accordion-down': 'accordion-down 0.2s ease-out',
+  			'accordion-up': 'accordion-up 0.2s ease-out'
   		}
   	}
   },

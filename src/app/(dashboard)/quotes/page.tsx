@@ -10,12 +10,19 @@ export default async function QuotesPage() {
   const { data: quotations } = await supabase
     .from("quotations")
     .select(`
-      id, title, quotation_number, quotation_date, type,
-      total_amount, tax_amount, grand_total, notes,
+      id, title, quotation_number, quotation_date,
+      total_amount, tax_amount, grand_total, notes, site_name,
       customer:customers(id, company_name),
       request:requests(id, title)
     `)
     .order("created_at", { ascending: false })
 
-  return <QuotesList quotations={quotations || []} />
+  // 고객 목록 (의뢰 생성 시 고객 선택용)
+  const { data: customers } = await supabase
+    .from("customers")
+    .select("id, company_name, contact_name")
+    .is("deleted_at", null)
+    .order("company_name")
+
+  return <QuotesList quotations={quotations || []} customers={customers || []} />
 }

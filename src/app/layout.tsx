@@ -1,17 +1,8 @@
 import type { Metadata } from "next"
-import { Plus_Jakarta_Sans } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "@/providers/auth-provider"
 import { QueryProvider } from "@/providers/query-provider"
 import { Toaster } from "@/components/ui/toaster"
-
-// 제목용 폰트 (둥글고 모던한 느낌)
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-heading",
-  weight: ["600", "700", "800"],
-  display: "swap",
-})
 
 export const metadata: Metadata = {
   title: "M",
@@ -25,9 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body
-        className={`${plusJakarta.variable} antialiased`}
-      >
+      <body className="antialiased">
         <QueryProvider>
           <AuthProvider>
             {children}

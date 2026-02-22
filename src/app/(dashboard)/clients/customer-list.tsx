@@ -347,33 +347,39 @@ export function CustomerList({ customers: initialCustomers }: Props) {
   }
 
   // 폼 필드 변경 + 자동저장 (수정 모드일 때)
-  const updateField = async (field: keyof CustomerForm, value: string) => {
+  const updateField = (field: keyof CustomerForm, value: string) => {
     // company_name은 빈 문자열 유지 (null 되면 .trim() 에러)
     const newValue = field === "company_name" ? value : (value || null)
     setEditForm((prev) => ({ ...prev, [field]: newValue }))
 
-    // 수정 모드: admin API로 바로 저장
+    // 수정 모드: 즉시 화면 반영 + 백그라운드 저장
     if (!isAddMode && selectedCustomer) {
+      // 낙관적 업데이트 (즉시 반영)
+      setCustomers((prev) =>
+        prev.map((c) =>
+          c.id === selectedCustomer.id ? { ...c, [field]: newValue } : c
+        )
+      )
+      setSelectedCustomer((prev) => prev ? { ...prev, [field]: newValue } : null)
       setSaveMessage("저장 중...")
-      const res = await fetch("/api/customers", {
+
+      // 백그라운드 저장 (await 안 함 → UI 블로킹 없음)
+      fetch("/api/customers", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: selectedCustomer.id, [field]: newValue }),
-      })
-
-      if (!res.ok) {
+      }).then((res) => {
+        if (!res.ok) {
+          setSaveMessage("저장 실패")
+          setTimeout(() => setSaveMessage(""), 2000)
+        } else {
+          setSaveMessage("저장됨")
+          setTimeout(() => setSaveMessage(""), 1000)
+        }
+      }).catch(() => {
         setSaveMessage("저장 실패")
         setTimeout(() => setSaveMessage(""), 2000)
-      } else {
-        setSaveMessage("자동 저장됨")
-        setCustomers((prev) =>
-          prev.map((c) =>
-            c.id === selectedCustomer.id ? { ...c, [field]: newValue } : c
-          )
-        )
-        setSelectedCustomer((prev) => prev ? { ...prev, [field]: newValue } : null)
-        setTimeout(() => setSaveMessage(""), 1500)
-      }
+      })
     }
   }
 
@@ -435,7 +441,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
   const isPanelOpen = !!selectedCustomer || isAddMode
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col -m-6 bg-white min-h-full">
       {/* 페이지 헤더 + 탭 네비게이션 */}
       <div className="flex items-center justify-between px-6 py-4 border-b">
         <div className="flex items-center gap-6">
@@ -543,7 +549,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
       <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="font-heading text-lg">고객 삭제</DialogTitle>
+            <DialogTitle className="font-sans text-lg">고객 삭제</DialogTitle>
             <DialogDescription className="text-sm text-gray-500 pt-2">
               <span className="font-semibold text-gray-900">
                 &ldquo;{deleteTarget?.company_name}&rdquo;
@@ -650,7 +656,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
                   value={editForm.company_name}
                   placeholder="회사명을 입력하세요"
                   onConfirm={(v) => updateField("company_name", v)}
-                  className="font-heading text-2xl font-semibold"
+                  className="font-sans text-2xl font-semibold"
                   align="left"
                 />
               </SheetHeader>
