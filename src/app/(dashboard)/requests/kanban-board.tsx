@@ -21,7 +21,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
-import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Briefcase, Building2, Calendar, CheckCircle2, ClipboardList, EyeOff, FileText, Phone, Plus, Search, Trash2, User, X, XCircle } from "lucide-react"
+import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Briefcase, Building2, Calendar, CheckCircle2, ClipboardList, EyeOff, FileText, Hash, Mail, Phone, Plus, Search, Trash2, User, X, XCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -739,6 +739,11 @@ function CustomerDetailSheet({
                     <span className="text-[15px] text-gray-400 w-[90px] shrink-0">연락처</span>
                     <InlineEditField value={customer.phone || ""} placeholder="010-0000-0000" onConfirm={(v) => updateField("phone", v)} textClass="text-base font-medium" />
                   </div>
+                  <div className="flex items-center gap-3">
+                    <Mail className="h-4 w-4 text-gray-400 shrink-0" />
+                    <span className="text-[15px] text-gray-400 w-[90px] shrink-0">이메일</span>
+                    <InlineEditField value={customer.email || ""} placeholder="example@email.com" onConfirm={(v) => updateField("email", v)} textClass="text-base font-medium" />
+                  </div>
                 </div>
 
                 <Separator className="mb-6" />
@@ -755,6 +760,11 @@ function CustomerDetailSheet({
                     <FileText className="h-4 w-4 text-gray-400 shrink-0" />
                     <span className="text-[15px] text-gray-400 w-[90px] shrink-0">사업자번호</span>
                     <InlineEditField value={customer.business_number || ""} placeholder="123-45-67890" onConfirm={(v) => updateField("business_number", v)} textClass="text-base font-medium" />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Building2 className="h-4 w-4 text-gray-400 shrink-0" />
+                    <span className="text-[15px] text-gray-400 w-[90px] shrink-0">소재지</span>
+                    <InlineEditField value={customer.address || ""} placeholder="주소를 입력하세요" onConfirm={(v) => updateField("address", v)} textClass="text-base font-medium" />
                   </div>
                 </div>
 
@@ -834,23 +844,39 @@ function QuotationsTab({
               <p className="text-sm">아직 견적서가 없습니다</p>
             </div>
           ) : (
-            quotations.map((q) => (
+            [...quotations].reverse().map((q, index) => (
               <button
                 key={q.id}
                 onClick={() => onEditQuote(q.id)}
-                className="w-full text-left border border-gray-200 rounded-lg p-3 hover:border-sky-aqua/50 hover:bg-sky-aqua/5 transition-all group"
+                className="w-full text-left border border-gray-200 rounded-xl px-4 py-3.5 hover:border-sky-aqua/40 hover:bg-sky-aqua/5 transition-all group"
               >
-                <div className="flex items-start justify-between mb-1">
-                  <p className="text-sm font-semibold text-gray-900 truncate pr-2 group-hover:text-sky-aqua transition-colors">
-                    {q.title}
-                  </p>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-sky-aqua/10 text-sky-aqua shrink-0">
-                    {q.quotation_number}
-                  </Badge>
+                {/* 상단: 순번 */}
+                <div className="flex items-center gap-1.5 mb-2">
+                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-aqua/15 text-sky-aqua text-[10px] font-bold shrink-0">
+                    {index + 1}
+                  </span>
                 </div>
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span>{formatShortDate(q.quotation_date)}</span>
-                  <span className="font-medium text-gray-700">{formatCurrency(q.grand_total)}</span>
+                {/* 제목 */}
+                <p className="text-sm font-semibold text-gray-800 group-hover:text-sky-aqua transition-colors leading-snug line-clamp-2 mb-1.5">
+                  {q.title}
+                </p>
+                {/* 견적번호 */}
+                <div className="flex items-center gap-1 mb-3">
+                  <Hash className="h-3 w-3 text-gray-300 shrink-0" />
+                  <span className="text-[11px] text-gray-400 font-medium">{q.quotation_number}</span>
+                </div>
+                {/* 하단: 날짜 + 금액 */}
+                <div className="flex items-center justify-between pt-2.5 border-t border-gray-100">
+                  <div className="flex items-center gap-1 text-[11px] text-gray-400">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    <span>{formatShortDate(q.quotation_date)}</span>
+                  </div>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className={`text-sm font-bold tabular-nums ${q.grand_total > 0 ? "text-sky-aqua" : "text-gray-300"}`}>
+                      {formatCurrency(q.grand_total)}
+                    </span>
+                    <span className="text-[9px] text-gray-400">VAT 포함가</span>
+                  </div>
                 </div>
               </button>
             ))

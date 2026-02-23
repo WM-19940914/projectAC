@@ -727,6 +727,16 @@ export function CustomerList({ customers: initialCustomers }: Props) {
                     className="text-base font-medium"
                   />
                 </div>
+                <div className="flex items-center gap-3">
+                  <Building2 className="h-4 w-4 text-gray-400 shrink-0" />
+                  <span className="text-[15px] text-gray-400 w-[90px] shrink-0">소재지</span>
+                  <InlineEdit
+                    value={editForm.address || ""}
+                    placeholder="주소를 입력하세요"
+                    onConfirm={(v) => updateField("address", v)}
+                    className="text-base font-medium"
+                  />
+                </div>
               </div>
 
               <Separator className="mb-6" />

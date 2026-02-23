@@ -73,23 +73,30 @@ export async function POST(req: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // 견적번호는 DB 트리거(generate_quotation_number)가 자동 생성
-    // 형식: Q-YYYYMMDD-NNN (BEFORE INSERT 트리거)
+    // 견적번호 생성: Q-YYYYMMDD-NNN 형식
+    const today = new Date().toISOString().split("T")[0].replace(/-/g, "")
+    const { count } = await supabase
+      .from("quotations")
+      .select("*", { count: "exact", head: true })
+      .like("quotation_number", `Q-${today}-%`)
+    const seq = ((count || 0) + 1).toString().padStart(3, "0")
+    const quotationNumber = `Q-${today}-${seq}`
 
-    // 합계 계산
+    // 합계 계산 (단위절사 반영: 프론트에서 전달된 값 우선, 없으면 자동 계산)
     const totalAmount = (items || []).reduce(
       (sum: number, item: Record<string, unknown>) =>
         sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
       0
     )
-    const taxAmount = Math.round(totalAmount * 0.1)
-    const grandTotal = totalAmount + taxAmount
+    const taxAmount = header.tax_amount !== undefined ? Number(header.tax_amount) : Math.round(totalAmount * 0.1)
+    const grandTotal = header.grand_total !== undefined ? Number(header.grand_total) : totalAmount + taxAmount
 
     // 견적서 헤더 생성
     const { data: quotation, error: headerError } = await supabase
       .from("quotations")
       .insert({
-        quotation_number: "TEMP", // DB 트리거가 덮어씌움
+        quotation_number: quotationNumber,
+        type: header.type || "간이",
         title: header.title.trim(),
         request_id: header.request_id || null,
         customer_id: header.customer_id || null,
@@ -104,6 +111,20 @@ export async function POST(req: NextRequest) {
         recipient: header.recipient || null,
         contact_person: header.contact_person || null,
         contact_phone: header.contact_phone || null,
+        // 공급자 정보 (직접입력 모드일 때만 값 있음, 우리 회사 모드는 null)
+        supplier_company_name: header.supplier_company_name || null,
+        supplier_biz_number: header.supplier_biz_number || null,
+        supplier_ceo_name: header.supplier_ceo_name || null,
+        supplier_email: header.supplier_email || null,
+        supplier_address: header.supplier_address || null,
+        supplier_manager: header.supplier_manager || null,
+        supplier_manager_phone: header.supplier_manager_phone || null,
+        supplier_manager_email: header.supplier_manager_email || null,
+        // 수신자 확장
+        receiver_company_name: header.receiver_company_name || null,
+        receiver_biz_number: header.receiver_biz_number || null,
+        receiver_email: header.receiver_email || null,
+        receiver_address: header.receiver_address || null,
       })
       .select()
       .single()
@@ -169,27 +190,34 @@ export async function PATCH(req: NextRequest) {
 
     const supabase = createAdminClient()
 
-    // 합계 재계산
-    const totalAmount = (items || []).reduce(
-      (sum: number, item: Record<string, unknown>) =>
-        sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
-      0
-    )
-    const taxAmount = Math.round(totalAmount * 0.1)
-    const grandTotal = totalAmount + taxAmount
-
-    // 헤더 업데이트
+    // 헤더 업데이트 (items가 없는 경우 합계 재계산 생략 - supplier 등 부분 업데이트 허용)
     const updateData: Record<string, unknown> = {
-      total_amount: totalAmount,
-      tax_amount: taxAmount,
-      grand_total: grandTotal,
       updated_at: new Date().toISOString(),
     }
 
+    // items가 전달된 경우에만 합계 재계산 (단위절사 반영: 프론트 전달값 우선)
+    if (items !== undefined) {
+      const totalAmount = (items || []).reduce(
+        (sum: number, item: Record<string, unknown>) =>
+          sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
+        0
+      )
+      const taxAmount = fields.tax_amount !== undefined ? Number(fields.tax_amount) : Math.round(totalAmount * 0.1)
+      const grandTotal = fields.grand_total !== undefined ? Number(fields.grand_total) : totalAmount + taxAmount
+      updateData.total_amount = totalAmount
+      updateData.tax_amount = taxAmount
+      updateData.grand_total = grandTotal
+    }
+
     const allowedFields = [
-      "title", "quotation_date", "valid_until", "notes", "terms",
+      "title", "type", "quotation_date", "valid_until", "notes", "terms",
       "customer_id", "request_id",
       "site_name", "recipient", "contact_person", "contact_phone",
+      // 공급자 정보
+      "supplier_company_name", "supplier_biz_number", "supplier_ceo_name",
+      "supplier_email", "supplier_address", "supplier_manager", "supplier_manager_phone", "supplier_manager_email",
+      // 수신자 확장
+      "receiver_company_name", "receiver_biz_number", "receiver_email", "receiver_address",
     ]
     for (const key of allowedFields) {
       if (key in fields) {

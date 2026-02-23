@@ -170,6 +170,19 @@ export interface Quotation {
   recipient?: string;        // 수신
   contact_person?: string;   // 담당자
   contact_phone?: string;    // 전화번호
+  // 공급자 정보
+  supplier_company_name?: string;
+  supplier_biz_number?: string;
+  supplier_ceo_name?: string;
+  supplier_email?: string;
+  supplier_address?: string;
+  supplier_manager?: string;
+  supplier_manager_phone?: string;
+  // 수신자 확장
+  receiver_company_name?: string;
+  receiver_biz_number?: string;
+  receiver_email?: string;
+  receiver_address?: string;
   created_by?: string;
   created_at: string;
   updated_at: string;
