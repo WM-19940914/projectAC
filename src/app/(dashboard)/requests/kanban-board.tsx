@@ -872,10 +872,18 @@ function QuotationsTab({
                     <span>{formatShortDate(q.quotation_date)}</span>
                   </div>
                   <div className="flex flex-col items-end gap-0.5">
-                    <span className={`text-sm font-bold tabular-nums ${q.grand_total > 0 ? "text-sky-aqua" : "text-gray-300"}`}>
+                    {q.total_amount > 0 && (
+                      <>
+                        <span className="text-xs font-bold tabular-nums text-gray-500">
+                          {formatCurrency(q.total_amount)}
+                        </span>
+                        <span className="text-[9px] text-gray-300">VAT 별도</span>
+                      </>
+                    )}
+                    <span className={`text-xs font-bold tabular-nums ${q.grand_total > 0 ? "text-sky-aqua" : "text-gray-300"}`}>
                       {formatCurrency(q.grand_total)}
                     </span>
-                    <span className="text-[9px] text-gray-400">VAT 포함가</span>
+                    <span className="text-[9px] text-gray-400">VAT 포함</span>
                   </div>
                 </div>
               </button>

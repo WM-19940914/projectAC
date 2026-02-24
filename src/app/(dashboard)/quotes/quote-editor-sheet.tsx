@@ -250,12 +250,14 @@ export default function QuoteEditorSheet({
           activeTabRef.current = restoredTab
           setActiveTab(restoredTab)
 
-          // 단위절사 복원: supply_amount = grand_total - tax_amount, truncation_abs = total_amount - supply_amount
-          const storedTotal = quotation.total_amount || 0
-          const storedGrand = quotation.grand_total || 0
-          const storedTax = quotation.tax_amount || 0
-          const storedSupply = storedGrand - storedTax
-          const impliedTruncation = storedTotal - storedSupply
+          // 단위절사 복원: total_amount = 공급가액(단위절사 반영), rawTotal = 아이템 합산
+          // 단위절사 = rawTotal - total_amount
+          const storedSupply = quotation.total_amount || 0
+          const rawTotal = (quotation.items || []).reduce(
+            (sum: number, item: Record<string, unknown>) =>
+              sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0), 0
+          )
+          const impliedTruncation = rawTotal - storedSupply
           setTruncationInput(impliedTruncation > 0 ? impliedTruncation.toLocaleString() : "")
 
           // 공급자 정보: DB에 저장된 값이 있으면 직접입력 모드, 없으면 우리 회사 기본값
@@ -433,28 +435,59 @@ export default function QuoteEditorSheet({
     if (items.length <= 1) return; s((p) => p.filter((_, j) => j !== i))
   }, [])
 
-  // 엑셀 붙여넣기: 클립보드에서 탭 구분 데이터를 파싱해서 빈 행부터 채움
-  const handlePasteRows = useCallback((
+  // 엑셀 붙여넣기: 포커스된 셀 위치 기준으로 클립보드 데이터를 채움
+  // colFields: 편집 가능한 열 순서 (품목명=0, 규격=1, 단위=2, 수량=3)
+  const PASTE_COL_FIELDS: (keyof ItemRow)[] = ["item_name", "specification", "unit", "quantity"]
+
+  const handlePasteCells = useCallback((
     setItems: React.Dispatch<React.SetStateAction<ItemRow[]>>,
-    rows: { item_name: string; specification: string; unit: string }[]
+    startRow: number,
+    startCol: number,
+    data: string[][]  // 2차원 배열: [행][열]
   ) => {
     setItems((prev) => {
       const next = [...prev]
-      // 첫 번째 빈 행 찾기
-      let startIdx = next.findIndex((r) => !r.item_name.trim())
-      if (startIdx === -1) startIdx = next.length
-
-      for (let i = 0; i < rows.length; i++) {
-        const targetIdx = startIdx + i
-        // 빈 행 부족하면 새 행 추가
-        while (targetIdx >= next.length) {
+      for (let r = 0; r < data.length; r++) {
+        const targetRow = startRow + r
+        // 행이 부족하면 추가
+        while (targetRow >= next.length) {
           next.push(emptyRow())
         }
-        const row = { ...next[targetIdx] }
-        row.item_name = rows[i].item_name
-        row.specification = rows[i].specification
-        row.unit = rows[i].unit
-        next[targetIdx] = row
+        const row = { ...next[targetRow] }
+        for (let c = 0; c < data[r].length; c++) {
+          const targetCol = startCol + c
+          if (targetCol >= PASTE_COL_FIELDS.length) break
+          const field = PASTE_COL_FIELDS[targetCol]
+          const val = data[r][c].trim()
+          if (field === "quantity") {
+            // 숫자 필드: 콤마/공백 제거 후 숫자 변환
+            ;(row as Record<string, string | number>)[field] = Number(val.replace(/[^0-9.-]/g, "")) || 0
+          } else {
+            ;(row as Record<string, string | number>)[field] = val
+          }
+        }
+        next[targetRow] = row
+      }
+      return next
+    })
+  }, [])
+
+  // 우측 단가 패널 붙여넣기: 반출가 열만 세로로 채움
+  const handlePasteRetrieval = useCallback((
+    setItems: React.Dispatch<React.SetStateAction<ItemRow[]>>,
+    startRow: number,
+    data: string[][]
+  ) => {
+    setItems((prev) => {
+      const next = [...prev]
+      for (let r = 0; r < data.length; r++) {
+        const targetRow = startRow + r
+        if (targetRow >= next.length) break
+        const row = { ...next[targetRow] }
+        // 각 행의 첫 번째 값만 반출가로 사용
+        const val = data[r][0]?.trim() || ""
+        row.retrieval_price = Number(val.replace(/[^0-9.-]/g, "")) || 0
+        next[targetRow] = row
       }
       return next
     })
@@ -529,10 +562,11 @@ export default function QuoteEditorSheet({
       // 뷰 타입 저장 (간이/상세) - ref 사용으로 뷰 전환 시 autoSave 트리거 방지
       type: quoteType === "detailed" ? "상세" : "간이",
       // 단위절사 반영된 최종 금액을 직접 전달 (API 재계산 덮어쓰기 방지)
+      total_amount: supplyAmount,
       grand_total: grandTotal,
       tax_amount: taxAmount,
     }
-  }, [title, quotationDate, requestId, customerId, receiver, supplier, supplierMode, notes, equipItems, installItems, grandTotal, taxAmount, quoteType, deliveryDate, deliveryPlace, paymentCondition])
+  }, [title, quotationDate, requestId, customerId, receiver, supplier, supplierMode, notes, equipItems, installItems, supplyAmount, grandTotal, taxAmount, quoteType, deliveryDate, deliveryPlace, paymentCondition])
 
   const doSave = useCallback(async (isAuto = false): Promise<boolean> => {
     const isUpdate = !!savedIdRef.current
@@ -616,7 +650,7 @@ export default function QuoteEditorSheet({
     autoSaveTimerRef.current = setTimeout(() => { doSaveRef.current(true) }, 2000)
     return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, quotationDate, notes, equipItems, installItems, receiver, supplier, supplierMode, open])
+  }, [title, quotationDate, notes, equipItems, installItems, receiver, supplier, supplierMode, truncationInput, open])
 
   // 회사 로고 업로드
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -978,7 +1012,7 @@ export default function QuoteEditorSheet({
                       onToggleBlank={(i) => setEquipBlankIdx(equipBlankIdx === i ? null : i)}
                       isRowMatched={isRowMatched}
                       clearRow={(i) => clearItemRow(setEquipItems, i)}
-                      onPasteRows={(rows) => handlePasteRows(setEquipItems, rows)} />
+                      onPasteCells={(startRow, startCol, data) => handlePasteCells(setEquipItems, startRow, startCol, data)} />
                   </div>
 
                   {pricingOpen && (
@@ -996,7 +1030,8 @@ export default function QuoteEditorSheet({
                       <PricingRows items={equipItems}
                         updateItem={(i, f, v) => updateItem(setEquipItems, i, f, v)}
                         roundUp={roundUp} onToggleRoundUp={() => setRoundUp(!roundUp)}
-                        isRowMatched={isRowMatched} />
+                        isRowMatched={isRowMatched}
+                        onPasteRetrieval={(startRow, data) => handlePasteRetrieval(setEquipItems, startRow, data)} />
                     </div>
                   )}
                 </div>
@@ -1021,7 +1056,7 @@ export default function QuoteEditorSheet({
                       onToggleBlank={(i) => setInstallBlankIdx(installBlankIdx === i ? null : i)}
                       isRowMatched={isRowMatched}
                       clearRow={(i) => clearItemRow(setInstallItems, i)}
-                      onPasteRows={(rows) => handlePasteRows(setInstallItems, rows)} />
+                      onPasteCells={(startRow, startCol, data) => handlePasteCells(setInstallItems, startRow, startCol, data)} />
                   </div>
 
                   {pricingOpen && (
@@ -1039,7 +1074,8 @@ export default function QuoteEditorSheet({
                       <PricingRows items={installItems}
                         updateItem={(i, f, v) => updateItem(setInstallItems, i, f, v)}
                         roundUp={roundUp} onToggleRoundUp={() => setRoundUp(!roundUp)}
-                        isRowMatched={isRowMatched} />
+                        isRowMatched={isRowMatched}
+                        onPasteRetrieval={(startRow, data) => handlePasteRetrieval(setInstallItems, startRow, data)} />
                     </div>
                   )}
                 </div>
@@ -1360,7 +1396,7 @@ export default function QuoteEditorSheet({
                     onToggleBlank={(i) => setEquipBlankIdx(equipBlankIdx === i ? null : i)}
                     isRowMatched={isRowMatched}
                     clearRow={(i) => clearItemRow(setEquipItems, i)}
-                    onPasteRows={(rows) => handlePasteRows(setEquipItems, rows)} />
+                    onPasteCells={(startRow, startCol, data) => handlePasteCells(setEquipItems, startRow, startCol, data)} />
                   {/* 장비 소계 */}
                   <div className="px-4 py-2.5 bg-gray-50/30 border-t border-gray-200">
                     <div className="flex justify-end items-center gap-3 text-xs">
@@ -1385,7 +1421,8 @@ export default function QuoteEditorSheet({
                     <PricingRows items={equipItems}
                       updateItem={(i, f, v) => updateItem(setEquipItems, i, f, v)}
                       roundUp={roundUp} onToggleRoundUp={() => setRoundUp(!roundUp)}
-                      isRowMatched={isRowMatched} />
+                      isRowMatched={isRowMatched}
+                      onPasteRetrieval={(startRow, data) => handlePasteRetrieval(setEquipItems, startRow, data)} />
                   </div>
                 )}
               </div>
@@ -1412,7 +1449,7 @@ export default function QuoteEditorSheet({
                     onToggleBlank={(i) => setInstallBlankIdx(installBlankIdx === i ? null : i)}
                     isRowMatched={isRowMatched}
                     clearRow={(i) => clearItemRow(setInstallItems, i)}
-                    onPasteRows={(rows) => handlePasteRows(setInstallItems, rows)} />
+                    onPasteCells={(startRow, startCol, data) => handlePasteCells(setInstallItems, startRow, startCol, data)} />
                   {/* 설치비 소계 */}
                   <div className="px-4 py-2.5 bg-gray-50/30 border-t border-gray-200">
                     <div className="flex justify-end items-center gap-3 text-xs">
@@ -1437,7 +1474,8 @@ export default function QuoteEditorSheet({
                     <PricingRows items={installItems}
                       updateItem={(i, f, v) => updateItem(setInstallItems, i, f, v)}
                       roundUp={roundUp} onToggleRoundUp={() => setRoundUp(!roundUp)}
-                      isRowMatched={isRowMatched} />
+                      isRowMatched={isRowMatched}
+                      onPasteRetrieval={(startRow, data) => handlePasteRetrieval(setInstallItems, startRow, data)} />
                   </div>
                 )}
               </div>
@@ -2023,7 +2061,7 @@ function PricePickerDialog({ items, target, onSelect, onClose, selectedItems }: 
 // ===================================================
 // 좌측: 품목 테이블
 // ===================================================
-function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBlank, isRowMatched, clearRow, onPasteRows }: {
+function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBlank, isRowMatched, clearRow, onPasteCells }: {
   items: ItemRow[]
   updateItem: (index: number, field: keyof ItemRow, value: string | number) => void
   addRow: () => void
@@ -2032,35 +2070,37 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
   onToggleBlank: (idx: number) => void
   isRowMatched?: (row: ItemRow) => boolean
   clearRow?: (index: number) => void
-  onPasteRows?: (rows: { item_name: string; specification: string; unit: string }[]) => void
+  onPasteCells?: (startRow: number, startCol: number, data: string[][]) => void
 }) {
-  // 엑셀 붙여넣기 핸들러: 탭으로 구분된 데이터 감지 → 품목명/규격/단위 자동 채움
+  // 엑셀 붙여넣기 핸들러: 포커스된 셀 위치 기준으로 데이터 채움
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const text = e.clipboardData.getData("text/plain")
     // 탭이 있으면 엑셀에서 복사한 데이터로 판단 (일반 텍스트 붙여넣기는 그대로 통과)
-    if (!text || !text.includes("\t") || !onPasteRows) return
+    if (!text || !text.includes("\t") || !onPasteCells) return
 
     e.preventDefault()
     e.stopPropagation()
 
-    const lines = text.split(/\r?\n/).filter((line) => line.trim())
-    const parsed: { item_name: string; specification: string; unit: string }[] = []
+    // 현재 포커스된 셀의 행/열 인덱스 가져오기
+    const active = document.activeElement as HTMLElement | null
+    const rowAttr = active?.getAttribute("data-row")
+    const colAttr = active?.getAttribute("data-col")
+    const startRow = rowAttr !== null && rowAttr !== undefined ? Number(rowAttr) : 0
+    const startCol = colAttr !== null && colAttr !== undefined ? Number(colAttr) : 0
 
+    // 클립보드 데이터를 2차원 배열로 파싱
+    const lines = text.split(/\r?\n/).filter((line) => line.trim())
+    const data: string[][] = []
     for (const line of lines) {
       const cols = line.split("\t")
-      // 빈 행 건너뛰기
       if (cols.every((c) => !c.trim())) continue
-      parsed.push({
-        item_name: cols[0]?.trim() || "",
-        specification: cols[1]?.trim() || "",
-        unit: cols[2]?.trim() || "",
-      })
+      data.push(cols)
     }
 
-    if (parsed.length > 0) {
-      onPasteRows(parsed)
+    if (data.length > 0) {
+      onPasteCells(startRow, startCol, data)
     }
-  }, [onPasteRows])
+  }, [onPasteCells])
 
   return (
     <div onPaste={handlePaste}>
@@ -2081,7 +2121,7 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
           <div className="px-2 flex items-center justify-end text-[11px] font-medium text-gray-600">금액</div>
         </div>
         {/* 우: X 버튼 헤더 */}
-        <div className={`w-[22px] shrink-0 ${HEADER_H}`} />
+        <div className={`w-[36px] shrink-0 ${HEADER_H}`} />
       </div>
       {/* 행 */}
       {items.map((item, idx) => {
@@ -2123,10 +2163,10 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
                 <><div /><div /><div /><div /><div /><div /></>
               ) : (
                 <>
-                  <CellInput value={item.item_name} onChange={(v) => updateItem(idx, "item_name", v)} placeholder="품목명 *" center />
-                  <CellInput value={item.specification} onChange={(v) => updateItem(idx, "specification", v)} placeholder="규격" center />
-                  <CellInput value={item.unit} onChange={(v) => updateItem(idx, "unit", v)} placeholder="식" center />
-                  <CellNumber value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} />
+                  <CellInput value={item.item_name} onChange={(v) => updateItem(idx, "item_name", v)} placeholder="품목명 *" center row={idx} col={0} />
+                  <CellInput value={item.specification} onChange={(v) => updateItem(idx, "specification", v)} placeholder="규격" center row={idx} col={1} />
+                  <CellInput value={item.unit} onChange={(v) => updateItem(idx, "unit", v)} placeholder="식" center row={idx} col={2} />
+                  <CellNumber value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} row={idx} col={3} />
                   <div className="flex items-center justify-end px-2 text-xs text-gray-900 tabular-nums bg-gray-50">
                     {item.unit_price > 0 ? item.unit_price.toLocaleString() : ""}
                   </div>
@@ -2136,12 +2176,18 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
                 </>
               )}
             </div>
-            {/* 우: 행 초기화 X 버튼 (테이블 밖) */}
-            <div className="w-[22px] shrink-0 flex items-center justify-center">
-              {hasContent && !isBlankRow && !isBelowBlank && clearRow && (
-                <button onClick={() => clearRow(idx)}
-                  className="p-0.5 rounded text-soft-blush hover:text-[#c4807e] hover:bg-soft-blush/15 transition-colors">
+            {/* 우: 지우개(초기화) + X(행 삭제) 버튼 */}
+            <div className="w-[36px] shrink-0 flex items-center justify-center gap-0.5">
+              {!isBlankRow && !isBelowBlank && clearRow && (
+                <button onClick={() => clearRow(idx)} title="데이터 초기화"
+                  className="p-0.5 rounded text-gray-300 hover:text-soft-blush hover:bg-soft-blush/10 transition-colors">
                   <Eraser className="h-3 w-3" />
+                </button>
+              )}
+              {!isBlankRow && !isBelowBlank && items.length > 1 && (
+                <button onClick={() => removeRow(idx)} title="행 삭제"
+                  className="p-0.5 rounded text-gray-300 hover:text-soft-blush hover:bg-soft-blush/10 transition-colors">
+                  <XIcon className="h-3 w-3" />
                 </button>
               )}
             </div>
@@ -2168,15 +2214,47 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
 // 금액 열은 넓게(76px), 율 열은 좁게(48px)
 const PRICING_COLS = "grid-cols-[24px_92px_48px_76px_80px_48px_76px_76px_48px_80px]"
 
-function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched }: {
+function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched, onPasteRetrieval }: {
   items: ItemRow[]
   updateItem: (index: number, field: keyof ItemRow, value: string | number) => void
   roundUp?: boolean
   onToggleRoundUp?: () => void
   isRowMatched?: (row: ItemRow) => boolean
+  onPasteRetrieval?: (startRow: number, data: string[][]) => void
 }) {
+  // 반출가 열 붙여넣기 핸들러: 포커스된 행부터 세로로 채움
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData("text/plain")
+    if (!text || !onPasteRetrieval) return
+    // 탭 또는 개행이 있으면 엑셀 데이터로 판단
+    if (!text.includes("\t") && !text.includes("\n")) return
+
+    // 반출가 셀에서만 동작 (data-col="0")
+    const active = document.activeElement as HTMLElement | null
+    const colAttr = active?.getAttribute("data-col")
+    if (colAttr !== "0") return
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    const rowAttr = active?.getAttribute("data-row")
+    const startRow = rowAttr !== null && rowAttr !== undefined ? Number(rowAttr) : 0
+
+    const lines = text.split(/\r?\n/).filter((line) => line.trim())
+    const data: string[][] = []
+    for (const line of lines) {
+      const cols = line.split("\t")
+      if (cols.every((c) => !c.trim())) continue
+      data.push(cols)
+    }
+
+    if (data.length > 0) {
+      onPasteRetrieval(startRow, data)
+    }
+  }, [onPasteRetrieval])
+
   return (
-    <div>
+    <div onPaste={handlePaste}>
       {/* 헤더 - 10개 열 */}
       <div className={`relative grid ${PRICING_COLS} bg-sky-aqua/10 border-y border-sky-aqua/20 ${HEADER_H}`}>
         {/* 제안가 열 가운데 위에 단위↑ 토글 (absolute로 행 높이에 영향 없음) */}
@@ -2215,7 +2293,7 @@ function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched
               )}
               {idx + 1}
             </div>
-            <CellNumber value={item.retrieval_price} onChange={(v) => updateItem(idx, "retrieval_price", v)} />
+            <CellNumber value={item.retrieval_price} onChange={(v) => updateItem(idx, "retrieval_price", v)} row={idx} col={0} />
             <CellPercent value={item.discount_rate} onChange={(v) => updateItem(idx, "discount_rate", v)} />
             <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_unit_price > 0 ? item.purchase_unit_price.toLocaleString() : ""}</div>
             <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_amount > 0 ? item.purchase_amount.toLocaleString() : ""}</div>
@@ -2312,22 +2390,24 @@ function MiniRow({ label, value, highlight, percent }: { label: string; value: n
   )
 }
 
-function CellInput({ value, onChange, placeholder, center }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; center?: boolean
+function CellInput({ value, onChange, placeholder, center, row, col }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; center?: boolean; row?: number; col?: number
 }) {
   return (
     <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+      data-row={row} data-col={col}
       className={`w-full h-full px-2 text-xs bg-white border-0 focus:outline-none focus:ring-1 focus:ring-gray-300 placeholder:text-gray-300 ${center ? "text-center" : ""}`} />
   )
 }
 
-function CellNumber({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function CellNumber({ value, onChange, row, col }: { value: number; onChange: (v: number) => void; row?: number; col?: number }) {
   const ref = useRef<HTMLInputElement>(null)
   const [displayVal, setDisplayVal] = useState(value > 0 ? value.toLocaleString() : "")
   useEffect(() => { setDisplayVal(value > 0 ? value.toLocaleString() : "") }, [value])
   return (
     <input ref={ref} type="text" inputMode="numeric"
       value={displayVal}
+      data-row={row} data-col={col}
       onChange={(e) => {
         const raw = e.target.value.replace(/[^0-9]/g, "")
         const formatted = raw ? Number(raw).toLocaleString() : ""
