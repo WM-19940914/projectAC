@@ -120,6 +120,10 @@ export async function POST(req: NextRequest) {
         supplier_manager: header.supplier_manager || null,
         supplier_manager_phone: header.supplier_manager_phone || null,
         supplier_manager_email: header.supplier_manager_email || null,
+        // 납기/결제 정보
+        delivery_date: header.delivery_date || null,
+        delivery_place: header.delivery_place || null,
+        payment_condition: header.payment_condition || null,
         // 수신자 확장
         receiver_company_name: header.receiver_company_name || null,
         receiver_biz_number: header.receiver_biz_number || null,
@@ -142,9 +146,9 @@ export async function POST(req: NextRequest) {
         item_name: item.item_name || "",
         specification: item.specification || null,
         unit: item.unit || null,
-        quantity: Number(item.quantity) || 1,
+        quantity: Number(item.quantity) || 0,
         unit_price: Number(item.unit_price) || 0,
-        amount: (Number(item.quantity) || 1) * (Number(item.unit_price) || 0),
+        amount: (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
         memo: item.memo || null,
         // 내부 단가 필드
         retrieval_price: Number(item.retrieval_price) || 0,
@@ -216,6 +220,8 @@ export async function PATCH(req: NextRequest) {
       // 공급자 정보
       "supplier_company_name", "supplier_biz_number", "supplier_ceo_name",
       "supplier_email", "supplier_address", "supplier_manager", "supplier_manager_phone", "supplier_manager_email",
+      // 납기/결제 정보
+      "delivery_date", "delivery_place", "payment_condition",
       // 수신자 확장
       "receiver_company_name", "receiver_biz_number", "receiver_email", "receiver_address",
     ]
@@ -246,9 +252,9 @@ export async function PATCH(req: NextRequest) {
           item_name: item.item_name || "",
           specification: item.specification || null,
           unit: item.unit || null,
-          quantity: Number(item.quantity) || 1,
+          quantity: Number(item.quantity) || 0,
           unit_price: Number(item.unit_price) || 0,
-          amount: (Number(item.quantity) || 1) * (Number(item.unit_price) || 0),
+          amount: (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
           memo: item.memo || null,
           // 내부 단가 필드
           retrieval_price: Number(item.retrieval_price) || 0,

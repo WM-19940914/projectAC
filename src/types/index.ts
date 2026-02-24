@@ -178,6 +178,11 @@ export interface Quotation {
   supplier_address?: string;
   supplier_manager?: string;
   supplier_manager_phone?: string;
+  supplier_manager_email?: string;
+  // 납기/결제 정보
+  delivery_date?: string;         // 납기일자
+  delivery_place?: string;        // 납기장소
+  payment_condition?: string;     // 결제조건
   // 수신자 확장
   receiver_company_name?: string;
   receiver_biz_number?: string;
