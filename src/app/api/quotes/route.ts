@@ -83,11 +83,12 @@ export async function POST(req: NextRequest) {
     const quotationNumber = `Q-${today}-${seq}`
 
     // 합계 계산 (단위절사 반영: 프론트에서 전달된 값 우선, 없으면 자동 계산)
-    const totalAmount = (items || []).reduce(
+    const rawTotal = (items || []).reduce(
       (sum: number, item: Record<string, unknown>) =>
         sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
       0
     )
+    const totalAmount = header.total_amount !== undefined ? Number(header.total_amount) : rawTotal
     const taxAmount = header.tax_amount !== undefined ? Number(header.tax_amount) : Math.round(totalAmount * 0.1)
     const grandTotal = header.grand_total !== undefined ? Number(header.grand_total) : totalAmount + taxAmount
 
@@ -201,11 +202,12 @@ export async function PATCH(req: NextRequest) {
 
     // items가 전달된 경우에만 합계 재계산 (단위절사 반영: 프론트 전달값 우선)
     if (items !== undefined) {
-      const totalAmount = (items || []).reduce(
+      const rawTotal = (items || []).reduce(
         (sum: number, item: Record<string, unknown>) =>
           sum + (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
         0
       )
+      const totalAmount = fields.total_amount !== undefined ? Number(fields.total_amount) : rawTotal
       const taxAmount = fields.tax_amount !== undefined ? Number(fields.tax_amount) : Math.round(totalAmount * 0.1)
       const grandTotal = fields.grand_total !== undefined ? Number(fields.grand_total) : totalAmount + taxAmount
       updateData.total_amount = totalAmount
