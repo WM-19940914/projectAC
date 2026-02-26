@@ -28,6 +28,12 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# MCP 설정 (비밀 토큰 포함)
+.mcp.json
+
+# Supabase 임시 파일
+supabase/.temp/
+
 # vercel
 .vercel
 
