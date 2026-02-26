@@ -15,13 +15,23 @@ interface ContractCardProps {
 }
 
 function ContractCard({ contract, isDragging, onClick, cardBarClass = "border-l-gray-300" }: ContractCardProps) {
-    // 정산 형태 배열 표시
+    // 정산 형태 표시
     const renderSettlementTypes = () => {
-        if (!contract.settlement_type || contract.settlement_type.length === 0) return null
+        if (!contract.settlement_type) return null
+        
+        // 문자열인 경우와 배열인 경우 모두 대응 (추후 스키마 변경 대비)
+        const types = Array.isArray(contract.settlement_type) 
+            ? contract.settlement_type 
+            : typeof contract.settlement_type === 'string' 
+                ? [contract.settlement_type] 
+                : []
+                
+        if (types.length === 0) return null
+
         return (
             <div className="flex flex-wrap gap-1 mt-2">
-                {contract.settlement_type.map(type => (
-                    <Badge key={type} variant="secondary" className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 hover:bg-gray-200">
+                {types.map((type, i) => (
+                    <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0 bg-gray-100 text-gray-600 hover:bg-gray-200">
                         {type}
                     </Badge>
                 ))}
@@ -46,9 +56,9 @@ function ContractCard({ contract, isDragging, onClick, cardBarClass = "border-l-
             </div>
 
             <div className="pr-6">
-                {/* 계약명 */}
+                {/* 계약명 (title로 변경) */}
                 <h4 className="font-heading font-bold text-gray-900 text-sm mb-1 leading-snug">
-                    {contract.name}
+                    {contract.title}
                 </h4>
 
                 {/* 고객사명 */}
@@ -59,11 +69,11 @@ function ContractCard({ contract, isDragging, onClick, cardBarClass = "border-l-
             </div>
 
             <div className="mt-auto space-y-2">
-                {/* 계약 금액 및 부가세 정보 */}
+                {/* 계약 금액 (contract_amount로 변경) */}
                 <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-1.5">
                         <span className="font-semibold text-sky-aqua tabular-nums">
-                            {formatCurrency(contract.amount)}
+                            {formatCurrency(contract.contract_amount)}
                         </span>
                         <span className={cn(
                             "text-[10px] px-1 py-0.5 rounded",

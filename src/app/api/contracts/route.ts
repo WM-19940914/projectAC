@@ -7,20 +7,25 @@ export async function POST(req: Request) {
         const data = await req.json();
         const supabase = createAdminClient();
 
-        const { data: contract, error } = await supabase
+        const { data: insertedData, error } = await supabase
             .from('contracts')
             .insert([data])
-            .select()
-            .single();
+            .select();
 
         if (error) throw error;
+
+        const contract = insertedData?.[0];
+        if (!contract) throw new Error('데이터가 생성되었으나 반환되지 않았습니다.');
 
         revalidatePath('/contracts');
         return NextResponse.json({ success: true, data: contract });
     } catch (error: any) {
         console.error('계약 생성 오류:', error);
         return NextResponse.json(
-            { success: false, error: error.message },
+            { 
+                success: false, 
+                error: error.message || 'Unknown error'
+            },
             { status: 500 }
         );
     }
@@ -32,21 +37,31 @@ export async function PATCH(req: Request) {
         const { id, ...updateData } = data;
         const supabase = createAdminClient();
 
+        // 필드명 매핑 (name -> title, amount -> contract_amount)
+        const mappedData: any = { ...updateData };
+        if (mappedData.name) {
+            mappedData.title = mappedData.name;
+            delete mappedData.name;
+        }
+        if (mappedData.amount !== undefined) {
+            mappedData.contract_amount = mappedData.amount;
+            delete mappedData.amount;
+        }
+
         const { data: contract, error } = await supabase
             .from('contracts')
-            .update(updateData)
+            .update(mappedData)
             .eq('id', id)
-            .select()
-            .single();
+            .select();
 
         if (error) throw error;
 
         revalidatePath('/contracts');
-        return NextResponse.json({ success: true, data: contract });
+        return NextResponse.json({ success: true, data: contract?.[0] });
     } catch (error: any) {
         console.error('계약 수정 오류:', error);
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: error.message || 'Unknown error' },
             { status: 500 }
         );
     }
@@ -77,10 +92,10 @@ export async function DELETE(req: Request) {
 
         revalidatePath('/contracts');
         return NextResponse.json({ success: true });
-    } catch (error: any) {
+    } catch (error) {
         console.error('계약 삭제 오류:', error);
         return NextResponse.json(
-            { success: false, error: error.message },
+            { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         );
     }

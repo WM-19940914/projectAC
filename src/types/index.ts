@@ -69,10 +69,10 @@ export type ContractStatus = '계약 준비 중' | '계약 진행 중' | '계약
 export interface Contract {
   id: string;
   customer_id?: string | null;
-  name: string;
-  amount: number;
-  vat_inclusive: boolean;
-  settlement_type: string[];
+  title: string;
+  contract_amount: number;
+  vat_inclusive?: boolean;
+  settlement_type?: string | null;
   start_date?: string | null;
   end_date?: string | null;
   status: ContractStatus;

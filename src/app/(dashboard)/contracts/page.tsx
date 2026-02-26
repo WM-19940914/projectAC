@@ -15,7 +15,6 @@ export default async function ContractsPage() {
       customer:customers(id, company_name, deleted_at)
     `)
     .neq("status", "숨김")
-    .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
   const { data: hiddenContracts } = await supabase
@@ -25,7 +24,6 @@ export default async function ContractsPage() {
       customer:customers(id, company_name, deleted_at)
     `)
     .eq("status", "숨김")
-    .is("deleted_at", null)
     .order("created_at", { ascending: false })
 
   const allItems = (contracts || []) as Contract[]
@@ -54,7 +52,7 @@ export default async function ContractsPage() {
     <ContractKanbanBoard
       columns={columns}
       totalCount={totalCount}
-      customers={(customers || []) as any[]}
+      customers={(customers || [])}
       hiddenItems={hiddenItems}
     />
   )
