@@ -139,7 +139,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          "flex h-full flex-col border-r bg-white transition-all duration-300",
+          "flex h-full flex-col border-r border-gray-100 bg-white/60 backdrop-blur-xl shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-300 relative z-20",
           collapsed ? "w-[68px]" : "w-[280px]"
         )}
       >
@@ -150,7 +150,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               href="/dashboard"
               className="flex items-center gap-2 font-bold text-xl text-sky-aqua"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-aqua text-white text-sm font-bold">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-aqua to-tropical-teal text-white shadow-md shadow-sky-aqua/20 text-sm font-bold">
                 M
               </div>
               M
@@ -215,10 +215,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <Link
                 href={dashboardItem.href}
                 className={cn(
-                  "flex h-10 items-center gap-3 rounded-md px-2 text-[15px] font-semibold transition-colors",
+                  "flex h-10 items-center gap-3 rounded-xl px-3 text-[15px] font-semibold transition-all duration-200 active:scale-95 hover:translate-x-1",
                   isActive(dashboardItem.href)
-                    ? "bg-sky-aqua/10 text-sky-aqua"
-                    : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                    ? "bg-sky-aqua/10 text-sky-aqua shadow-sm"
+                    : "text-gray-600 hover:bg-gray-100/80 hover:text-gray-900"
                 )}
               >
                 <dashboardItem.icon className="h-5 w-5 shrink-0" />
@@ -268,10 +268,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       {/* 펼친 상태: 아코디언 헤더 */}
                       <div
                         className={cn(
-                          "flex h-10 w-full items-center gap-3 rounded-md px-2 text-[15px] font-semibold transition-colors mt-2 cursor-pointer",
+                          "flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-semibold transition-all duration-200 mt-2 cursor-pointer active:scale-[0.98] hover:translate-x-1",
                           hasActiveItem
-                            ? "text-sky-aqua"
-                            : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                            ? "text-sky-aqua shadow-sm bg-sky-aqua/5"
+                            : "text-gray-600 hover:bg-gray-100/80 hover:text-gray-900"
                         )}
                       >
                         {/* 카테고리 이름 클릭 → 기본 페이지 이동 + 열기 */}
@@ -313,10 +313,10 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                               key={item.href}
                               href={item.href}
                               className={cn(
-                                "flex h-9 items-center gap-3 rounded-md pl-9 pr-2 text-[14px] transition-colors",
+                                "flex h-9 items-center gap-3 rounded-lg pl-9 pr-3 text-[14px] transition-all duration-200 mt-1 active:scale-[0.98] hover:translate-x-1",
                                 active
-                                  ? "bg-sky-aqua/10 text-sky-aqua font-medium"
-                                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                                  ? "bg-sky-aqua/10 text-sky-aqua font-semibold shadow-sm"
+                                  : "text-gray-500 hover:bg-gray-100/80 hover:text-gray-900"
                               )}
                             >
                               <Icon className="h-4 w-4 shrink-0" />
@@ -360,7 +360,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex h-10 items-center gap-3 rounded-md px-2 text-[15px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                className="flex h-10 items-center gap-3 rounded-xl px-3 text-[15px] text-gray-500 transition-all duration-200 mt-1 active:scale-[0.98] hover:translate-x-1 hover:bg-gray-100/80 hover:text-gray-900"
               >
                 <Icon className="h-5 w-5 shrink-0" />
                 <span className="truncate">{item.label}</span>

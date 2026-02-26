@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Search, X } from "lucide-react"
+import { Search, X, Plus, Edit2, Trash2, Check } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { formatCurrency } from "@/lib/format"
+import { useRouter } from "next/navigation"
 
 // 가격표 아이템 타입
 interface PriceItem {
@@ -28,6 +29,75 @@ export default function PriceList({ items }: PriceListProps) {
   const [activeTab, setActiveTab] = useState<string>("장비")
   const [subFilter, setSubFilter] = useState<string>("전체")
   const [search, setSearch] = useState("")
+
+  const router = useRouter()
+  // 수정 기능 state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<Partial<PriceItem>>({})
+  // 추가 기능 state
+  const [isAdding, setIsAdding] = useState(false)
+  const [addForm, setAddForm] = useState<Partial<PriceItem>>({
+    sub_category: "",
+    product_name: "",
+    specification: "",
+    unit: "식",
+    unit_price: 0
+  })
+
+  // 저장 (수정) 핸들러
+  const saveEdit = async () => {
+    if (!editingId) return
+    try {
+      const res = await fetch("/api/price-list", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingId, ...editForm }),
+      })
+      if (res.ok) {
+        setEditingId(null)
+        router.refresh()
+      } else {
+        alert("수정 실패")
+      }
+    } catch { }
+  }
+
+  // 삭제 핸들러
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`정말 "${name}"을(를) 삭제하시겠습니까?\n삭제하면 되돌릴 수 없습니다.`)) return
+    try {
+      const res = await fetch("/api/price-list", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      if (res.ok) {
+        if (editingId === id) setEditingId(null)
+        router.refresh()
+      } else {
+        alert("삭제 실패")
+      }
+    } catch { }
+  }
+
+  // 추가 핸들러
+  const saveAdd = async () => {
+    if (!addForm.product_name) return alert("상품명을 입력해주세요.")
+    try {
+      const res = await fetch("/api/price-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...addForm, category: activeTab }),
+      })
+      if (res.ok) {
+        setIsAdding(false)
+        setAddForm({ sub_category: "", product_name: "", specification: "", unit: "식", unit_price: 0 })
+        router.refresh()
+      } else {
+        alert("추가 실패")
+      }
+    } catch { }
+  }
 
   // 장비 탭의 소분류 목록 (고정 순서)
   const EQUIP_SUB_ORDER = ["전체", "실외기", "실내기", "판넬", "분지관", "제어기기", "싱글", "HOME", "ETC", "미분류"]
@@ -147,11 +217,10 @@ export default function PriceList({ items }: PriceListProps) {
                 setSubFilter("전체")
                 setSearch("")
               }}
-              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                activeTab === tab
+              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === tab
                   ? "bg-sky-aqua text-white shadow-sm"
                   : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-              }`}
+                }`}
             >
               {tab}
               <span className={`ml-1.5 text-xs ${activeTab === tab ? "text-white/70" : "opacity-50"}`}>
@@ -161,49 +230,58 @@ export default function PriceList({ items }: PriceListProps) {
           ))}
         </div>
 
-        {/* 검색 */}
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="상품명, 규격 검색..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-8 h-9 text-sm rounded-xl border-gray-200 focus:border-sky-aqua focus:ring-sky-aqua/20"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
+        {/* 우측 상단 메뉴: 새 항목 추가 + 검색 */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-sky-aqua text-white rounded-xl text-sm font-semibold hover:bg-sky-aqua/90 transition-all shadow-sm active:scale-95"
+          >
+            <Plus className="h-4 w-4" />
+            새 항목
+          </button>
+
+          <div className="relative w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="상품명, 규격 검색..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 pr-8 h-9 text-sm rounded-xl border-gray-200 focus:border-sky-aqua focus:ring-sky-aqua/20"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* 소분류 필터 (장비·설치비 모두) */}
       <div className="flex items-center gap-2 px-6 py-3 bg-white border-b overflow-x-auto">
-          {subCategories.map((sub) => {
-            const count = sub === "전체"
-              ? items.filter((i) => i.category === activeTab).length
-              : sub === "미분류"
-                ? items.filter((i) => i.category === activeTab && !i.sub_category).length
-                : items.filter((i) => i.category === activeTab && i.sub_category === sub).length
-            return (
-              <button
-                key={sub}
-                onClick={() => setSubFilter(sub)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
-                  subFilter === sub
-                    ? "bg-sky-aqua/10 text-sky-aqua border border-sky-aqua/30"
-                    : "text-gray-400 hover:text-gray-600 hover:bg-gray-50 border border-transparent"
+        {subCategories.map((sub) => {
+          const count = sub === "전체"
+            ? items.filter((i) => i.category === activeTab).length
+            : sub === "미분류"
+              ? items.filter((i) => i.category === activeTab && !i.sub_category).length
+              : items.filter((i) => i.category === activeTab && i.sub_category === sub).length
+          return (
+            <button
+              key={sub}
+              onClick={() => setSubFilter(sub)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${subFilter === sub
+                  ? "bg-sky-aqua/10 text-sky-aqua border border-sky-aqua/30"
+                  : "text-gray-400 hover:text-gray-600 hover:bg-gray-50 border border-transparent"
                 }`}
-              >
-                {sub}
-                <span className={`ml-1 text-[11px] ${subFilter === sub ? "text-sky-aqua/60" : "opacity-40"}`}>{count}</span>
-              </button>
-            )
-          })}
+            >
+              {sub}
+              <span className={`ml-1 text-[11px] ${subFilter === sub ? "text-sky-aqua/60" : "opacity-40"}`}>{count}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* 검색 결과 카운트 */}
@@ -223,44 +301,120 @@ export default function PriceList({ items }: PriceListProps) {
           <div className="space-y-1">
             {/* 헤더 */}
             <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-2 text-[11px] font-semibold text-gray-500 w-fit bg-gray-50/95 backdrop-blur-sm rounded-lg">
-              <span className="shrink-0 w-[64px] text-center">분류</span>
+              <span className="shrink-0 w-[80px] text-center">분류</span>
               <span className="shrink-0 w-[260px] text-center">상품명</span>
               <span className="shrink-0 w-[180px] text-center">규격</span>
-              <span className="shrink-0 w-[40px] text-center">단위</span>
-              <span className="shrink-0 w-[100px] text-center">단가</span>
+              <span className="shrink-0 w-[60px] text-center">단위</span>
+              <span className="shrink-0 w-[120px] text-center">단가</span>
+              <span className="shrink-0 w-[80px] text-center">관리</span>
             </div>
-            {filteredItems.map((item) => (
-              <div
-                key={item.id}
-                className="group flex items-center gap-3 px-4 py-2.5 bg-white rounded-xl hover:shadow-sm hover:bg-sky-aqua/[0.02] transition-all cursor-default w-fit"
-              >
-                {/* 분류 배지 */}
-                <span className="shrink-0 w-[64px] text-center text-[10px] font-medium text-gray-400 bg-gray-100 rounded-md py-0.5">
-                  {item.sub_category || "-"}
-                </span>
 
-                {/* 상품명 */}
-                <span className="shrink-0 w-[260px] text-[13px] font-semibold text-gray-800 text-center truncate">
-                  {item.product_name}
-                </span>
-
-                {/* 규격 */}
-                <span className="shrink-0 w-[180px] text-[12px] text-gray-700 text-center truncate">
-                  {item.specification || "-"}
-                </span>
-
-                {/* 단위 */}
-                <span className="shrink-0 w-[40px] text-center text-[11px] text-gray-400">
-                  {item.unit || "-"}
-                </span>
-
-                {/* 단가 */}
-                <span className="shrink-0 w-[100px] text-center text-[13px] font-semibold tabular-nums text-gray-900">
-                  {formatCurrency(item.unit_price)}
-                </span>
-
+            {/* 새 항목 추가 폼 */}
+            {isAdding && (
+              <div className="group flex items-center gap-3 px-4 py-2.5 bg-yellow-50/50 rounded-xl border border-yellow-200 w-fit">
+                <Input
+                  className="shrink-0 w-[80px] h-8 text-xs bg-white"
+                  placeholder="분류"
+                  value={addForm.sub_category || ""}
+                  onChange={(e) => setAddForm({ ...addForm, sub_category: e.target.value })}
+                />
+                <Input
+                  className="shrink-0 w-[260px] h-8 text-xs bg-white"
+                  placeholder="상품명"
+                  value={addForm.product_name || ""}
+                  onChange={(e) => setAddForm({ ...addForm, product_name: e.target.value })}
+                  autoFocus
+                />
+                <Input
+                  className="shrink-0 w-[180px] h-8 text-xs bg-white"
+                  placeholder="규격"
+                  value={addForm.specification || ""}
+                  onChange={(e) => setAddForm({ ...addForm, specification: e.target.value })}
+                />
+                <Input
+                  className="shrink-0 w-[60px] h-8 text-xs bg-white"
+                  placeholder="단위"
+                  value={addForm.unit || ""}
+                  onChange={(e) => setAddForm({ ...addForm, unit: e.target.value })}
+                />
+                <Input
+                  type="number"
+                  className="shrink-0 w-[120px] h-8 text-xs bg-white text-right"
+                  value={addForm.unit_price || 0}
+                  onChange={(e) => setAddForm({ ...addForm, unit_price: parseInt(e.target.value) || 0 })}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveAdd() }}
+                />
+                <div className="shrink-0 w-[80px] flex items-center justify-center gap-1.5">
+                  <button onClick={saveAdd} className="p-1.5 text-sky-aqua hover:bg-sky-aqua/10 rounded transition-colors" title="저장">
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => setIsAdding(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded transition-colors" title="취소">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            ))}
+            )}
+
+            {filteredItems.map((item) => {
+              const isEditing = editingId === item.id
+              return (
+                <div
+                  key={item.id}
+                  className="group flex items-center gap-3 px-4 py-2.5 bg-white rounded-xl hover:shadow-sm hover:bg-sky-aqua/[0.02] transition-all cursor-default w-fit shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
+                >
+                  {isEditing ? (
+                    <>
+                      <Input className="shrink-0 w-[80px] h-8 text-xs" value={editForm.sub_category || ""} onChange={e => setEditForm({ ...editForm, sub_category: e.target.value })} />
+                      <Input className="shrink-0 w-[260px] h-8 text-xs" value={editForm.product_name || ""} onChange={e => setEditForm({ ...editForm, product_name: e.target.value })} autoFocus />
+                      <Input className="shrink-0 w-[180px] h-8 text-xs" value={editForm.specification || ""} onChange={e => setEditForm({ ...editForm, specification: e.target.value })} />
+                      <Input className="shrink-0 w-[60px] h-8 text-xs" value={editForm.unit || ""} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
+                      <Input type="number" className="shrink-0 w-[120px] h-8 text-xs text-right" value={editForm.unit_price || 0} onChange={e => setEditForm({ ...editForm, unit_price: parseInt(e.target.value) || 0 })} onKeyDown={(e) => { if (e.key === "Enter") saveEdit() }} />
+                      <div className="shrink-0 w-[80px] flex items-center justify-center gap-1.5">
+                        <button onClick={saveEdit} className="p-1 text-sky-aqua hover:bg-sky-aqua/10 rounded transition-colors" title="저장"><Check className="h-4 w-4" /></button>
+                        <button onClick={() => setEditingId(null)} className="p-1 text-gray-400 hover:bg-gray-100 rounded transition-colors" title="취소"><X className="h-4 w-4" /></button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* 분류 배지 */}
+                      <span className="shrink-0 w-[80px] text-center text-[10px] font-medium text-gray-400 bg-gray-100 rounded-md py-0.5">
+                        {item.sub_category || "-"}
+                      </span>
+
+                      {/* 상품명 */}
+                      <span className="shrink-0 w-[260px] text-[13px] font-semibold text-gray-800 text-center truncate" title={item.product_name}>
+                        {item.product_name}
+                      </span>
+
+                      {/* 규격 */}
+                      <span className="shrink-0 w-[180px] text-[12px] text-gray-700 text-center truncate" title={item.specification || ""}>
+                        {item.specification || "-"}
+                      </span>
+
+                      {/* 단위 */}
+                      <span className="shrink-0 w-[60px] text-center text-[11px] text-gray-400">
+                        {item.unit || "-"}
+                      </span>
+
+                      {/* 단가 */}
+                      <span className="shrink-0 w-[120px] text-center text-[13px] font-semibold tabular-nums text-gray-900">
+                        {formatCurrency(item.unit_price)}
+                      </span>
+
+                      {/* 관리 버튼 (Hover 시 표시) */}
+                      <div className="shrink-0 w-[80px] flex items-center justify-center gap-1 opacity-10 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => { setEditingId(item.id); setEditForm({ ...item }) }} className="p-1.5 text-gray-400 hover:text-sky-aqua hover:bg-sky-aqua/10 rounded transition-colors" title="수정">
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => handleDelete(item.id, item.product_name)} className="p-1.5 text-gray-400 hover:text-soft-blush hover:bg-soft-blush/10 rounded transition-colors" title="삭제">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

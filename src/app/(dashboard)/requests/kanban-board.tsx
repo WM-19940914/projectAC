@@ -90,30 +90,30 @@ const COLUMN_STYLES: Record<string, {
   "견적 문의": {
     header: "text-sky-aqua",
     border: "border-t-sky-aqua",
-    bg: "bg-sky-aqua/10",
+    bg: "bg-gradient-to-b from-sky-aqua/10 to-transparent",
     badge: "bg-sky-aqua/20 text-sky-aqua",
-    cardBar: "border-sky-aqua",
+    cardBar: "border-l-sky-aqua",
   },
   "영업중": {
     header: "text-tropical-teal",
     border: "border-t-tropical-teal",
-    bg: "bg-tropical-teal/10",
+    bg: "bg-gradient-to-b from-tropical-teal/10 to-transparent",
     badge: "bg-tropical-teal/20 text-tropical-teal",
-    cardBar: "border-tropical-teal",
+    cardBar: "border-l-tropical-teal",
   },
   "계약 성공": {
     header: "text-muted-teal",
     border: "border-t-muted-teal",
-    bg: "bg-muted-teal/10",
+    bg: "bg-gradient-to-b from-muted-teal/10 to-transparent",
     badge: "bg-muted-teal/20 text-muted-teal",
-    cardBar: "border-muted-teal",
+    cardBar: "border-l-muted-teal",
   },
   "수주 실패": {
     header: "text-soft-blush",
     border: "border-t-soft-blush",
-    bg: "bg-soft-blush/10",
+    bg: "bg-gradient-to-b from-soft-blush/10 to-transparent",
     badge: "bg-soft-blush/20 text-soft-blush",
-    cardBar: "border-soft-blush",
+    cardBar: "border-l-soft-blush",
   },
 }
 
@@ -815,11 +815,10 @@ function QuotationsTab({
           <button
             key={tab.label}
             onClick={() => setActiveTab(tab.label)}
-            className={`pb-2 text-sm transition-colors ${
-              activeTab === tab.label
-                ? "font-bold text-gray-900 border-b-2 border-gray-900"
-                : "font-medium text-gray-300 hover:text-gray-500 border-b-2 border-transparent"
-            }`}
+            className={`pb-2 text-sm transition-colors ${activeTab === tab.label
+              ? "font-bold text-gray-900 border-b-2 border-gray-900"
+              : "font-medium text-gray-300 hover:text-gray-500 border-b-2 border-transparent"
+              }`}
           >
             {tab.label} <span className="text-xs">{tab.count}</span>
           </button>
@@ -1679,7 +1678,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
               return (
                 <div
                   key={col.status}
-                  className="flex flex-col flex-1 min-w-0 rounded-lg bg-gray-50"
+                  className={cn("flex flex-col flex-1 min-w-0 rounded-2xl border border-gray-100/50", style.bg)}
                 >
                   {/* 컬럼 헤더 */}
                   <div className="flex items-center justify-between px-4 py-3">
@@ -1696,7 +1695,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         title={
                           sortOrder[col.status] === "asc" ? "오래된 순 (오름차순)"
                             : sortOrder[col.status] === "desc" ? "최신 순 (내림차순)"
-                            : "정렬 없음"
+                              : "정렬 없음"
                         }
                         className={cn(
                           "p-1 rounded-md transition-all",
@@ -1727,88 +1726,88 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                           snapshot.isDraggingOver && "bg-black/5"
                         )}
                       >
-                          {getSortedItems(col).map((item, index) => (
-                            <Draggable key={item.id} draggableId={item.id} index={index}>
-                              {(provided, snapshot) => (
-                                <div
-                                  ref={provided.innerRef}
-                                  {...provided.draggableProps}
-                                  {...provided.dragHandleProps}
-                                  onClick={() => setSelectedItem(item)}
-                                  className={cn(
-                                    "group relative bg-white rounded-lg border-2 p-4 min-h-[150px] shadow-sm hover:shadow-md transition-shadow cursor-grab",
-                                    style.cardBar,
-                                    snapshot.isDragging && "shadow-lg ring-2 ring-black/10"
-                                  )}
+                        {getSortedItems(col).map((item, index) => (
+                          <Draggable key={item.id} draggableId={item.id} index={index}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                onClick={() => setSelectedItem(item)}
+                                className={cn(
+                                  "group relative bg-white/80 backdrop-blur-md rounded-xl border-l-[6px] border-t border-r border-b border-gray-100 p-5 min-h-[150px] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-grab",
+                                  style.cardBar,
+                                  snapshot.isDragging && "shadow-2xl ring-2 ring-sky-aqua/20 scale-[1.02]"
+                                )}
+                              >
+                                {/* 숨김 버튼 (호버 시에만 표시) */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleHide(item)
+                                  }}
+                                  title="숨기기"
+                                  className="absolute bottom-3 right-12 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-gray-400 hover:bg-gray-500 text-white shadow-md hover:scale-110"
                                 >
-                                  {/* 숨김 버튼 (호버 시에만 표시) */}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleHide(item)
-                                    }}
-                                    title="숨기기"
-                                    className="absolute bottom-3 right-12 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-gray-400 hover:bg-gray-500 text-white shadow-md hover:scale-110"
-                                  >
-                                    <EyeOff className="h-4 w-4" />
-                                  </button>
+                                  <EyeOff className="h-4 w-4" />
+                                </button>
 
-                                  {/* 삭제 버튼 (호버 시에만 표시) */}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setDeleteTarget(item)
-                                    }}
-                                    className="absolute bottom-3 right-3 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-soft-blush hover:bg-soft-blush/80 text-white shadow-md hover:scale-110"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
+                                {/* 삭제 버튼 (호버 시에만 표시) */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setDeleteTarget(item)
+                                  }}
+                                  className="absolute bottom-3 right-3 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-soft-blush hover:bg-soft-blush/80 text-white shadow-md hover:scale-110"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
 
-                                  {/* 상태 배지 (우측 상단 모서리) */}
-                                  <Badge className={cn("absolute top-2 right-2 text-[10px] px-1 py-0", style.badge)}>
-                                    {col.status}
-                                  </Badge>
+                                {/* 상태 배지 (우측 상단 모서리) */}
+                                <Badge className={cn("absolute top-2 right-2 text-[10px] px-1 py-0", style.badge)}>
+                                  {col.status}
+                                </Badge>
 
-                                  {/* 제목 */}
-                                  <div className="mb-2 pr-16">
-                                    <p className="flex items-center gap-1.5 text-base font-semibold text-gray-900 truncate" title={item.title}>
-                                      {(() => {
-                                        const Icon = COLUMN_ICONS[col.status] || ClipboardList
-                                        return <Icon className="h-3.5 w-3.5 text-gray-500 shrink-0" />
-                                      })()}
-                                      <span className="truncate">{item.title}</span>
-                                    </p>
+                                {/* 제목 */}
+                                <div className="mb-2 pr-16">
+                                  <p className="flex items-center gap-1.5 text-base font-semibold text-gray-900 truncate" title={item.title}>
+                                    {(() => {
+                                      const Icon = COLUMN_ICONS[col.status] || ClipboardList
+                                      return <Icon className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                                    })()}
+                                    <span className="truncate">{item.title}</span>
+                                  </p>
+                                </div>
+
+                                {/* 문의 일시 + 고객명 (제목과 간격 두고 하단 배치) */}
+                                <div className="mt-4 space-y-1">
+                                  <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                    <span>{item.inquiry_date ? formatDate(item.inquiry_date) : "없음"}</span>
                                   </div>
-
-                                  {/* 문의 일시 + 고객명 (제목과 간격 두고 하단 배치) */}
-                                  <div className="mt-4 space-y-1">
-                                    <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                                      <Calendar className="h-3.5 w-3.5 shrink-0" />
-                                      <span>{item.inquiry_date ? formatDate(item.inquiry_date) : "없음"}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                                      <Building2 className="h-3.5 w-3.5 shrink-0" />
-                                      <span className={item.customer?.deleted_at ? "text-soft-blush" : ""}>
-                                        {item.customer ? (item.customer.deleted_at ? "삭제된 고객" : item.customer.company_name) : "없음"}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                                      <FileText className="h-3.5 w-3.5 shrink-0" />
-                                      <span>없음</span>
-                                    </div>
+                                  <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                                    <Building2 className="h-3.5 w-3.5 shrink-0" />
+                                    <span className={item.customer?.deleted_at ? "text-soft-blush" : ""}>
+                                      {item.customer ? (item.customer.deleted_at ? "삭제된 고객" : item.customer.company_name) : "없음"}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-sm text-gray-500">
+                                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                                    <span>없음</span>
                                   </div>
                                 </div>
-                              )}
-                            </Draggable>
-                          ))}
-                          {provided.placeholder}
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
 
-                          {/* 빈 컬럼 */}
-                          {col.items.length === 0 && (
-                            <div className="text-center py-8 text-xs text-gray-400">
-                              없음
-                            </div>
-                          )}
+                        {/* 빈 컬럼 */}
+                        {col.items.length === 0 && (
+                          <div className="text-center py-8 text-xs text-gray-400">
+                            없음
+                          </div>
+                        )}
                       </div>
                     )}
                   </Droppable>
@@ -1911,7 +1910,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
               </span>
               을(를) 삭제하시겠습니까?
               <br />
-              <span className="text-red-500 font-semibold">삭제하면 되돌릴 수 없습니다.</span>
+              <span className="text-soft-blush font-semibold">삭제하면 되돌릴 수 없습니다.</span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">

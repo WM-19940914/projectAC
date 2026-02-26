@@ -556,7 +556,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
               </span>
               을(를) 삭제하시겠습니까?
               <br />
-              <span className="text-red-500 font-semibold">삭제하면 되돌릴 수 없습니다.</span>
+              <span className="text-soft-blush font-semibold">삭제하면 되돌릴 수 없습니다.</span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -593,7 +593,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
               {saveMessage && (
                 <span className={cn(
                   "text-sm",
-                  saveMessage.includes("실패") || saveMessage.includes("입력") ? "text-red-500" : "text-muted-teal"
+                  saveMessage.includes("실패") || saveMessage.includes("입력") ? "text-soft-blush" : "text-muted-teal"
                 )}>
                   {saveMessage}
                 </span>

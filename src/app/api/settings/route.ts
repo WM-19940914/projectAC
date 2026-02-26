@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest) {
     const allowedFields = [
       "company_name", "biz_number", "ceo_name",
       "email", "address", "manager", "manager_phone", "manager_email",
-      "logo_url",
+      "logo_url", "stamp_url",
     ]
 
     const updateData: Record<string, unknown> = {

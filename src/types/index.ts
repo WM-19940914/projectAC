@@ -68,23 +68,18 @@ export type ContractStatus = '계약 준비 중' | '계약 진행 중' | '계약
 
 export interface Contract {
   id: string;
-  contract_number?: string;
-  title: string;
+  customer_id?: string | null;
+  name: string;
+  amount: number;
+  vat_inclusive: boolean;
+  settlement_type: string[];
+  start_date?: string | null;
+  end_date?: string | null;
   status: ContractStatus;
-  customer_id?: string;
-  contract_amount: number;
-  settlement_type?: string;
-  start_date?: string;
-  end_date?: string;
-  total_settlement: number;
-  total_expense: number;
-  net_profit: number;
-  profit_rate: number;
-  category?: string;
-  memo?: string;
-  created_by?: string;
+  memo?: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
   // 조인
   customer?: Customer;
   settlements?: Settlement[];
@@ -149,7 +144,7 @@ export interface Expense {
 
 // ----- 견적서 -----
 export type QuotationType = '간이' | '상세';
-export type QuotationItemCategory = '일반' | '장비' | '설치비';
+export type QuotationItemCategory = '일반' | '장비' | '설치비' | '갑지';
 
 export interface Quotation {
   id: string;
