@@ -19,12 +19,12 @@ export async function POST(req: Request) {
 
         revalidatePath('/contracts');
         return NextResponse.json({ success: true, data: contract });
-    } catch (error: any) {
+    } catch (error) {
         console.error('계약 생성 오류:', error);
         return NextResponse.json(
-            { 
-                success: false, 
-                error: error.message || 'Unknown error'
+            {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
             },
             { status: 500 }
         );
@@ -38,7 +38,7 @@ export async function PATCH(req: Request) {
         const supabase = createAdminClient();
 
         // 필드명 매핑 (name -> title, amount -> contract_amount)
-        const mappedData: any = { ...updateData };
+        const mappedData: Record<string, unknown> = { ...updateData };
         if (mappedData.name) {
             mappedData.title = mappedData.name;
             delete mappedData.name;
@@ -58,10 +58,10 @@ export async function PATCH(req: Request) {
 
         revalidatePath('/contracts');
         return NextResponse.json({ success: true, data: contract?.[0] });
-    } catch (error: any) {
+    } catch (error) {
         console.error('계약 수정 오류:', error);
         return NextResponse.json(
-            { success: false, error: error.message || 'Unknown error' },
+            { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         );
     }

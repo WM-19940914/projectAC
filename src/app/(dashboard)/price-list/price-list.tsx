@@ -25,6 +25,11 @@ interface PriceListProps {
 
 const TABS = ["장비", "설치비"] as const
 
+// 장비 탭의 소분류 목록 (고정 순서)
+const EQUIP_SUB_ORDER = ["전체", "실외기", "실내기", "판넬", "분지관", "제어기기", "싱글", "HOME", "ETC", "미분류"]
+// 설치비 탭의 소분류 목록 (고정 순서)
+const INSTALL_SUB_ORDER = ["전체", "냉매배관", "보온재", "드레인", "덕트", "전기/배선", "받침대", "공사비", "미분류"]
+
 export default function PriceList({ items }: PriceListProps) {
   const [activeTab, setActiveTab] = useState<string>("장비")
   const [subFilter, setSubFilter] = useState<string>("전체")
@@ -98,11 +103,6 @@ export default function PriceList({ items }: PriceListProps) {
       }
     } catch { }
   }
-
-  // 장비 탭의 소분류 목록 (고정 순서)
-  const EQUIP_SUB_ORDER = ["전체", "실외기", "실내기", "판넬", "분지관", "제어기기", "싱글", "HOME", "ETC", "미분류"]
-  // 설치비 탭의 소분류 목록 (고정 순서)
-  const INSTALL_SUB_ORDER = ["전체", "냉매배관", "보온재", "드레인", "덕트", "전기/배선", "받침대", "공사비", "미분류"]
 
   const subCategories = useMemo(() => {
     const targetCategory = activeTab
@@ -218,8 +218,8 @@ export default function PriceList({ items }: PriceListProps) {
                 setSearch("")
               }}
               className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === tab
-                  ? "bg-sky-aqua text-white shadow-sm"
-                  : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                ? "bg-sky-aqua text-white shadow-sm"
+                : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                 }`}
             >
               {tab}
@@ -273,8 +273,8 @@ export default function PriceList({ items }: PriceListProps) {
               key={sub}
               onClick={() => setSubFilter(sub)}
               className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${subFilter === sub
-                  ? "bg-sky-aqua/10 text-sky-aqua border border-sky-aqua/30"
-                  : "text-gray-400 hover:text-gray-600 hover:bg-gray-50 border border-transparent"
+                ? "bg-sky-aqua/10 text-sky-aqua border border-sky-aqua/30"
+                : "text-gray-400 hover:text-gray-600 hover:bg-gray-50 border border-transparent"
                 }`}
             >
               {sub}
