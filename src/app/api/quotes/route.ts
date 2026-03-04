@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
         .select(`
           *,
           items:quotation_items(*),
-          customer:customers(id, company_name),
-          request:requests(id, title)
+          customer:customers!quotations_customer_id_fkey(id, company_name),
+          request:requests!quotations_request_id_fkey(id, title)
         `)
         .eq("id", id)
         .order("item_order", { referencedTable: "quotation_items", ascending: true })
@@ -38,8 +38,8 @@ export async function GET(req: NextRequest) {
       .select(`
         *,
         items:quotation_items(*),
-        customer:customers(id, company_name),
-        request:requests(id, title)
+        customer:customers!quotations_customer_id_fkey(id, company_name),
+        request:requests!quotations_request_id_fkey(id, title)
       `)
       .order("created_at", { ascending: false })
 

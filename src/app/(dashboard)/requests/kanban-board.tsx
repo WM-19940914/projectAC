@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Sheet,
   SheetContent,
@@ -21,7 +22,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
-import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Box, Briefcase, Building2, Calendar, CheckCircle2, Circle, ClipboardList, EyeOff, FileText, Hash, Mail, Pencil, Phone, Plus, Search, Trash2, Truck, User, X, XCircle } from "lucide-react"
+import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CheckCircle2, Circle, ClipboardList, EyeOff, FileText, Hash, Mail, Pencil, Phone, Plus, Search, Trash2, Truck, User, X, XCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -37,6 +38,8 @@ interface RequestItem {
   title: string
   inquiry_date: string | null
   status: string
+  contract_id: string | null
+  confirmed_quote_id: string | null
   memo: string | null
   created_at: string
   customer: {
@@ -844,12 +847,1438 @@ interface QuotationListItem {
   grand_total: number
 }
 
-interface ConfirmedQuoteInfo {
-  quoteId: string
+type SettlementStage = "선금" | "중도금" | "잔금"
+
+const SETTLEMENT_STAGE_ORDER: SettlementStage[] = ["선금", "중도금", "잔금"]
+const EMPTY_STAGE_RATIOS: Record<SettlementStage, number> = { 선금: 0, 중도금: 0, 잔금: 0 }
+const EMPTY_STAGE_SCHEDULED_DATES: Record<SettlementStage, string> = { 선금: "", 중도금: "", 잔금: "" }
+const DEFAULT_MIDDLE_INSTALLMENTS = 1
+
+interface ContractDraft {
+  id: string | null
   title: string
-  quotationNumber: string
-  totalAmount: number
-  grandTotal: number
+  status: string
+  customer_id: string
+  contract_amount: number
+  start_date: string
+  end_date: string
+  settlement_type: SettlementStage[]
+}
+
+interface PendingContractDraftSnapshot {
+  draft: ContractDraft
+  stageRatios: Record<SettlementStage, number>
+  middleInstallments: number
+  stageScheduledDates: Record<SettlementStage, string>
+  settlementStatusMap: Record<string, SettlementStatusInput>
+}
+
+interface SettlementStatusInput {
+  payment_confirmed: boolean
+  actual_amount: number
+  received_date: string
+  tax_invoice_issued: boolean
+}
+
+function normalizeSettlementStatusInput(raw: unknown): SettlementStatusInput {
+  if (!raw || typeof raw !== "object") {
+    return { payment_confirmed: false, actual_amount: 0, received_date: "", tax_invoice_issued: false }
+  }
+  const obj = raw as Record<string, unknown>
+  const amount = Number(obj.actual_amount ?? 0)
+  return {
+    payment_confirmed: obj.payment_confirmed === true,
+    actual_amount: Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0,
+    received_date: typeof obj.received_date === "string" ? obj.received_date : "",
+    tax_invoice_issued: obj.tax_invoice_issued === true,
+  }
+}
+
+function sanitizeSettlementStatusMap(raw: unknown): Record<string, SettlementStatusInput> {
+  if (!raw || typeof raw !== "object") return {}
+  const parsed = raw as Record<string, unknown>
+  return Object.fromEntries(
+    Object.entries(parsed).map(([key, value]) => [key, normalizeSettlementStatusInput(value)])
+  )
+}
+
+function normalizeSettlementTypes(raw: unknown): SettlementStage[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((v): v is SettlementStage => SETTLEMENT_STAGE_ORDER.includes(v as SettlementStage))
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const normalized = raw.replace(/[{}]/g, "")
+    return normalized
+      .split(",")
+      .map((v) => v.trim())
+      .filter((v): v is SettlementStage => SETTLEMENT_STAGE_ORDER.includes(v as SettlementStage))
+  }
+  return []
+}
+
+function createEvenRatios(selected: SettlementStage[]): Record<SettlementStage, number> {
+  const next = { ...EMPTY_STAGE_RATIOS }
+  if (selected.length === 0) return next
+  if (selected.length === 1) {
+    next[selected[0]] = 100
+    return next
+  }
+  const base = Math.floor(100 / selected.length)
+  let remain = 100
+  selected.forEach((stage, idx) => {
+    const value = idx === selected.length - 1 ? remain : base
+    next[stage] = value
+    remain -= value
+  })
+  return next
+}
+
+function normalizeRatios(
+  raw: unknown,
+  selected: SettlementStage[]
+): Record<SettlementStage, number> {
+  const next = { ...EMPTY_STAGE_RATIOS }
+  if (!raw || typeof raw !== "object") {
+    return createEvenRatios(selected)
+  }
+  const obj = raw as Record<string, unknown>
+  selected.forEach((stage) => {
+    const parsed = Number(obj[stage] ?? 0)
+    next[stage] = Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0
+  })
+  return next
+}
+
+function normalizeMiddleInstallments(raw: unknown): number {
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return DEFAULT_MIDDLE_INSTALLMENTS
+  return Math.max(1, Math.min(5, Math.round(parsed)))
+}
+
+function normalizeStageScheduledDates(raw: unknown): Record<SettlementStage, string> {
+  if (!raw || typeof raw !== "object") return { ...EMPTY_STAGE_SCHEDULED_DATES }
+  const obj = raw as Record<string, unknown>
+  return {
+    선금: typeof obj.선금 === "string" ? obj.선금 : "",
+    중도금: typeof obj.중도금 === "string" ? obj.중도금 : "",
+    잔금: typeof obj.잔금 === "string" ? obj.잔금 : "",
+  }
+}
+
+function formatStagePercent(value: number): string {
+  return Number.isInteger(value) ? `${value}` : value.toFixed(1)
+}
+
+function buildContractSnapshot(params: {
+  draft: ContractDraft
+  selectedStages: SettlementStage[]
+  stageRatios: Record<SettlementStage, number>
+  middleInstallments: number
+  stageScheduledDates: Record<SettlementStage, string>
+  settlementStatusMap: Record<string, SettlementStatusInput>
+  customerId: string | null
+}) {
+  const selectedStages = SETTLEMENT_STAGE_ORDER.filter((stage) => params.selectedStages.includes(stage))
+  const normalizedRatios = normalizeRatios(params.stageRatios, selectedStages)
+  const normalizedDates = normalizeStageScheduledDates(params.stageScheduledDates)
+  const normalizedStatus = sanitizeSettlementStatusMap(params.settlementStatusMap)
+  return JSON.stringify({
+    title: params.draft.title.trim(),
+    status: params.draft.status,
+    customer_id: params.customerId,
+    contract_amount: Math.max(0, Math.round(Number(params.draft.contract_amount || 0))),
+    settlement_type: selectedStages,
+    stage_ratios: selectedStages.reduce((acc, stage) => ({ ...acc, [stage]: normalizedRatios[stage] }), {}),
+    middle_installments: selectedStages.includes("중도금")
+      ? normalizeMiddleInstallments(params.middleInstallments)
+      : DEFAULT_MIDDLE_INSTALLMENTS,
+    stage_scheduled_dates: selectedStages.reduce((acc, stage) => ({
+      ...acc,
+      [stage]: normalizedDates[stage] || null,
+    }), {}),
+    settlement_status_map: normalizedStatus,
+    start_date: params.draft.start_date || null,
+    end_date: params.draft.end_date || null,
+  })
+}
+
+function buildSettlementRows(
+  supplyAmount: number,
+  selected: SettlementStage[],
+  ratios: Record<SettlementStage, number>,
+  middleInstallments: number
+) {
+  if (selected.length === 0) return [] as Array<{ key: string; label: string; supply: number; total: number }>
+  const safeSupply = Math.max(0, Math.round(supplyAmount || 0))
+  const totalVat = Math.round(safeSupply * 0.1)
+  let usedSupply = 0
+  let usedVat = 0
+  const rows: Array<{ key: string; label: string; supply: number; total: number }> = []
+
+  selected.forEach((stage, idx) => {
+    const ratio = Math.max(0, Math.min(100, Number(ratios[stage] || 0)))
+    const isLast = idx === selected.length - 1
+    const stageSupply = isLast ? safeSupply - usedSupply : Math.round((safeSupply * ratio) / 100)
+    usedSupply += stageSupply
+    const stageVat = isLast ? totalVat - usedVat : Math.round(stageSupply * 0.1)
+    usedVat += stageVat
+
+    if (stage === "중도금" && middleInstallments > 1) {
+      let usedSplitSupply = 0
+      let usedSplitVat = 0
+      for (let installment = 1; installment <= middleInstallments; installment++) {
+        const isLastInstallment = installment === middleInstallments
+        const splitSupply = isLastInstallment
+          ? stageSupply - usedSplitSupply
+          : Math.round(stageSupply / middleInstallments)
+        usedSplitSupply += splitSupply
+        const splitVat = isLastInstallment
+          ? stageVat - usedSplitVat
+          : Math.round(splitSupply * 0.1)
+        usedSplitVat += splitVat
+        const splitRatio = ratio / middleInstallments
+        rows.push({
+          key: `middle-${installment}`,
+          label: `중도금 ${installment}차 ${formatStagePercent(splitRatio)}%`,
+          supply: splitSupply,
+          total: splitSupply + splitVat,
+        })
+      }
+      return
+    }
+
+    rows.push({
+      key: stage,
+      label: `${stage} ${formatStagePercent(ratio)}%`,
+      supply: stageSupply,
+      total: stageSupply + stageVat,
+    })
+  })
+
+  return rows
+}
+
+function getTodayDateString() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, "0")
+  const day = String(now.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function getOverdueDays(dateString: string): number {
+  if (!dateString) return 0
+  const scheduled = new Date(`${dateString}T00:00:00`)
+  if (Number.isNaN(scheduled.getTime())) return 0
+  const today = new Date()
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const diffMs = todayStart.getTime() - scheduled.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  return diffDays > 0 ? diffDays : 0
+}
+
+function ContractFlowTab({
+  requestId,
+  requestTitle,
+  requestCustomer,
+  requestContractId,
+  confirmedQuoteSupplyAmount,
+  onLinkContract,
+}: {
+  requestId: string
+  requestTitle: string
+  requestCustomer: { id: string; company_name: string; deleted_at: string | null } | null
+  requestContractId: string | null
+  confirmedQuoteSupplyAmount: number | null
+  onLinkContract: (contractId: string) => Promise<void>
+}) {
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState("")
+  const [isAmountModalOpen, setIsAmountModalOpen] = useState(false)
+  const [amountInputValue, setAmountInputValue] = useState("")
+  const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false)
+  const [activeContractTab, setActiveContractTab] = useState<"계약서" | "정산 현황">("계약서")
+  const [modalStages, setModalStages] = useState<SettlementStage[]>(["잔금"])
+  const [modalRatios, setModalRatios] = useState<Record<SettlementStage, number>>({ ...EMPTY_STAGE_RATIOS, 잔금: 100 })
+  const [modalScheduledDates, setModalScheduledDates] = useState<Record<SettlementStage, string>>({ ...EMPTY_STAGE_SCHEDULED_DATES })
+  const [modalMiddleInstallments, setModalMiddleInstallments] = useState(DEFAULT_MIDDLE_INSTALLMENTS)
+  const [stageRatios, setStageRatios] = useState<Record<SettlementStage, number>>({ ...EMPTY_STAGE_RATIOS, 잔금: 100 })
+  const [stageScheduledDates, setStageScheduledDates] = useState<Record<SettlementStage, string>>({ ...EMPTY_STAGE_SCHEDULED_DATES })
+  const [middleInstallments, setMiddleInstallments] = useState(DEFAULT_MIDDLE_INSTALLMENTS)
+  const [settlementStatusMap, setSettlementStatusMap] = useState<Record<string, SettlementStatusInput>>({})
+  const [isSettlementStatusHydrated, setIsSettlementStatusHydrated] = useState(false)
+  const initialSnapshotRef = useRef("")
+  const lastSavedSnapshotRef = useRef("")
+  const failedSnapshotRef = useRef<string | null>(null)
+  const latestPendingRef = useRef<PendingContractDraftSnapshot | null>(null)
+  const [draft, setDraft] = useState<ContractDraft>({
+    id: null,
+    title: `${requestTitle} 계약`,
+    status: "계약 준비 중",
+    customer_id: requestCustomer?.id || "",
+    contract_amount: 0,
+    settlement_type: ["잔금"],
+    start_date: "",
+    end_date: "",
+  })
+
+  const saveRatioToLocal = useCallback((
+    key: string,
+    ratio: Record<SettlementStage, number>,
+    middleCount: number,
+    scheduledDates: Record<SettlementStage, string>
+  ) => {
+    try {
+      const raw = localStorage.getItem("requests:contractRatios:v1")
+      const parsed = raw
+        ? JSON.parse(raw) as Record<string, {
+          ratios?: Record<SettlementStage, number>
+          middle_installments?: number
+          scheduled_dates?: Record<SettlementStage, string>
+        } | Record<SettlementStage, number>>
+        : {}
+      parsed[key] = {
+        ratios: ratio,
+        middle_installments: normalizeMiddleInstallments(middleCount),
+        scheduled_dates: normalizeStageScheduledDates(scheduledDates),
+      }
+      localStorage.setItem("requests:contractRatios:v1", JSON.stringify(parsed))
+    } catch {
+      // localStorage 미지원 환경 무시
+    }
+  }, [])
+
+  const pendingDraftKey = `requests:contractDraftPending:v1:${requestId}`
+  const requestSettlementStatusKey = `requests:settlementStatus:v1:request:${requestId}`
+  const contractSettlementStatusKey = draft.id
+    ? `requests:settlementStatus:v1:contract:${draft.id}`
+    : (requestContractId ? `requests:settlementStatus:v1:contract:${requestContractId}` : null)
+  const settlementStatusStorageKey = contractSettlementStatusKey || requestSettlementStatusKey
+
+  const loadPendingDraftFromLocal = useCallback((): PendingContractDraftSnapshot | null => {
+    try {
+      const raw = localStorage.getItem(pendingDraftKey)
+      if (!raw) return null
+      const parsed = JSON.parse(raw) as PendingContractDraftSnapshot
+      if (!parsed || typeof parsed !== "object") return null
+      return parsed
+    } catch {
+      return null
+    }
+  }, [pendingDraftKey])
+
+  const savePendingDraftToLocal = useCallback((snapshot: PendingContractDraftSnapshot) => {
+    try {
+      localStorage.setItem(pendingDraftKey, JSON.stringify(snapshot))
+    } catch {
+      // localStorage 미지원 환경 무시
+    }
+  }, [pendingDraftKey])
+
+  const clearPendingDraftFromLocal = useCallback(() => {
+    try {
+      localStorage.removeItem(pendingDraftKey)
+    } catch {
+      // localStorage 미지원 환경 무시
+    }
+  }, [pendingDraftKey])
+
+  const loadRatioFromLocal = useCallback((key: string) => {
+    try {
+      const raw = localStorage.getItem("requests:contractRatios:v1")
+      if (!raw) {
+        return {
+          ratios: null,
+          middleInstallments: DEFAULT_MIDDLE_INSTALLMENTS,
+          scheduledDates: { ...EMPTY_STAGE_SCHEDULED_DATES },
+        }
+      }
+      const parsed = JSON.parse(raw) as Record<string, {
+        ratios?: Record<SettlementStage, number>
+        middle_installments?: number
+        scheduled_dates?: Record<SettlementStage, string>
+      } | Record<SettlementStage, number>>
+      const entry = parsed[key]
+      if (!entry) {
+        return {
+          ratios: null,
+          middleInstallments: DEFAULT_MIDDLE_INSTALLMENTS,
+          scheduledDates: { ...EMPTY_STAGE_SCHEDULED_DATES },
+        }
+      }
+      if ("ratios" in entry) {
+        return {
+          ratios: entry.ratios ?? null,
+          middleInstallments: normalizeMiddleInstallments(entry.middle_installments),
+          scheduledDates: normalizeStageScheduledDates(entry.scheduled_dates),
+        }
+      }
+      return {
+        ratios: entry,
+        middleInstallments: DEFAULT_MIDDLE_INSTALLMENTS,
+        scheduledDates: { ...EMPTY_STAGE_SCHEDULED_DATES },
+      }
+    } catch {
+      return {
+        ratios: null,
+        middleInstallments: DEFAULT_MIDDLE_INSTALLMENTS,
+        scheduledDates: { ...EMPTY_STAGE_SCHEDULED_DATES },
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadContract = async () => {
+      const defaultDraft: ContractDraft = {
+        id: null,
+        title: `${requestTitle} 계약`,
+        status: "계약 준비 중",
+        customer_id: requestCustomer?.id || "",
+        contract_amount: 0,
+        settlement_type: ["잔금"],
+        start_date: "",
+        end_date: "",
+      }
+
+      if (!requestContractId) {
+        if (cancelled) return
+        const storedConfig = loadRatioFromLocal(`request:${requestId}`)
+        const nextRatios = storedConfig.ratios
+          ? normalizeRatios(storedConfig.ratios, defaultDraft.settlement_type)
+          : { ...EMPTY_STAGE_RATIOS, 잔금: 100 }
+        const nextMiddleInstallments = normalizeMiddleInstallments(storedConfig.middleInstallments)
+        const nextStageScheduledDates = normalizeStageScheduledDates(storedConfig.scheduledDates)
+        const pending = loadPendingDraftFromLocal()
+        const pendingDraft = pending?.draft ?? null
+        const pendingStages = pendingDraft
+          ? SETTLEMENT_STAGE_ORDER.filter((stage) => pendingDraft.settlement_type.includes(stage))
+          : []
+        const resolvedDraft = pendingDraft ? {
+          ...defaultDraft,
+          ...pendingDraft,
+          settlement_type: pendingStages.length > 0 ? pendingStages : defaultDraft.settlement_type,
+        } : defaultDraft
+        const resolvedRatios = pending
+          ? normalizeRatios(pending.stageRatios, resolvedDraft.settlement_type)
+          : nextRatios
+        const resolvedMiddleInstallments = pending
+          ? normalizeMiddleInstallments(pending.middleInstallments)
+          : nextMiddleInstallments
+        const resolvedStageScheduledDates = pending
+          ? normalizeStageScheduledDates(pending.stageScheduledDates)
+          : nextStageScheduledDates
+        const resolvedSettlementStatusMap = pending
+          ? sanitizeSettlementStatusMap(pending.settlementStatusMap)
+          : {}
+
+        setDraft(resolvedDraft)
+        setStageRatios(resolvedRatios)
+        setMiddleInstallments(resolvedMiddleInstallments)
+        setStageScheduledDates(resolvedStageScheduledDates)
+        setSettlementStatusMap(resolvedSettlementStatusMap)
+
+        const initialSnapshot = buildContractSnapshot({
+          draft: defaultDraft,
+          selectedStages: defaultDraft.settlement_type,
+          stageRatios: nextRatios,
+          middleInstallments: nextMiddleInstallments,
+          stageScheduledDates: nextStageScheduledDates,
+          settlementStatusMap: {},
+          customerId: requestCustomer?.id || defaultDraft.customer_id || null,
+        })
+        initialSnapshotRef.current = initialSnapshot
+        lastSavedSnapshotRef.current = initialSnapshot
+        failedSnapshotRef.current = null
+        setSaveMessage("")
+        return
+      }
+
+      setIsLoading(true)
+      setSaveMessage("")
+      try {
+        const res = await fetch(`/api/contracts?id=${requestContractId}`)
+        const result = await res.json()
+        if (!res.ok || !result.success) throw new Error(result.error || "계약 조회 실패")
+
+        const contract = result.data as Record<string, unknown>
+        const settlementTypes = normalizeSettlementTypes(contract.settlement_type)
+        const nextDraft: ContractDraft = {
+          id: String(contract.id || requestContractId),
+          title: typeof contract.title === "string" && contract.title.trim() ? contract.title : `${requestTitle} 계약`,
+          status: typeof contract.status === "string" ? contract.status : "계약 준비 중",
+          customer_id: typeof contract.customer_id === "string" ? contract.customer_id : (requestCustomer?.id || ""),
+          contract_amount: Math.max(0, Math.round(Number(contract.contract_amount || 0))),
+          settlement_type: settlementTypes.length > 0 ? settlementTypes : ["잔금"],
+          start_date: typeof contract.start_date === "string" ? contract.start_date : "",
+          end_date: typeof contract.end_date === "string" ? contract.end_date : "",
+        }
+
+        if (cancelled) return
+        const storedByContract = loadRatioFromLocal(`contract:${requestContractId}`)
+        const storedByRequest = loadRatioFromLocal(`request:${requestId}`)
+        const storedConfig = storedByContract.ratios ? storedByContract : storedByRequest
+        const contractMeta = (
+          contract.contract_meta && typeof contract.contract_meta === "object"
+            ? contract.contract_meta as Record<string, unknown>
+            : null
+        )
+        const hasMetaRatios = !!(contractMeta && contractMeta.stage_ratios && typeof contractMeta.stage_ratios === "object")
+        const nextRatios = hasMetaRatios
+          ? normalizeRatios(contractMeta?.stage_ratios, nextDraft.settlement_type)
+          : (
+            storedConfig.ratios
+              ? normalizeRatios(storedConfig.ratios, nextDraft.settlement_type)
+              : createEvenRatios(nextDraft.settlement_type)
+          )
+        const nextMiddleInstallments = hasMetaRatios
+          ? normalizeMiddleInstallments(contractMeta?.middle_installments)
+          : normalizeMiddleInstallments(storedConfig.middleInstallments)
+        const nextStageScheduledDates = contractMeta
+          ? normalizeStageScheduledDates(contractMeta.stage_scheduled_dates)
+          : normalizeStageScheduledDates(storedConfig.scheduledDates)
+        const nextSettlementStatusFromDb = contractMeta
+          ? sanitizeSettlementStatusMap(contractMeta.settlement_status_map)
+          : {}
+        const pending = loadPendingDraftFromLocal()
+        const pendingDraft = pending?.draft ?? null
+        const pendingStages = pendingDraft
+          ? SETTLEMENT_STAGE_ORDER.filter((stage) => pendingDraft.settlement_type.includes(stage))
+          : []
+        const canApplyPending = !!pendingDraft && (
+          !pendingDraft.id ||
+          pendingDraft.id === nextDraft.id
+        )
+        const resolvedDraft = canApplyPending ? {
+          ...nextDraft,
+          ...pendingDraft,
+          settlement_type: pendingStages.length > 0 ? pendingStages : nextDraft.settlement_type,
+        } : nextDraft
+        const resolvedRatios = canApplyPending && pending
+          ? normalizeRatios(pending.stageRatios, resolvedDraft.settlement_type)
+          : nextRatios
+        const resolvedMiddleInstallments = canApplyPending && pending
+          ? normalizeMiddleInstallments(pending.middleInstallments)
+          : nextMiddleInstallments
+        const resolvedStageScheduledDates = canApplyPending && pending
+          ? normalizeStageScheduledDates(pending.stageScheduledDates)
+          : nextStageScheduledDates
+        const resolvedSettlementStatusMap = canApplyPending && pending
+          ? sanitizeSettlementStatusMap(pending.settlementStatusMap)
+          : nextSettlementStatusFromDb
+
+        setDraft(resolvedDraft)
+        setStageRatios(resolvedRatios)
+        setMiddleInstallments(resolvedMiddleInstallments)
+        setStageScheduledDates(resolvedStageScheduledDates)
+        setSettlementStatusMap(resolvedSettlementStatusMap)
+
+        if (nextDraft.id && Object.keys(nextSettlementStatusFromDb).length > 0) {
+          try {
+            localStorage.setItem(
+              `requests:settlementStatus:v1:contract:${nextDraft.id}`,
+              JSON.stringify(nextSettlementStatusFromDb)
+            )
+          } catch {
+            // localStorage 미지원 환경 무시
+          }
+        }
+
+        const initialSnapshot = buildContractSnapshot({
+          draft: nextDraft,
+          selectedStages: nextDraft.settlement_type,
+          stageRatios: nextRatios,
+          middleInstallments: nextMiddleInstallments,
+          stageScheduledDates: nextStageScheduledDates,
+          settlementStatusMap: nextSettlementStatusFromDb,
+          customerId: requestCustomer?.id || nextDraft.customer_id || null,
+        })
+        initialSnapshotRef.current = initialSnapshot
+        lastSavedSnapshotRef.current = initialSnapshot
+        failedSnapshotRef.current = null
+      } catch {
+        if (cancelled) return
+        setDraft(defaultDraft)
+        setStageRatios({ ...EMPTY_STAGE_RATIOS, 잔금: 100 })
+        setMiddleInstallments(DEFAULT_MIDDLE_INSTALLMENTS)
+        setStageScheduledDates({ ...EMPTY_STAGE_SCHEDULED_DATES })
+        setSettlementStatusMap({})
+        const initialSnapshot = buildContractSnapshot({
+          draft: defaultDraft,
+          selectedStages: defaultDraft.settlement_type,
+          stageRatios: { ...EMPTY_STAGE_RATIOS, 잔금: 100 },
+          middleInstallments: DEFAULT_MIDDLE_INSTALLMENTS,
+          stageScheduledDates: { ...EMPTY_STAGE_SCHEDULED_DATES },
+          settlementStatusMap: {},
+          customerId: requestCustomer?.id || defaultDraft.customer_id || null,
+        })
+        initialSnapshotRef.current = initialSnapshot
+        lastSavedSnapshotRef.current = initialSnapshot
+        failedSnapshotRef.current = null
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    loadContract()
+    return () => { cancelled = true }
+  }, [requestContractId, requestCustomer?.id, requestId, requestTitle, loadRatioFromLocal, loadPendingDraftFromLocal])
+
+  const selectedStages = SETTLEMENT_STAGE_ORDER.filter((stage) => draft.settlement_type.includes(stage))
+  const supplyAmount = Math.max(0, Math.round(Number(draft.contract_amount || 0)))
+  const totalWithVat = supplyAmount + Math.round(supplyAmount * 0.1)
+  const settlementRows = buildSettlementRows(supplyAmount, selectedStages, stageRatios, middleInstallments)
+  const settlementRowsWithScheduledDate = settlementRows.map((row) => {
+    let scheduledDate = ""
+    if (row.key === "선금") scheduledDate = stageScheduledDates.선금
+    else if (row.key === "잔금") scheduledDate = stageScheduledDates.잔금
+    else if (row.key === "중도금" || row.key.startsWith("middle-")) scheduledDate = stageScheduledDates.중도금
+    return {
+      ...row,
+      scheduledDate,
+    }
+  })
+  const settlementStatusRows = settlementRows.map((row) => {
+    const status = normalizeSettlementStatusInput(settlementStatusMap[row.key])
+    const plannedAmount = Math.max(0, Math.round(Number(row.total || 0)))
+    const actualAmount = Math.max(0, Math.round(Number(status.actual_amount || 0)))
+    let scheduledDate = ""
+    if (row.key === "선금") scheduledDate = stageScheduledDates.선금
+    else if (row.key === "잔금") scheduledDate = stageScheduledDates.잔금
+    else if (row.key === "중도금" || row.key.startsWith("middle-")) scheduledDate = stageScheduledDates.중도금
+    return {
+      key: row.key,
+      label: row.label.replace(/^선금/, "선급금"),
+      paymentConfirmed: status.payment_confirmed,
+      plannedAmount,
+      actualAmount,
+      shortfallAmount: Math.max(0, plannedAmount - actualAmount),
+      scheduledDate,
+      receivedDate: status.received_date,
+      taxInvoiceIssued: status.tax_invoice_issued,
+      overdueDays: !status.payment_confirmed ? getOverdueDays(scheduledDate) : 0,
+    }
+  })
+  const stageSummary = selectedStages.length > 0
+    ? selectedStages.map((stage) => (
+      stage === "중도금"
+        ? `${stage} ${formatStagePercent(stageRatios[stage])}% (${middleInstallments}회)`
+        : `${stage} ${formatStagePercent(stageRatios[stage])}%`
+    )).join(" · ")
+    : "정산 형태를 설정해주세요."
+  const modalSelectedRatioSum = modalStages.reduce((sum, stage) => {
+    const value = Number(modalRatios[stage] ?? 0)
+    return sum + (Number.isFinite(value) ? value : 0)
+  }, 0)
+
+  const canSave = draft.title.trim().length > 0 && !isSaving
+  const saveSnapshot = buildContractSnapshot({
+    draft,
+    selectedStages,
+    stageRatios,
+    middleInstallments,
+    stageScheduledDates,
+    settlementStatusMap,
+    customerId: requestCustomer?.id || draft.customer_id || null,
+  })
+
+  useEffect(() => {
+    latestPendingRef.current = {
+      draft,
+      stageRatios,
+      middleInstallments,
+      stageScheduledDates,
+      settlementStatusMap,
+    }
+  }, [draft, stageRatios, middleInstallments, stageScheduledDates, settlementStatusMap])
+
+  useEffect(() => {
+    return () => {
+      if (latestPendingRef.current) {
+        savePendingDraftToLocal(latestPendingRef.current)
+      }
+    }
+  }, [savePendingDraftToLocal])
+
+  useEffect(() => {
+    if (isLoading) return
+    if (!initialSnapshotRef.current) return
+
+    if (saveSnapshot === lastSavedSnapshotRef.current) {
+      clearPendingDraftFromLocal()
+      return
+    }
+
+    savePendingDraftToLocal({
+      draft,
+      stageRatios,
+      middleInstallments,
+      stageScheduledDates,
+      settlementStatusMap,
+    })
+  }, [
+    isLoading,
+    saveSnapshot,
+    draft,
+    stageRatios,
+    middleInstallments,
+    stageScheduledDates,
+    settlementStatusMap,
+    clearPendingDraftFromLocal,
+    savePendingDraftToLocal,
+  ])
+
+  useEffect(() => {
+    setIsSettlementStatusHydrated(false)
+    try {
+      const raw = localStorage.getItem(settlementStatusStorageKey)
+      const parsed = raw ? sanitizeSettlementStatusMap(JSON.parse(raw)) : {}
+      setSettlementStatusMap(parsed)
+    } catch {
+      setSettlementStatusMap({})
+    } finally {
+      setIsSettlementStatusHydrated(true)
+    }
+  }, [settlementStatusStorageKey])
+
+  useEffect(() => {
+    if (!contractSettlementStatusKey) return
+    try {
+      const existingContractData = localStorage.getItem(contractSettlementStatusKey)
+      if (existingContractData) return
+      const requestData = localStorage.getItem(requestSettlementStatusKey)
+      if (!requestData) return
+      localStorage.setItem(contractSettlementStatusKey, requestData)
+      setSettlementStatusMap(sanitizeSettlementStatusMap(JSON.parse(requestData)))
+    } catch {
+      // localStorage 미지원 환경 무시
+    }
+  }, [contractSettlementStatusKey, requestSettlementStatusKey])
+
+  useEffect(() => {
+    setSettlementStatusMap((prev) => {
+      const next: Record<string, SettlementStatusInput> = {}
+      let changed = Object.keys(prev).length !== settlementStatusRows.length
+
+      settlementStatusRows.forEach((row) => {
+        const prevValue = prev[row.key]
+        const normalized = normalizeSettlementStatusInput(prevValue)
+        if (
+          !prevValue ||
+          prevValue.payment_confirmed !== normalized.payment_confirmed ||
+          prevValue.actual_amount !== normalized.actual_amount ||
+          prevValue.received_date !== normalized.received_date ||
+          prevValue.tax_invoice_issued !== normalized.tax_invoice_issued
+        ) {
+          changed = true
+        }
+        next[row.key] = normalized
+      })
+
+      return changed ? next : prev
+    })
+  }, [settlementStatusRows])
+
+  useEffect(() => {
+    if (!isSettlementStatusHydrated) return
+    try {
+      localStorage.setItem(settlementStatusStorageKey, JSON.stringify(settlementStatusMap))
+    } catch {
+      // localStorage 미지원 환경 무시
+    }
+  }, [isSettlementStatusHydrated, settlementStatusStorageKey, settlementStatusMap])
+
+  const updateSettlementStatus = useCallback((rowKey: string, patch: Partial<SettlementStatusInput>) => {
+    setSettlementStatusMap((prev) => {
+      const current = normalizeSettlementStatusInput(prev[rowKey])
+      return {
+        ...prev,
+        [rowKey]: {
+          ...current,
+          ...patch,
+        },
+      }
+    })
+  }, [])
+
+  const openAmountModal = () => {
+    const baseAmount = supplyAmount
+    setAmountInputValue(baseAmount > 0 ? baseAmount.toLocaleString("ko-KR") : "")
+    setIsAmountModalOpen(true)
+  }
+
+  const handleApplyAmount = () => {
+    const digitsOnly = amountInputValue.replace(/[^0-9]/g, "")
+    const next = digitsOnly ? Number(digitsOnly) : 0
+    setDraft((prev) => ({ ...prev, contract_amount: Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0 }))
+    setIsAmountModalOpen(false)
+  }
+
+  const openSettlementModal = () => {
+    const normalized: SettlementStage[] = selectedStages.length > 0 ? selectedStages : ["잔금"]
+    setModalStages(normalized)
+    setModalRatios(normalizeRatios(stageRatios, normalized))
+    setModalScheduledDates(normalizeStageScheduledDates(stageScheduledDates))
+    setModalMiddleInstallments(middleInstallments)
+    setIsSettlementModalOpen(true)
+  }
+
+  const handleToggleModalStage = (stage: SettlementStage) => {
+    setModalStages((prev) => {
+      const next = prev.includes(stage)
+        ? prev.filter((s) => s !== stage)
+        : [...prev, stage]
+      const normalized = SETTLEMENT_STAGE_ORDER.filter((s) => next.includes(s))
+      if (!normalized.includes("중도금")) {
+        setModalMiddleInstallments(DEFAULT_MIDDLE_INSTALLMENTS)
+      }
+      setModalScheduledDates((prevDates) => {
+        const nextDates = { ...prevDates }
+        if (!normalized.includes(stage)) {
+          nextDates[stage] = ""
+        }
+        return nextDates
+      })
+      setModalRatios((prevRatios) => {
+        if (normalized.length === 0) return { ...EMPTY_STAGE_RATIOS }
+        const nextRatios = { ...EMPTY_STAGE_RATIOS }
+        normalized.forEach((key) => {
+          const parsed = Number(prevRatios[key] ?? 0)
+          nextRatios[key] = Number.isFinite(parsed) ? Math.max(0, Math.min(100, Math.round(parsed))) : 0
+        })
+        if (normalized.length === 1) {
+          nextRatios[normalized[0]] = 100
+        }
+        return nextRatios
+      })
+      return normalized
+    })
+  }
+
+  const handleApplySettlement = () => {
+    if (modalStages.length === 0 || modalSelectedRatioSum > 100) return
+    const normalized = SETTLEMENT_STAGE_ORDER.filter((stage) => modalStages.includes(stage))
+    setDraft((prev) => ({ ...prev, settlement_type: normalized }))
+    setStageRatios(normalizeRatios(modalRatios, normalized))
+    setStageScheduledDates(() => {
+      const base = { ...EMPTY_STAGE_SCHEDULED_DATES }
+      normalized.forEach((stage) => {
+        base[stage] = modalScheduledDates[stage] || ""
+      })
+      return base
+    })
+    setMiddleInstallments(
+      normalized.includes("중도금")
+        ? normalizeMiddleInstallments(modalMiddleInstallments)
+        : DEFAULT_MIDDLE_INSTALLMENTS
+    )
+    setIsSettlementModalOpen(false)
+  }
+
+  const handleSave = useCallback(async (mode: "manual" | "auto" = "manual") => {
+    if (!canSave || isLoading || isSaving) return
+    if (mode === "auto" && failedSnapshotRef.current === saveSnapshot) return
+    if (saveSnapshot === lastSavedSnapshotRef.current) {
+      if (mode === "manual") {
+        setSaveMessage("변경사항 없음")
+        setTimeout(() => setSaveMessage(""), 1200)
+      }
+      return
+    }
+
+    setIsSaving(true)
+    setSaveMessage(mode === "manual" ? "즉시 저장 중..." : "자동 저장 중...")
+    try {
+      const selectedStageRatios = normalizeRatios(stageRatios, selectedStages)
+      const selectedStageScheduledDates = selectedStages.reduce((acc, stage) => ({
+        ...acc,
+        [stage]: stageScheduledDates[stage] || "",
+      }), {} as Record<SettlementStage, string>)
+      const settlementStatusForSave = settlementRows.reduce((acc, row) => ({
+        ...acc,
+        [row.key]: normalizeSettlementStatusInput(settlementStatusMap[row.key]),
+      }), {} as Record<string, SettlementStatusInput>)
+
+      const payload = {
+        title: draft.title.trim(),
+        status: draft.status,
+        customer_id: requestCustomer?.id || draft.customer_id || null,
+        contract_amount: supplyAmount,
+        settlement_type: selectedStages,
+        start_date: draft.start_date || null,
+        end_date: draft.end_date || null,
+        contract_meta: {
+          stage_ratios: selectedStageRatios,
+          middle_installments: normalizeMiddleInstallments(middleInstallments),
+          stage_scheduled_dates: selectedStageScheduledDates,
+          settlement_status_map: settlementStatusForSave,
+        },
+      }
+
+      const isUpdate = !!draft.id
+      const res = await fetch("/api/contracts", {
+        method: isUpdate ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isUpdate ? { id: draft.id, ...payload } : payload),
+      })
+      const result = await res.json()
+      if (!res.ok || !result.success) throw new Error(result.error || "계약 저장 실패")
+
+      const saved = result.data as { id: string }
+      setDraft((prev) => ({ ...prev, id: saved.id }))
+      saveRatioToLocal(`request:${requestId}`, stageRatios, middleInstallments, stageScheduledDates)
+      saveRatioToLocal(`contract:${saved.id}`, stageRatios, middleInstallments, stageScheduledDates)
+
+      if (!requestContractId || requestContractId !== saved.id) {
+        await onLinkContract(saved.id)
+      }
+
+      lastSavedSnapshotRef.current = saveSnapshot
+      clearPendingDraftFromLocal()
+      failedSnapshotRef.current = null
+      setSaveMessage(mode === "manual" ? "즉시 저장됨" : "자동 저장됨")
+      setTimeout(() => setSaveMessage(""), 1500)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "저장 실패"
+      failedSnapshotRef.current = saveSnapshot
+      setSaveMessage(`저장 실패: ${message}`)
+      setTimeout(() => {
+        setSaveMessage((prev) => (prev.startsWith("저장 실패") ? prev : ""))
+      }, 2500)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [
+    canSave,
+    isLoading,
+    isSaving,
+    saveSnapshot,
+    draft,
+    requestCustomer?.id,
+    supplyAmount,
+    selectedStages,
+    requestId,
+    stageRatios,
+    middleInstallments,
+    stageScheduledDates,
+    settlementStatusMap,
+    settlementRows,
+    requestContractId,
+    onLinkContract,
+    saveRatioToLocal,
+    clearPendingDraftFromLocal,
+  ])
+
+  useEffect(() => {
+    if (!canSave || isLoading) return
+    if (!initialSnapshotRef.current) return
+    if (saveSnapshot === lastSavedSnapshotRef.current) return
+    if (failedSnapshotRef.current === saveSnapshot) return
+
+    const timer = setTimeout(() => {
+      void handleSave("auto")
+    }, 700)
+
+    return () => clearTimeout(timer)
+  }, [canSave, isLoading, saveSnapshot, handleSave])
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 border-b border-gray-200 mb-3">
+        {(["계약서", "정산 현황"] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveContractTab(tab)}
+            className={`pb-2 text-sm transition-colors ${activeContractTab === tab
+              ? "font-bold text-gray-900 border-b-2 border-gray-900"
+              : "font-medium text-gray-300 hover:text-gray-500 border-b-2 border-transparent"
+              }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {activeContractTab === "계약서" && (
+        isLoading ? (
+          <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
+            <p className="text-sm font-medium text-gray-500">계약 정보를 불러오는 중입니다.</p>
+          </div>
+        ) : (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-gray-200/80 bg-white p-2.5 space-y-2 shadow-[0_1px_0_rgba(17,24,39,0.03)]">
+        <p className="text-xs font-semibold text-gray-700">계약 정보</p>
+
+        <div className="grid grid-cols-1 gap-1.5">
+          <div className="max-w-[520px] rounded-lg border border-gray-100 bg-gray-50/50 p-2 space-y-1">
+            <Label htmlFor="contract-title" className="text-[10px] font-medium text-gray-500">계약 제목</Label>
+            <Input
+              id="contract-title"
+              value={draft.title}
+              onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))}
+              placeholder="계약 제목을 입력하세요"
+              className="h-7 border-gray-200 bg-white text-sm focus:ring-sky-aqua/40"
+            />
+          </div>
+
+          <div className="max-w-[520px] rounded-lg border border-gray-100 bg-gray-50/50 p-2 space-y-1">
+            <Label className="text-[10px] font-medium text-gray-500">계약 상태</Label>
+            <div className="rounded-md bg-gray-100 p-1 grid grid-cols-3 gap-1">
+              {(["계약 준비 중", "계약 진행 중", "계약 종료"] as const).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setDraft((prev) => ({ ...prev, status }))}
+                  className={cn(
+                    "h-6 rounded-md text-[10px] font-medium transition-colors",
+                    draft.status === status
+                      ? "bg-white text-sky-aqua shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  )}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <label className={cn(
+                "inline-flex items-center gap-1 text-[9px] cursor-pointer select-none",
+                draft.status === "계약 중단" ? "text-soft-blush" : "text-gray-400"
+              )}>
+                <input
+                  type="checkbox"
+                  checked={draft.status === "계약 중단"}
+                  onChange={(e) => {
+                    setDraft((prev) => ({
+                      ...prev,
+                      status: e.target.checked
+                        ? "계약 중단"
+                        : (prev.status === "계약 중단" ? "계약 진행 중" : prev.status),
+                    }))
+                  }}
+                  className="h-3 w-3 rounded border-gray-300 text-soft-blush focus:ring-soft-blush/40"
+                />
+                계약중단
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid max-w-[520px] grid-cols-2 gap-1.5">
+          <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-2 space-y-1">
+            <Label htmlFor="contract-start" className="text-[10px] font-medium text-gray-500">계약 착수일</Label>
+            <Input
+              id="contract-start"
+              type="date"
+              value={draft.start_date}
+              onChange={(e) => setDraft((prev) => ({ ...prev, start_date: e.target.value }))}
+              className="h-6 border-gray-200 bg-white px-2 font-sans text-[8px] font-normal text-gray-500 focus:ring-sky-aqua/40"
+            />
+          </div>
+
+          <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-2 space-y-1">
+            <Label htmlFor="contract-end" className="text-[10px] font-medium text-gray-500">계약 종료일</Label>
+            <Input
+              id="contract-end"
+              type="date"
+              value={draft.end_date}
+              onChange={(e) => setDraft((prev) => ({ ...prev, end_date: e.target.value }))}
+              className="h-6 border-gray-200 bg-white px-2 font-sans text-[8px] font-normal text-gray-500 focus:ring-sky-aqua/40"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="contract-amount" className="text-base font-semibold text-sky-aqua">
+                <span className="inline-flex items-center gap-1">
+                  <Banknote className="h-4 w-4" />
+                  <span> 총 계약금액</span>
+                </span>
+              </Label>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-1.5">
+                <Popover open={isAmountModalOpen} onOpenChange={setIsAmountModalOpen}>
+                  <PopoverTrigger asChild>
+                    <Input
+                      id="contract-amount"
+                      type="text"
+                      value={draft.contract_amount > 0 ? draft.contract_amount.toLocaleString("ko-KR") : ""}
+                      readOnly
+                      onClick={openAmountModal}
+                      placeholder="0"
+                      className="h-7 w-52 cursor-pointer border-gray-200 bg-white text-sm font-semibold text-right tabular-nums focus:ring-sky-aqua/40"
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent align="end" side="bottom" sideOffset={6} className="w-52 border-gray-200 p-2.5">
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        disabled={typeof confirmedQuoteSupplyAmount !== "number"}
+                        onClick={() => {
+                          if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
+                            setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
+                          }
+                        }}
+                        className="inline-flex h-8 w-full items-center justify-center rounded-md border border-gray-300 bg-gray-100 px-2 text-[10px] font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-200 hover:text-gray-800 disabled:opacity-40"
+                      >
+                        확정 견적금액 불러오기
+                      </button>
+                      <Input
+                        id="contract-amount-editor"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9,]*"
+                        value={amountInputValue}
+                        onChange={(e) => {
+                          const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                          setAmountInputValue(digitsOnly ? Number(digitsOnly).toLocaleString("ko-KR") : "")
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            handleApplyAmount()
+                          }
+                        }}
+                        placeholder="0"
+                        className="h-8 border-gray-200 bg-white text-sm font-semibold text-right tabular-nums focus:ring-sky-aqua/40"
+                      />
+                      <p className="text-right text-[10px] font-semibold text-soft-blush">VAT별도</p>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setIsAmountModalOpen(false)}
+                          className="px-2 py-1 text-[10px] rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50"
+                        >
+                          취소
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleApplyAmount}
+                          className="px-2 py-1 text-[10px] rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/90"
+                        >
+                          적용
+                        </button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                <span className="text-[10px] text-gray-400">원</span>
+              </div>
+              <p className="text-[9px] text-gray-400">VAT별도</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-gray-700">정산 형태</p>
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] text-gray-400">{stageSummary}</p>
+            <button
+              type="button"
+              onClick={openSettlementModal}
+              className="inline-flex items-center justify-center rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 hover:border-sky-aqua/40 hover:text-sky-aqua"
+            >
+              설정
+            </button>
+          </div>
+        </div>
+
+        <p className="text-[10px] font-medium text-gray-500">정산 금액 자동 계산</p>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-md bg-gray-50 px-2.5 py-2">
+            <p className="text-[9px] text-gray-400">VAT별도</p>
+            <p className="text-[10px] mt-0.5 font-semibold tabular-nums text-gray-700">{formatCurrency(supplyAmount)}</p>
+          </div>
+          <div className="rounded-md bg-sky-aqua/5 px-2.5 py-2">
+            <p className="text-[9px] text-gray-400">VAT 포함</p>
+            <p className="text-[10px] mt-0.5 font-semibold tabular-nums text-sky-aqua">{formatCurrency(totalWithVat)}</p>
+          </div>
+        </div>
+
+        {settlementRows.length === 0 ? (
+          <p className="text-[10px] text-gray-400">설정 버튼에서 정산 형태를 선택하세요.</p>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-gray-100">
+            <div className="grid grid-cols-[90px_96px_1fr_1fr] gap-2 bg-gray-50 px-2.5 py-1.5">
+              <p className="text-[9px] text-gray-400">구분</p>
+              <p className="text-[9px] text-gray-400">입금예정일</p>
+              <p className="text-[9px] text-right text-gray-400">VAT별도</p>
+              <p className="text-[9px] text-right text-gray-400">VAT포함</p>
+            </div>
+            {settlementRowsWithScheduledDate.map((row) => (
+              <div key={row.key} className="grid grid-cols-[90px_96px_1fr_1fr] gap-2 border-t border-gray-100 bg-white px-2.5 py-2">
+                <p className="text-[10px] font-medium text-gray-600">{row.label}</p>
+                <p className="text-[10px] text-gray-500">{row.scheduledDate || "-"}</p>
+                <p className="text-[10px] text-right tabular-nums text-gray-600">{formatCurrency(row.supply)}</p>
+                <p className="text-[10px] text-right tabular-nums font-semibold text-sky-aqua">{formatCurrency(row.total)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <p className={cn("text-[10px]", saveMessage.includes("실패") ? "text-soft-blush" : "text-gray-500")}>
+          {saveMessage || "입력값은 자동 저장됩니다."}
+        </p>
+        <button
+          type="button"
+          onClick={() => { void handleSave("manual") }}
+          disabled={!canSave}
+          className="inline-flex h-8 items-center justify-center rounded-md bg-sky-aqua px-3 text-xs font-semibold text-white hover:bg-sky-aqua/90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isSaving ? "저장 중..." : "즉시 저장"}
+        </button>
+      </div>
+
+      <Dialog open={isSettlementModalOpen} onOpenChange={setIsSettlementModalOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="font-sans text-base">정산 형태 설정</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              체크박스로 단계를 선택하고 비율(%)과 정산예정일을 설정하세요.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2.5">
+            {SETTLEMENT_STAGE_ORDER.map((stage) => {
+              const checked = modalStages.includes(stage)
+              return (
+                <div key={stage} className="flex items-start justify-between gap-2 rounded-md border border-gray-200 bg-white px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleModalStage(stage)}
+                      className="h-3.5 w-3.5 rounded border-sky-aqua accent-sky-aqua focus:ring-2 focus:ring-sky-aqua/60"
+                    />
+                    <span className={cn("text-sm", checked ? "text-gray-700" : "text-gray-400")}>{stage}</span>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={checked ? (modalRatios[stage] === 0 ? "" : String(modalRatios[stage])) : ""}
+                        placeholder="0"
+                        disabled={!checked}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onChange={(e) => {
+                          if (!checked) return
+                          const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                          const nextValue = digitsOnly ? Number(digitsOnly) : 0
+                          setModalRatios((prev) => ({
+                            ...prev,
+                            [stage]: Number.isFinite(nextValue) ? Math.max(0, Math.min(100, Math.round(nextValue))) : 0,
+                          }))
+                        }}
+                        className={cn(
+                          "h-7 w-16 rounded-md border px-2 text-right text-xs tabular-nums focus:outline-none",
+                          checked
+                            ? "border-gray-300 bg-white focus:ring-2 focus:ring-sky-aqua/50"
+                            : "border-gray-200 bg-gray-100 text-gray-300"
+                        )}
+                      />
+                      <span className={cn("text-[10px]", checked ? "text-gray-500" : "text-gray-300")}>%</span>
+                      {stage === "중도금" && checked && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-gray-500">회차</span>
+                          <select
+                            value={modalMiddleInstallments}
+                            onChange={(e) => setModalMiddleInstallments(normalizeMiddleInstallments(e.target.value))}
+                            className="h-7 rounded-md border border-gray-300 bg-white px-1.5 text-[10px] text-gray-600 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50"
+                          >
+                            {[1, 2, 3, 4, 5].map((count) => (
+                              <option key={count} value={count}>{count}회</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className={cn("text-[10px]", checked ? "text-gray-500" : "text-gray-300")}>예정일</span>
+                      <input
+                        type="date"
+                        value={checked ? modalScheduledDates[stage] : ""}
+                        disabled={!checked}
+                        onChange={(e) => {
+                          if (!checked) return
+                          setModalScheduledDates((prev) => ({
+                            ...prev,
+                            [stage]: e.target.value,
+                          }))
+                        }}
+                        className={cn(
+                          "h-7 rounded-md border px-2 text-[10px] focus:outline-none",
+                          checked
+                            ? "border-gray-300 bg-white text-gray-600 focus:ring-2 focus:ring-sky-aqua/50"
+                            : "border-gray-200 bg-gray-100 text-gray-300"
+                        )}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setIsSettlementModalOpen(false)}
+              className="px-3 py-1.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleApplySettlement}
+              disabled={modalStages.length === 0 || modalSelectedRatioSum > 100}
+              className="px-3 py-1.5 text-xs rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/90 disabled:opacity-40"
+            >
+              적용
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+        )
+      )}
+
+      {activeContractTab === "정산 현황" && (
+        isLoading ? (
+          <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
+            <p className="text-sm font-medium text-gray-500">정산 현황을 불러오는 중입니다.</p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-gray-700">총 계약금액</p>
+                <p className="text-sm font-bold tabular-nums text-sky-aqua">
+                  {formatCurrency(totalWithVat)} <span className="text-[10px] font-semibold align-middle">VAT포함</span>
+                </p>
+              </div>
+            </div>
+
+            {settlementStatusRows.map((row) => (
+              <div
+                key={row.key}
+                className={cn(
+                  "rounded-xl border bg-white px-3 py-2.5 space-y-2 transition-colors",
+                  row.overdueDays > 0
+                    ? "border-soft-blush/60 bg-soft-blush/10 ring-1 ring-soft-blush/25"
+                    : row.paymentConfirmed
+                      ? "border-sky-aqua/60 bg-sky-aqua/10 ring-1 ring-sky-aqua/20"
+                      : "border-gray-200"
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="truncate text-[11px] font-semibold text-gray-700">{row.label}</p>
+                    <label className="inline-flex shrink-0 cursor-pointer items-center gap-1 text-[10px] text-gray-500">
+                      <input
+                        type="checkbox"
+                        checked={row.paymentConfirmed}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            updateSettlementStatus(row.key, {
+                              payment_confirmed: true,
+                              actual_amount: row.plannedAmount,
+                              received_date: row.receivedDate || getTodayDateString(),
+                            })
+                            return
+                          }
+                          updateSettlementStatus(row.key, {
+                            payment_confirmed: false,
+                            actual_amount: 0,
+                            received_date: "",
+                          })
+                        }}
+                        className="h-3.5 w-3.5 rounded border-sky-aqua accent-sky-aqua focus:ring-2 focus:ring-sky-aqua/60"
+                      />
+                      {row.paymentConfirmed ? "입금완료" : "미입금"}
+                    </label>
+                    <span className="shrink-0 text-[9px] text-gray-400">입금예정일 {row.scheduledDate || "-"}</span>
+                    {row.overdueDays > 0 && (
+                      <span className="inline-flex shrink-0 items-center rounded-full border border-red-300 bg-red-100 px-1.5 py-0.5 text-[9px] font-bold text-red-700">
+                        D+{row.overdueDays}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[11px] font-bold tabular-nums text-gray-700">{formatCurrency(row.plannedAmount)}</p>
+                    <p className="text-[9px] text-gray-400">VAT포함</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-gray-400">입금금액</p>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9,]*"
+                      value={row.actualAmount > 0 ? row.actualAmount.toLocaleString("ko-KR") : ""}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                        const nextAmount = digitsOnly ? Number(digitsOnly) : 0
+                        updateSettlementStatus(row.key, {
+                          actual_amount: Number.isFinite(nextAmount) ? Math.max(0, Math.round(nextAmount)) : 0,
+                        })
+                      }}
+                      placeholder="0"
+                      className="h-8 border-gray-200 bg-white px-2 text-right text-[11px] font-semibold tabular-nums focus:ring-sky-aqua/40"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-gray-400">입금 완료일</p>
+                    <Input
+                      type="date"
+                      value={row.receivedDate}
+                      onChange={(e) => updateSettlementStatus(row.key, { received_date: e.target.value })}
+                      className="h-8 border-gray-200 bg-white px-2 text-[11px] text-gray-600 focus:ring-sky-aqua/40"
+                    />
+                  </div>
+                </div>
+
+                {row.shortfallAmount > 0 && (
+                  <p className="text-right text-[10px] font-medium text-soft-blush">
+                    미입금 {formatCurrency(row.shortfallAmount)}
+                  </p>
+                )}
+
+                <div className="flex justify-end">
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-[10px] text-gray-500">
+                    <input
+                      type="checkbox"
+                      checked={row.taxInvoiceIssued}
+                      onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_issued: e.target.checked })}
+                      className="h-3.5 w-3.5 rounded border-sky-aqua accent-sky-aqua focus:ring-2 focus:ring-sky-aqua/60"
+                    />
+                    {row.taxInvoiceIssued ? "계산서 발행완료" : "계산서 미발행"}
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  )
 }
 
 function SalesFlowPanel({
@@ -858,17 +2287,27 @@ function SalesFlowPanel({
   onEditQuote,
   confirmedQuoteId,
   onToggleConfirm,
+  requestId,
+  requestTitle,
+  requestCustomer,
+  requestContractId,
+  onLinkContract,
 }: {
   quotations: QuotationListItem[]
   onAddQuote: () => void
   onEditQuote: (id: string) => void
   confirmedQuoteId: string | null
   onToggleConfirm: (quote: QuotationListItem) => void
+  requestId: string
+  requestTitle: string
+  requestCustomer: { id: string; company_name: string; deleted_at: string | null } | null
+  requestContractId: string | null
+  onLinkContract: (contractId: string) => Promise<void>
 }) {
   const [activeFlow, setActiveFlow] = useState<"견적" | "계약" | "주문·배송" | "매입·매출">("견적")
 
-  const flowTabs: Array<{ key: "견적" | "계약" | "주문·배송" | "매입·매출"; count?: number }> = [
-    { key: "견적", count: quotations.length },
+  const flowTabs: Array<{ key: "견적" | "계약" | "주문·배송" | "매입·매출" }> = [
+    { key: "견적" },
     { key: "계약" },
     { key: "주문·배송" },
     { key: "매입·매출" },
@@ -879,6 +2318,7 @@ function SalesFlowPanel({
     "주문·배송": Truck,
     "매입·매출": ArrowUpDown,
   } as const
+  const confirmedQuote = confirmedQuoteId ? quotations.find((q) => q.id === confirmedQuoteId) ?? null : null
 
   return (
     <div>
@@ -898,7 +2338,6 @@ function SalesFlowPanel({
             >
               <Icon className="h-3.5 w-3.5 shrink-0" />
               <span>{tab.key}</span>
-              {typeof tab.count === "number" && <span className="ml-0.5 text-xs">{tab.count}</span>}
             </button>
           )
         })}
@@ -914,7 +2353,18 @@ function SalesFlowPanel({
         />
       )}
 
-      {activeFlow !== "견적" && (
+      {activeFlow === "계약" && (
+        <ContractFlowTab
+          requestId={requestId}
+          requestTitle={requestTitle}
+          requestCustomer={requestCustomer}
+          requestContractId={requestContractId}
+          confirmedQuoteSupplyAmount={confirmedQuote?.total_amount ?? null}
+          onLinkContract={onLinkContract}
+        />
+      )}
+
+      {activeFlow !== "견적" && activeFlow !== "계약" && (
         <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
           <p className="text-sm font-medium text-gray-500">{activeFlow} 흐름은 다음 단계에서 연결됩니다.</p>
         </div>
@@ -1269,27 +2719,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [quotations, setQuotations] = useState<QuotationListItem[]>([])
   const [isQuoteSheetOpen, setIsQuoteSheetOpen] = useState(false)
   const [editingQuotation, setEditingQuotation] = useState<QuotationWithItems | null>(null)
-  const [confirmedQuotes, setConfirmedQuotes] = useState<Record<string, ConfirmedQuoteInfo>>({})
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("requests:confirmedQuotes:v1")
-      if (raw) {
-        const parsed = JSON.parse(raw) as Record<string, ConfirmedQuoteInfo>
-        setConfirmedQuotes(parsed)
-      }
-    } catch {
-      setConfirmedQuotes({})
-    }
-  }, [])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("requests:confirmedQuotes:v1", JSON.stringify(confirmedQuotes))
-    } catch {
-      // localStorage 사용 불가 환경에서는 조용히 무시
-    }
-  }, [confirmedQuotes])
 
   // 의뢰 선택 시 견적서 목록 로드
   const loadQuotations = useCallback(async (reqId: string) => {
@@ -1313,40 +2742,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       setQuotations([])
     }
   }, [selectedItemId, loadQuotations])
-
-  useEffect(() => {
-    if (!selectedItemId) return
-    const current = confirmedQuotes[selectedItemId]
-    if (!current) return
-
-    const matched = quotations.find((q) => q.id === current.quoteId)
-    if (!matched) {
-      setConfirmedQuotes((prev) => {
-        const next = { ...prev }
-        delete next[selectedItemId]
-        return next
-      })
-      return
-    }
-
-    if (
-      matched.grand_total !== current.grandTotal ||
-      matched.total_amount !== current.totalAmount ||
-      matched.quotation_number !== current.quotationNumber ||
-      matched.title !== current.title
-    ) {
-      setConfirmedQuotes((prev) => ({
-        ...prev,
-        [selectedItemId]: {
-          quoteId: matched.id,
-          title: matched.title,
-          quotationNumber: matched.quotation_number,
-          totalAmount: matched.total_amount,
-          grandTotal: matched.grand_total,
-        },
-      }))
-    }
-  }, [selectedItemId, quotations, confirmedQuotes])
 
   // 견적서 편집 열기 (상세 데이터 fetch)
   const handleEditQuote = useCallback(async (quoteId: string) => {
@@ -1400,28 +2795,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     }
     router.refresh()
   }, [selectedItem, loadQuotations, router])
-
-  const handleToggleConfirmedQuote = useCallback((quote: QuotationListItem) => {
-    if (!selectedItem) return
-    setConfirmedQuotes((prev) => {
-      const current = prev[selectedItem.id]
-      if (current?.quoteId === quote.id) {
-        const next = { ...prev }
-        delete next[selectedItem.id]
-        return next
-      }
-      return {
-        ...prev,
-        [selectedItem.id]: {
-          quoteId: quote.id,
-          title: quote.title,
-          quotationNumber: quote.quotation_number,
-          totalAmount: quote.total_amount,
-          grandTotal: quote.grand_total,
-        },
-      }
-    })
-  }, [selectedItem])
 
   // 의뢰 필드 수정 + 자동저장
   const updateRequestField = useCallback(async (field: string, value: string | null) => {
@@ -1484,6 +2857,12 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       setTimeout(() => setSaveMessage(""), 2000)
     }
   }, [selectedItem, localCustomers, router])
+
+  const handleToggleConfirmedQuote = useCallback(async (quote: QuotationListItem) => {
+    if (!selectedItem) return
+    const nextConfirmedQuoteId = selectedItem.confirmed_quote_id === quote.id ? null : quote.id
+    await updateRequestField("confirmed_quote_id", nextConfirmedQuoteId)
+  }, [selectedItem, updateRequestField])
   // 컬럼별 정렬 상태: null(기본) → "asc"(오름차순) → "desc"(내림차순) → null 순환
   const [sortOrder, setSortOrder] = useState<Record<string, "asc" | "desc" | null>>({})
 
@@ -1731,7 +3110,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                 >
                   {/* 컬럼 헤더 */}
                   <div className="flex items-center justify-between px-4 py-3">
-                    <h2 className={cn("font-extrabold text-2xl", style.header)}>
+                    <h2 className={cn("font-extrabold text-lg", style.header)}>
                       {col.status}
                     </h2>
                     <div className="flex items-center gap-1.5">
@@ -1813,16 +3192,16 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                 </button>
 
                                 {/* 상태 배지 (우측 상단 모서리) */}
-                                <Badge className={cn("absolute top-2 right-2 text-[10px] px-1 py-0", style.badge)}>
+                                <Badge className={cn("absolute top-2 right-2 text-[8px] px-1 py-0", style.badge)}>
                                   {col.status}
                                 </Badge>
 
                                 {/* 제목 */}
                                 <div className="mb-2 pr-16">
-                                  <p className="flex items-center gap-1.5 text-base font-semibold text-gray-900 truncate" title={item.title}>
+                                  <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-900 truncate" title={item.title}>
                                     {(() => {
                                       const Icon = COLUMN_ICONS[col.status] || ClipboardList
-                                      return <Icon className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                                      return <Icon className="h-3 w-3 text-gray-500 shrink-0" />
                                     })()}
                                     <span className="truncate">{item.title}</span>
                                   </p>
@@ -1830,18 +3209,18 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
                                 {/* 문의 일시 + 고객명 (제목과 간격 두고 하단 배치) */}
                                 <div className="mt-4 space-y-1">
-                                  <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                    <Calendar className="h-3 w-3 shrink-0" />
                                     <span>{item.inquiry_date ? formatDate(item.inquiry_date) : "없음"}</span>
                                   </div>
-                                  <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                                    <Building2 className="h-3.5 w-3.5 shrink-0" />
+                                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                    <Building2 className="h-3 w-3 shrink-0" />
                                     <span className={item.customer?.deleted_at ? "text-soft-blush" : ""}>
                                       {item.customer ? (item.customer.deleted_at ? "삭제된 고객" : item.customer.company_name) : "없음"}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                    <FileText className="h-3 w-3 shrink-0" />
                                     <span>없음</span>
                                   </div>
                                 </div>
@@ -1853,7 +3232,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
                         {/* 빈 컬럼 */}
                         {col.items.length === 0 && (
-                          <div className="text-center py-8 text-xs text-gray-400">
+                          <div className="text-center py-8 text-[10px] text-gray-400">
                             없음
                           </div>
                         )}
@@ -2089,14 +3468,14 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       <Sheet open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
         <SheetContent side="right" className="w-full sm:max-w-[900px] p-0 flex flex-col [&>button:first-child]:hidden">
           {selectedItem && (() => {
-            const confirmedQuote = confirmedQuotes[selectedItem.id] ?? null
-            const confirmedQuoteFromList = confirmedQuote
-              ? quotations.find((q) => q.id === confirmedQuote.quoteId) ?? null
+            const confirmedQuoteId = selectedItem.confirmed_quote_id
+            const confirmedQuote = confirmedQuoteId
+              ? quotations.find((q) => q.id === confirmedQuoteId) ?? null
               : null
-            const confirmedQuoteTitle = confirmedQuoteFromList?.title ?? confirmedQuote?.title ?? "미확정"
-            const confirmedQuotationNumber = confirmedQuoteFromList?.quotation_number ?? confirmedQuote?.quotationNumber ?? "미확정"
-            const confirmedTotalAmount = confirmedQuoteFromList?.total_amount ?? confirmedQuote?.totalAmount ?? null
-            const confirmedGrandTotal = confirmedQuoteFromList?.grand_total ?? confirmedQuote?.grandTotal ?? null
+            const confirmedQuoteTitle = confirmedQuote?.title ?? "미확정"
+            const confirmedQuotationNumber = confirmedQuote?.quotation_number ?? "미확정"
+            const confirmedTotalAmount = confirmedQuote?.total_amount ?? null
+            const confirmedGrandTotal = confirmedQuote?.grand_total ?? null
             return (
               <>
                 {/* 상단 헤더 */}
@@ -2261,20 +3640,20 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                               <Box className="h-3.5 w-3.5 text-gray-500" />
                               확정 견적서
                             </p>
-                            {!confirmedQuote?.quoteId && (
+                            {!confirmedQuoteId && (
                               <span className="text-[10px] text-gray-400">견적서를 확정 지어주세요</span>
                             )}
                           </div>
                           <button
                             type="button"
                             onClick={() => {
-                              if (confirmedQuote?.quoteId) handleEditQuote(confirmedQuote.quoteId)
+                              if (confirmedQuoteId) handleEditQuote(confirmedQuoteId)
                             }}
-                            disabled={!confirmedQuote?.quoteId}
-                            aria-label={confirmedQuote?.quoteId ? "확정 견적서 열기" : "확정 견적서 없음"}
+                            disabled={!confirmedQuoteId}
+                            aria-label={confirmedQuoteId ? "확정 견적서 열기" : "확정 견적서 없음"}
                             className={cn(
                               "w-full rounded-xl border border-gray-200 bg-white p-4 space-y-3 text-left transition-colors",
-                              confirmedQuote?.quoteId
+                              confirmedQuoteId
                                 ? "cursor-pointer hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
                                 : "cursor-default"
                             )}
@@ -2323,8 +3702,15 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                       quotations={quotations}
                       onAddQuote={handleAddQuote}
                       onEditQuote={handleEditQuote}
-                      confirmedQuoteId={confirmedQuote?.quoteId ?? null}
+                      confirmedQuoteId={confirmedQuoteId}
                       onToggleConfirm={handleToggleConfirmedQuote}
+                      requestId={selectedItem.id}
+                      requestTitle={selectedItem.title}
+                      requestCustomer={selectedItem.customer}
+                      requestContractId={selectedItem.contract_id}
+                      onLinkContract={async (contractId) => {
+                        await updateRequestField("contract_id", contractId)
+                      }}
                     />
                   </div>
                 </div>

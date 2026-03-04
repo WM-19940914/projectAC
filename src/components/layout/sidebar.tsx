@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -9,52 +9,42 @@ import { Button } from "@/components/ui/button"
 import {
   Tooltip,
   TooltipContent,
-  TooltipTrigger,
   TooltipProvider,
+  TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Separator } from "@/components/ui/separator"
 import {
-  LayoutDashboard,
-  FileText,
+  Briefcase,
   CheckSquare,
-  Users,
-  FileSignature,
-  File,
-  FileStack,
-  DollarSign,
-  CreditCard,
-  Settings,
+  ChevronDown,
   ClipboardList,
+  FileText,
+  LayoutDashboard,
   PanelLeftClose,
   PanelLeftOpen,
-  ChevronDown,
-  Briefcase,
-  HandCoins,
+  Settings,
+  Users,
 } from "lucide-react"
 
-// ----- 타입 정의 -----
 interface MenuItem {
   label: string
   href: string
   icon: React.ElementType
 }
 
-// 아코디언 메뉴 그룹 (영업, 계약, 정산·지출)
 interface AccordionGroup {
   category: string
-  icon: React.ElementType       // 카테고리 아이콘
-  defaultHref: string           // 카테고리 클릭 시 이동할 경로 (첫 번째 항목)
+  icon: React.ElementType
+  defaultHref: string
   items: MenuItem[]
 }
 
-// ----- 대시보드 (독립 메뉴) -----
 const dashboardItem: MenuItem = {
   label: "대시보드",
   href: "/dashboard",
   icon: LayoutDashboard,
 }
 
-// ----- 아코디언 메뉴 구조 -----
 const accordionGroups: AccordionGroup[] = [
   {
     category: "영업",
@@ -66,34 +56,13 @@ const accordionGroups: AccordionGroup[] = [
       { label: "견적서", href: "/quotes", icon: FileText },
     ],
   },
-  {
-    category: "계약",
-    icon: FileSignature,
-    defaultHref: "/contracts",
-    items: [
-      { label: "계약", href: "/contracts", icon: FileSignature },
-      { label: "계약서", href: "/contract-documents", icon: File },
-      { label: "계약서 양식", href: "/contract-templates", icon: FileStack },
-    ],
-  },
-  {
-    category: "정산·지출",
-    icon: HandCoins,
-    defaultHref: "/settlements",
-    items: [
-      { label: "정산", href: "/settlements", icon: DollarSign },
-      { label: "지출", href: "/expenses", icon: CreditCard },
-    ],
-  },
 ]
 
-// ----- 하단 링크 -----
 const bottomLinks: MenuItem[] = [
   { label: "가격표", href: "/price-list", icon: ClipboardList },
   { label: "비즈니스 설정", href: "/settings", icon: Settings },
 ]
 
-// 현재 경로가 어떤 그룹에 속하는지 찾기
 function findActiveGroup(pathname: string): string | null {
   for (const group of accordionGroups) {
     if (group.items.some((item) => pathname.startsWith(item.href))) {
@@ -103,7 +72,6 @@ function findActiveGroup(pathname: string): string | null {
   return null
 }
 
-// ===== 메인 사이드바 컴포넌트 =====
 interface SidebarProps {
   collapsed: boolean
   onToggle: () => void
@@ -111,59 +79,47 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname()
+  const [openGroup, setOpenGroup] = useState<string | null>(findActiveGroup(pathname))
 
-  // 열려있는 아코디언 (현재 경로에 맞는 그룹 자동 오픈)
-  const [openGroup, setOpenGroup] = useState<string | null>(
-    findActiveGroup(pathname)
-  )
-
-  // 경로 바뀌면 해당 그룹 자동 오픈
   useEffect(() => {
     const active = findActiveGroup(pathname)
     if (active) setOpenGroup(active)
   }, [pathname])
 
-  // 현재 경로가 메뉴 항목과 일치하는지
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard"
     return pathname.startsWith(href)
   }
 
-  // 아코디언 토글 (이미 열려있으면 닫기, 닫혀있으면 열기)
   const toggleGroup = (category: string) => {
     setOpenGroup((prev) => (prev === category ? null : category))
   }
-
 
   return (
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
-          "flex h-full flex-col border-r border-gray-100 bg-white/60 backdrop-blur-xl shadow-[4px_0_24px_rgba(0,0,0,0.02)] transition-all duration-300 relative z-20",
+          "relative z-20 flex h-full flex-col border-r border-gray-100 bg-white/60 shadow-[4px_0_24px_rgba(0,0,0,0.02)] backdrop-blur-xl transition-all duration-300",
           collapsed ? "w-[68px]" : "w-[280px]"
         )}
       >
-        {/* 로고 영역 */}
         <div className="flex h-14 items-center justify-between border-b px-3">
-          {!collapsed && (
-            <Link
-              href="/dashboard"
-              className="flex items-center gap-2 font-bold text-xl text-sky-aqua"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-aqua to-tropical-teal text-white shadow-md shadow-sky-aqua/20 text-sm font-bold">
+          {!collapsed ? (
+            <Link href="/dashboard" className="flex items-center gap-2 text-xl font-bold text-sky-aqua">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-sky-aqua to-tropical-teal text-sm font-bold text-white shadow-md shadow-sky-aqua/20">
                 M
               </div>
               M
             </Link>
-          )}
-          {collapsed && (
+          ) : (
             <Link
               href="/dashboard"
-              className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-sky-aqua text-white text-sm font-bold"
+              className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-sky-aqua text-sm font-bold text-white"
             >
               M
             </Link>
           )}
+
           {!collapsed && (
             <Button
               variant="ghost"
@@ -176,7 +132,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
         </div>
 
-        {/* 접힌 상태에서 펼치기 버튼 */}
         {collapsed && (
           <div className="flex justify-center py-2">
             <Button
@@ -190,10 +145,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         )}
 
-        {/* 메뉴 영역 */}
         <ScrollArea className="flex-1 px-3 py-2">
           <nav className="flex flex-col gap-1">
-            {/* 대시보드 (독립) */}
             {collapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -209,7 +162,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     <dashboardItem.icon className="h-4 w-4" />
                   </Link>
                 </TooltipTrigger>
-                <TooltipContent side="right">대시보드</TooltipContent>
+                <TooltipContent side="right">{dashboardItem.label}</TooltipContent>
               </Tooltip>
             ) : (
               <Link
@@ -226,16 +179,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </Link>
             )}
 
-            {/* 아코디언 메뉴 그룹들 */}
             {accordionGroups.map((group) => {
               const isOpen = openGroup === group.category
-              // 이 그룹 안에 활성 항목이 있는지
               const hasActiveItem = group.items.some((item) => isActive(item.href))
               const GroupIcon = group.icon
 
               return (
                 <div key={group.category} className="mt-1">
-                  {/* 접힌 상태: 카테고리 아이콘만 (클릭 시 첫 번째 항목으로 이동) */}
                   {collapsed ? (
                     <>
                       <Separator className="my-2" />
@@ -256,25 +206,21 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                                 <Icon className="h-4 w-4" />
                               </Link>
                             </TooltipTrigger>
-                            <TooltipContent side="right">
-                              {item.label}
-                            </TooltipContent>
+                            <TooltipContent side="right">{item.label}</TooltipContent>
                           </Tooltip>
                         )
                       })}
                     </>
                   ) : (
                     <>
-                      {/* 펼친 상태: 아코디언 헤더 */}
                       <div
                         className={cn(
-                          "flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-semibold transition-all duration-200 mt-2 cursor-pointer active:scale-[0.98] hover:translate-x-1",
+                          "mt-2 flex h-10 w-full cursor-pointer items-center gap-3 rounded-xl px-3 text-[15px] font-semibold transition-all duration-200 active:scale-[0.98] hover:translate-x-1",
                           hasActiveItem
-                            ? "text-sky-aqua shadow-sm bg-sky-aqua/5"
+                            ? "bg-sky-aqua/5 text-sky-aqua shadow-sm"
                             : "text-gray-600 hover:bg-gray-100/80 hover:text-gray-900"
                         )}
                       >
-                        {/* 카테고리 이름 클릭 → 기본 페이지 이동 + 열기 */}
                         <Link
                           href={group.defaultHref}
                           onClick={() => setOpenGroup(group.category)}
@@ -283,10 +229,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                           <GroupIcon className="h-5 w-5 shrink-0" />
                           <span className="truncate">{group.category}</span>
                         </Link>
-                        {/* 화살표 클릭 → 아코디언 토글만 */}
                         <button
                           onClick={() => toggleGroup(group.category)}
-                          className="p-1 rounded hover:bg-gray-200 transition-colors"
+                          className="rounded p-1 transition-colors hover:bg-gray-200"
                         >
                           <ChevronDown
                             className={cn(
@@ -297,7 +242,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         </button>
                       </div>
 
-                      {/* 아코디언 내용 (하위 메뉴) */}
                       <div
                         className={cn(
                           "overflow-hidden transition-all duration-200",
@@ -313,9 +257,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                               key={item.href}
                               href={item.href}
                               className={cn(
-                                "flex h-9 items-center gap-3 rounded-lg pl-9 pr-3 text-[14px] transition-all duration-200 mt-1 active:scale-[0.98] hover:translate-x-1",
+                                "mt-1 flex h-9 items-center gap-3 rounded-lg pl-9 pr-3 text-[14px] transition-all duration-200 active:scale-[0.98] hover:translate-x-1",
                                 active
-                                  ? "bg-sky-aqua/10 text-sky-aqua font-semibold shadow-sm"
+                                  ? "bg-sky-aqua/10 font-semibold text-sky-aqua shadow-sm"
                                   : "text-gray-500 hover:bg-gray-100/80 hover:text-gray-900"
                               )}
                             >
@@ -333,7 +277,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </nav>
         </ScrollArea>
 
-        {/* 하단 링크 영역 */}
         <div className="border-t px-3 py-2">
           {bottomLinks.map((item) => {
             const Icon = item.icon
@@ -349,9 +292,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                       <Icon className="h-4 w-4" />
                     </Link>
                   </TooltipTrigger>
-                  <TooltipContent side="right">
-                    {item.label}
-                  </TooltipContent>
+                  <TooltipContent side="right">{item.label}</TooltipContent>
                 </Tooltip>
               )
             }
@@ -360,7 +301,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex h-10 items-center gap-3 rounded-xl px-3 text-[15px] text-gray-500 transition-all duration-200 mt-1 active:scale-[0.98] hover:translate-x-1 hover:bg-gray-100/80 hover:text-gray-900"
+                className="mt-1 flex h-10 items-center gap-3 rounded-xl px-3 text-[15px] text-gray-500 transition-all duration-200 active:scale-[0.98] hover:translate-x-1 hover:bg-gray-100/80 hover:text-gray-900"
               >
                 <Icon className="h-5 w-5 shrink-0" />
                 <span className="truncate">{item.label}</span>
@@ -373,12 +314,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   )
 }
 
-// 모바일 네비게이션에서 재사용할 메뉴 컴포넌트
 export function SidebarMenu({ onItemClick }: { onItemClick?: () => void }) {
   const pathname = usePathname()
-  const [openGroup, setOpenGroup] = useState<string | null>(
-    findActiveGroup(pathname)
-  )
+  const [openGroup, setOpenGroup] = useState<string | null>(findActiveGroup(pathname))
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard"
@@ -391,7 +329,6 @@ export function SidebarMenu({ onItemClick }: { onItemClick?: () => void }) {
 
   return (
     <nav className="flex flex-col gap-1 px-3 py-2">
-      {/* 대시보드 */}
       <Link
         href={dashboardItem.href}
         onClick={onItemClick}
@@ -406,7 +343,6 @@ export function SidebarMenu({ onItemClick }: { onItemClick?: () => void }) {
         <span className="truncate">{dashboardItem.label}</span>
       </Link>
 
-      {/* 아코디언 그룹 */}
       {accordionGroups.map((group) => {
         const isOpen = openGroup === group.category
         const hasActiveItem = group.items.some((item) => isActive(item.href))
@@ -416,15 +352,16 @@ export function SidebarMenu({ onItemClick }: { onItemClick?: () => void }) {
           <div key={group.category}>
             <div
               className={cn(
-                "flex h-9 w-full items-center gap-3 rounded-md px-2 text-sm font-semibold transition-colors mt-2 cursor-pointer",
-                hasActiveItem
-                  ? "text-sky-aqua"
-                  : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                "mt-2 flex h-9 w-full cursor-pointer items-center gap-3 rounded-md px-2 text-sm font-semibold transition-colors",
+                hasActiveItem ? "text-sky-aqua" : "text-gray-700 hover:bg-gray-100 hover:text-gray-900"
               )}
             >
               <Link
                 href={group.defaultHref}
-                onClick={() => { setOpenGroup(group.category); onItemClick?.() }}
+                onClick={() => {
+                  setOpenGroup(group.category)
+                  onItemClick?.()
+                }}
                 className="flex flex-1 items-center gap-3"
               >
                 <GroupIcon className="h-4 w-4 shrink-0" />
@@ -432,7 +369,7 @@ export function SidebarMenu({ onItemClick }: { onItemClick?: () => void }) {
               </Link>
               <button
                 onClick={() => toggleGroup(group.category)}
-                className="p-1 rounded hover:bg-gray-200 transition-colors"
+                className="rounded p-1 transition-colors hover:bg-gray-200"
               >
                 <ChevronDown
                   className={cn(
@@ -452,6 +389,7 @@ export function SidebarMenu({ onItemClick }: { onItemClick?: () => void }) {
               {group.items.map((item) => {
                 const active = isActive(item.href)
                 const Icon = item.icon
+
                 return (
                   <Link
                     key={item.href}
@@ -460,7 +398,7 @@ export function SidebarMenu({ onItemClick }: { onItemClick?: () => void }) {
                     className={cn(
                       "flex h-8 items-center gap-3 rounded-md pl-9 pr-2 text-sm transition-colors",
                       active
-                        ? "bg-sky-aqua/10 text-sky-aqua font-medium"
+                        ? "bg-sky-aqua/10 font-medium text-sky-aqua"
                         : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                     )}
                   >
@@ -474,7 +412,6 @@ export function SidebarMenu({ onItemClick }: { onItemClick?: () => void }) {
         )
       })}
 
-      {/* 하단 링크 */}
       <Separator className="my-2" />
       {bottomLinks.map((item) => {
         const Icon = item.icon

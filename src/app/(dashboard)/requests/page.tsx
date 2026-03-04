@@ -12,6 +12,8 @@ function toRequestItem(r: Record<string, unknown>) {
     title: r.title as string,
     inquiry_date: r.inquiry_date as string | null,
     status: r.status as string,
+    contract_id: (r.contract_id as string | null) ?? null,
+    confirmed_quote_id: (r.confirmed_quote_id as string | null) ?? null,
     memo: r.memo as string | null,
     created_at: r.created_at as string,
     customer: Array.isArray(r.customer)
@@ -28,7 +30,7 @@ export default async function RequestsPage() {
   const { data: requests } = await supabase
     .from("requests")
     .select(`
-      id, title, inquiry_date,
+      id, title, inquiry_date, contract_id, confirmed_quote_id,
       status, memo, created_at,
       customer:customers(id, company_name, deleted_at)
     `)
@@ -40,7 +42,7 @@ export default async function RequestsPage() {
   const { data: hiddenRequests } = await supabase
     .from("requests")
     .select(`
-      id, title, inquiry_date,
+      id, title, inquiry_date, contract_id, confirmed_quote_id,
       status, memo, created_at,
       customer:customers(id, company_name, deleted_at)
     `)

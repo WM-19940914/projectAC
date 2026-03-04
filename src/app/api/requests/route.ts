@@ -51,7 +51,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     // 허용 필드만 추출
-    const allowedFields = ["hidden", "title", "customer_id", "inquiry_date", "memo", "status"]
+    const allowedFields = ["hidden", "title", "customer_id", "contract_id", "confirmed_quote_id", "inquiry_date", "memo", "status"]
     const updateData: Record<string, unknown> = {}
     for (const key of allowedFields) {
       if (key in fields) {
