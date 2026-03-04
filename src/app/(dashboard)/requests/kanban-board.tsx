@@ -21,7 +21,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
-import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Briefcase, Building2, Calendar, CheckCircle2, ClipboardList, EyeOff, FileText, Hash, Mail, Phone, Plus, Search, Trash2, User, X, XCircle } from "lucide-react"
+import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Box, Briefcase, Building2, Calendar, CheckCircle2, Circle, ClipboardList, EyeOff, FileText, Hash, Mail, Pencil, Phone, Plus, Search, Trash2, Truck, User, X, XCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -197,6 +197,7 @@ function InlineSelect({
   options,
   onConfirm,
   badgeStyles,
+  align = "right",
 }: {
   value: string
   displayValue: string
@@ -204,6 +205,7 @@ function InlineSelect({
   options: { value: string; label: string }[]
   onConfirm: (value: string) => void
   badgeStyles?: Record<string, string>
+  align?: "left" | "right"
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -225,7 +227,8 @@ function InlineSelect({
       ref={wrapperRef}
       onClick={() => setIsOpen(true)}
       className={cn(
-        "relative flex-1 cursor-pointer py-1 px-2 -mx-2 text-right",
+        "relative flex-1 cursor-pointer py-1 px-2 -mx-2",
+        align === "left" ? "text-left" : "text-right",
         !displayValue && "border-b border-dashed border-gray-300"
       )}
     >
@@ -243,7 +246,10 @@ function InlineSelect({
       {isOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute top-full right-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-1.5 min-w-[200px] max-h-[240px] overflow-y-auto"
+          className={cn(
+            "absolute top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-1.5 min-w-[200px] max-h-[240px] overflow-y-auto",
+            align === "left" ? "left-0" : "right-0"
+          )}
         >
           {options.map((opt) => (
             <button
@@ -331,11 +337,11 @@ function InlineDate({
       ref={wrapperRef}
       onClick={() => { setTempValue(value); setIsEditing(true) }}
       className={cn(
-        "relative flex-1 cursor-pointer py-1 px-2 -mx-2 text-right",
+        "relative inline-flex cursor-pointer items-center rounded-sm py-0.5 px-1 text-right",
         !displayValue && "border-b border-dashed border-gray-300"
       )}
     >
-      <span className={cn("text-sm", displayValue ? "text-gray-900" : "text-gray-400")}>
+      <span className={cn("text-xs", displayValue ? "text-gray-900" : "text-gray-400")}>
         {displayValue || placeholder}
       </span>
 
@@ -362,109 +368,6 @@ function InlineDate({
               입력완료
             </button>
           </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ----- 인라인 메모 편집 컴포넌트 -----
-function InlineMemo({
-  value,
-  placeholder,
-  onConfirm,
-}: {
-  value: string
-  placeholder: string
-  onConfirm: (value: string) => void
-}) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [tempValue, setTempValue] = useState(value)
-  const wrapperRef = useRef<HTMLDivElement>(null)
-  // ref로 최신 값 추적 (언마운트 시 저장용)
-  const tempRef = useRef(tempValue)
-  const valueRef = useRef(value)
-  const onConfirmRef = useRef(onConfirm)
-  const isEditingRef = useRef(isEditing)
-  tempRef.current = tempValue
-  valueRef.current = value
-  onConfirmRef.current = onConfirm
-  isEditingRef.current = isEditing
-
-  // 외부에서 value가 바뀌면 동기화
-  useEffect(() => { setTempValue(value) }, [value])
-
-  // 편집 중 언마운트되면 자동저장
-  useEffect(() => {
-    return () => {
-      if (isEditingRef.current && tempRef.current !== valueRef.current) {
-        onConfirmRef.current(tempRef.current)
-      }
-    }
-  }, [])
-
-  // 바깥 클릭하면 저장 후 닫기
-  useEffect(() => {
-    if (!isEditing) return
-    const handleClickOutside = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        if (tempValue !== value) onConfirm(tempValue)
-        setIsEditing(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [isEditing, tempValue, value, onConfirm])
-
-  const handleOpen = () => {
-    setTempValue(value)
-    setIsEditing(true)
-  }
-
-  const handleConfirm = () => {
-    if (tempValue !== value) onConfirm(tempValue)
-    setIsEditing(false)
-  }
-
-  return (
-    <div ref={wrapperRef}>
-      {isEditing ? (
-        <div className="space-y-2">
-          <textarea
-            value={tempValue}
-            onChange={(e) => setTempValue(e.target.value)}
-            placeholder={placeholder}
-            autoFocus
-            rows={5}
-            className="w-full text-sm border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua resize-none"
-          />
-          <div className="flex justify-end gap-1.5">
-            <button
-              onClick={() => { setTempValue(value); setIsEditing(false) }}
-              className="px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded transition-colors"
-            >
-              취소
-            </button>
-            <button
-              onClick={handleConfirm}
-              className="px-3 py-1 text-xs bg-sky-aqua text-white rounded hover:bg-sky-aqua/90 transition-colors font-medium"
-            >
-              입력완료
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div
-          onClick={handleOpen}
-          className={cn(
-            "rounded-lg border bg-gray-50 p-4 min-h-[120px] cursor-pointer hover:bg-sky-aqua/5 transition-colors",
-            !value && "border-dashed border-gray-300"
-          )}
-          title="클릭하여 수정"
-        >
-          <p className={cn("text-sm whitespace-pre-wrap", value ? "text-gray-600" : "text-gray-400")}>
-            {value || placeholder}
-          </p>
         </div>
       )}
     </div>
@@ -798,10 +701,14 @@ function QuotationsTab({
   quotations,
   onAddQuote,
   onEditQuote,
+  confirmedQuoteId,
+  onToggleConfirm,
 }: {
   quotations: QuotationListItem[]
   onAddQuote: () => void
   onEditQuote: (id: string) => void
+  confirmedQuoteId: string | null
+  onToggleConfirm: (quote: QuotationListItem) => void
 }) {
   const [activeTab, setActiveTab] = useState<"견적서" | "파일">("견적서")
 
@@ -843,50 +750,77 @@ function QuotationsTab({
               <p className="text-sm">아직 견적서가 없습니다</p>
             </div>
           ) : (
-            [...quotations].reverse().map((q, index) => (
-              <button
-                key={q.id}
-                onClick={() => onEditQuote(q.id)}
-                className="w-full text-left border border-gray-200 rounded-xl px-4 py-3.5 hover:border-sky-aqua/40 hover:bg-sky-aqua/5 transition-all group"
-              >
-                {/* 상단: 순번 */}
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-aqua/15 text-sky-aqua text-[10px] font-bold shrink-0">
-                    {index + 1}
-                  </span>
-                </div>
-                {/* 제목 */}
-                <p className="text-sm font-semibold text-gray-800 group-hover:text-sky-aqua transition-colors leading-snug line-clamp-2 mb-1.5">
-                  {q.title}
-                </p>
-                {/* 견적번호 */}
-                <div className="flex items-center gap-1 mb-3">
-                  <Hash className="h-3 w-3 text-gray-300 shrink-0" />
-                  <span className="text-[11px] text-gray-400 font-medium">{q.quotation_number}</span>
-                </div>
-                {/* 하단: 날짜 + 금액 */}
-                <div className="flex items-center justify-between pt-2.5 border-t border-gray-100">
-                  <div className="flex items-center gap-1 text-[11px] text-gray-400">
-                    <Calendar className="h-3 w-3 shrink-0" />
-                    <span>{formatShortDate(q.quotation_date)}</span>
-                  </div>
-                  <div className="flex flex-col items-end gap-0.5">
-                    {q.total_amount > 0 && (
-                      <>
-                        <span className="text-xs font-bold tabular-nums text-gray-500">
-                          {formatCurrency(q.total_amount)}
-                        </span>
-                        <span className="text-[9px] text-gray-300">VAT 별도</span>
-                      </>
-                    )}
-                    <span className={`text-xs font-bold tabular-nums ${q.grand_total > 0 ? "text-sky-aqua" : "text-gray-300"}`}>
-                      {formatCurrency(q.grand_total)}
+            [...quotations].reverse().map((q, index) => {
+              const isConfirmed = confirmedQuoteId === q.id
+              return (
+                <div
+                  key={q.id}
+                  className={cn(
+                    "border rounded-xl px-4 py-3.5 transition-all",
+                    isConfirmed
+                      ? "border-sky-aqua/70 bg-sky-aqua/10 ring-1 ring-sky-aqua/30"
+                      : "border-gray-200 hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
+                  )}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-aqua/15 text-sky-aqua text-[10px] font-bold shrink-0">
+                      {index + 1}
                     </span>
-                    <span className="text-[9px] text-gray-400">VAT 포함</span>
+                    <button
+                      type="button"
+                      onClick={() => onToggleConfirm(q)}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors border",
+                        isConfirmed
+                          ? "border-sky-aqua text-sky-aqua bg-sky-aqua/10 hover:bg-sky-aqua/20"
+                          : "border-gray-300 text-gray-500 bg-white hover:bg-gray-50"
+                      )}
+                    >
+                      {isConfirmed ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5" />
+                      )}
+                      확정
+                    </button>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onEditQuote(q.id)}
+                    className="w-full text-left group"
+                  >
+                    <p className="text-sm font-semibold text-gray-800 group-hover:text-sky-aqua transition-colors leading-snug line-clamp-2 mb-1.5">
+                      {q.title}
+                    </p>
+                    <div className="flex items-center gap-1 mb-3">
+                      <Hash className="h-3 w-3 text-gray-300 shrink-0" />
+                      <span className="text-[11px] text-gray-400 font-medium">{q.quotation_number}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2.5 border-t border-gray-100">
+                      <div className="flex items-center gap-1 text-[11px] text-gray-400">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>{formatShortDate(q.quotation_date)}</span>
+                      </div>
+                      <div className="flex flex-col items-end gap-0.5">
+                        {q.total_amount > 0 && (
+                          <>
+                            <span className="text-xs font-bold tabular-nums text-gray-500">
+                              {formatCurrency(q.total_amount)}
+                            </span>
+                            <span className="text-[9px] text-gray-300">VAT 별도</span>
+                          </>
+                        )}
+                        <span className={`text-xs font-bold tabular-nums ${q.grand_total > 0 ? "text-sky-aqua" : "text-gray-300"}`}>
+                          {formatCurrency(q.grand_total)}
+                        </span>
+                        <span className="text-[9px] text-gray-400">VAT 포함</span>
+                      </div>
+                    </div>
+                  </button>
                 </div>
-              </button>
-            ))
+              )
+            })
           )}
         </div>
       )}
@@ -910,6 +844,85 @@ interface QuotationListItem {
   grand_total: number
 }
 
+interface ConfirmedQuoteInfo {
+  quoteId: string
+  title: string
+  quotationNumber: string
+  totalAmount: number
+  grandTotal: number
+}
+
+function SalesFlowPanel({
+  quotations,
+  onAddQuote,
+  onEditQuote,
+  confirmedQuoteId,
+  onToggleConfirm,
+}: {
+  quotations: QuotationListItem[]
+  onAddQuote: () => void
+  onEditQuote: (id: string) => void
+  confirmedQuoteId: string | null
+  onToggleConfirm: (quote: QuotationListItem) => void
+}) {
+  const [activeFlow, setActiveFlow] = useState<"견적" | "계약" | "주문·배송" | "매입·매출">("견적")
+
+  const flowTabs: Array<{ key: "견적" | "계약" | "주문·배송" | "매입·매출"; count?: number }> = [
+    { key: "견적", count: quotations.length },
+    { key: "계약" },
+    { key: "주문·배송" },
+    { key: "매입·매출" },
+  ]
+  const flowIcons = {
+    "견적": FileText,
+    "계약": Briefcase,
+    "주문·배송": Truck,
+    "매입·매출": ArrowUpDown,
+  } as const
+
+  return (
+    <div>
+      <div className="flex items-center gap-5 border-b border-gray-200 mb-4 overflow-x-auto">
+        {flowTabs.map((tab) => {
+          const Icon = flowIcons[tab.key]
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveFlow(tab.key)}
+              className={cn(
+                "inline-flex items-center gap-1.5 pb-2 text-sm whitespace-nowrap transition-colors border-b-2",
+                activeFlow === tab.key
+                  ? "font-bold text-sky-aqua border-sky-aqua"
+                  : "font-medium text-gray-400 border-transparent hover:text-gray-600"
+              )}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span>{tab.key}</span>
+              {typeof tab.count === "number" && <span className="ml-0.5 text-xs">{tab.count}</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {activeFlow === "견적" && (
+        <QuotationsTab
+          quotations={quotations}
+          onAddQuote={onAddQuote}
+          onEditQuote={onEditQuote}
+          confirmedQuoteId={confirmedQuoteId}
+          onToggleConfirm={onToggleConfirm}
+        />
+      )}
+
+      {activeFlow !== "견적" && (
+        <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
+          <p className="text-sm font-medium text-gray-500">{activeFlow} 흐름은 다음 단계에서 연결됩니다.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ----- 고객 연결/표시 패널 컴포넌트 (컴팩트 + Dialog 모달) -----
 function CustomerPanel({
   customer,
@@ -918,9 +931,6 @@ function CustomerPanel({
   onUnlink,
   onCreateAndLink,
   onOpenDetail,
-  quotations,
-  onAddQuote,
-  onEditQuote,
 }: {
   customer: { id: string; company_name: string; deleted_at: string | null } | null
   customers: CustomerOption[]
@@ -928,9 +938,6 @@ function CustomerPanel({
   onUnlink: () => void
   onCreateAndLink: (form: { company_name: string; contact_name?: string; phone?: string }) => Promise<void>
   onOpenDetail: () => void
-  quotations: QuotationListItem[]
-  onAddQuote: () => void
-  onEditQuote: (id: string) => void
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -985,137 +992,102 @@ function CustomerPanel({
 
   return (
     <div>
-      {/* 탭 헤더 */}
-      <div className="flex items-center gap-4 border-b border-gray-200 mb-0">
-        <div className="flex items-center gap-1.5 pb-2 border-b-2 border-gray-900">
-          <span className="text-base font-bold text-gray-900">고객</span>
-          {customer && !customer.deleted_at && (
-            <CheckCircle2 className="h-5 w-5 text-white fill-muted-teal" />
-          )}
-          {customer?.deleted_at && (
-            <span className="w-4 h-4 rounded-full bg-soft-blush text-white text-[10px] font-bold flex items-center justify-center">!</span>
-          )}
-        </div>
-        {/* 계약 탭 (구현 예정) */}
-        <div className="flex items-center gap-1.5 pb-2 border-b-2 border-transparent cursor-not-allowed">
-          <span className="text-base font-bold text-gray-300">계약</span>
-        </div>
-      </div>
+      <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900 mb-2">
+        <Box className="h-3.5 w-3.5 text-gray-500" />
+        고객 정보
+      </p>
 
-      {/* 고객 미연결 상태 */}
       {!customer && (
-        <div>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="w-full flex items-center justify-between py-3 group"
-          >
-            <div className="flex items-center gap-2.5">
-              <Building2 className="h-4 w-4 text-gray-400" />
-              <span className="text-sm text-gray-500">고객을 연결해주세요.</span>
-            </div>
-            <Search className="h-4 w-4 text-gray-300 group-hover:text-sky-aqua transition-colors" />
-          </button>
-          <div className="rounded-md bg-sky-aqua/5 px-3 py-2.5">
-            <p className="text-xs text-sky-aqua">고객을 선택하거나 추가해주세요 :)</p>
-          </div>
-        </div>
-      )}
-
-      {/* 삭제된 고객 상태 */}
-      {customer?.deleted_at && (
-        <div>
-          <div className="flex items-center justify-between py-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <Building2 className="h-4 w-4 text-soft-blush shrink-0" />
-              <span className="text-sm font-medium text-soft-blush">삭제된 데이터</span>
-            </div>
-            <div className="flex items-center gap-0.5 shrink-0">
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="p-1.5 rounded-md text-gray-400 hover:text-tropical-teal hover:bg-tropical-teal/10 transition-colors"
-                title="변경"
-              >
-                <Search className="h-3 w-3" />
-              </button>
-              <button
-                onClick={onUnlink}
-                className="p-1.5 rounded-md text-gray-400 hover:text-soft-blush hover:bg-soft-blush/10 transition-colors"
-                title="해제"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-          <div className="rounded-md bg-soft-blush/10 px-3 py-2.5">
-            <p className="text-xs text-soft-blush font-medium">연결된 데이터가 삭제됐어요!</p>
-            <p className="text-xs text-soft-blush/80">다른 데이터로 연결을 변경해주세요.</p>
-          </div>
-        </div>
-      )}
-
-      {/* 고객 연결됨 상태 (삭제되지 않은 고객) */}
-      {customer && !customer.deleted_at && (
-        <div>
-          {/* 연결된 고객 행 */}
-          <div className="flex items-center justify-between py-2">
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-4">
+          <p className="text-xs font-medium text-gray-600 mb-1">고객 연결 필요</p>
+          <p className="text-[10px] text-gray-400 mb-3">의뢰에 고객을 연결해주세요.</p>
+          <div className="flex justify-end">
             <button
-              onClick={onOpenDetail}
-              className="flex items-center gap-2 min-w-0 hover:opacity-70 transition-opacity"
-              title="고객 상세 보기"
+              onClick={() => setIsModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-aqua/10 text-sky-aqua text-xs font-semibold hover:bg-sky-aqua/20 transition-colors"
             >
-              <div className="w-6 h-6 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
-                <Building2 className="h-3 w-3 text-tropical-teal" />
-              </div>
-              <span className="text-sm font-medium text-sky-aqua truncate underline underline-offset-2 decoration-sky-aqua/30">{customer.company_name}</span>
+              <Search className="h-3.5 w-3.5" />
+              고객 연결
             </button>
-            <div className="flex items-center gap-0.5 shrink-0">
+          </div>
+        </div>
+      )}
+
+      {customer?.deleted_at && (
+        <div className="rounded-xl border border-soft-blush/30 bg-soft-blush/5 p-4">
+          <p className="text-xs font-semibold text-soft-blush mb-1">삭제된 고객이 연결되어 있습니다</p>
+          <p className="text-[10px] text-soft-blush/80 mb-3">다른 고객으로 변경하거나 연결을 해제하세요.</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsModalOpen(true)}
+              aria-label="고객 변경"
+              title="고객 변경"
+              className="inline-flex h-5 w-5 items-center justify-center text-gray-400 hover:text-gray-500 transition-colors"
+            >
+              <Search className="h-3 w-3" />
+            </button>
+            <button
+              onClick={onUnlink}
+              aria-label="고객 연결 해제"
+              title="고객 연결 해제"
+              className="inline-flex h-5 w-5 items-center justify-center text-gray-400 hover:text-gray-500 transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {customer && !customer.deleted_at && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <button onClick={onOpenDetail} className="min-w-0 text-left hover:opacity-80 transition-opacity">
+              <p className="text-sm font-semibold text-gray-900 truncate">{customer.company_name}</p>
+            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onOpenDetail}
+                aria-label="고객 상세 편집"
+                title="고객 상세 편집"
+                className="inline-flex h-5 w-5 items-center justify-center text-gray-400 hover:text-gray-500 transition-colors"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="p-1.5 rounded-md text-gray-400 hover:text-tropical-teal hover:bg-tropical-teal/10 transition-colors"
-                title="변경"
+                aria-label="고객 변경"
+                title="고객 변경"
+                className="inline-flex h-5 w-5 items-center justify-center text-gray-400 hover:text-gray-500 transition-colors"
               >
                 <Search className="h-3 w-3" />
               </button>
               <button
                 onClick={onUnlink}
-                className="p-1.5 rounded-md text-gray-400 hover:text-soft-blush hover:bg-soft-blush/10 transition-colors"
-                title="해제"
+                aria-label="고객 연결 해제"
+                title="고객 연결 해제"
+                className="inline-flex h-5 w-5 items-center justify-center text-gray-400 hover:text-gray-500 transition-colors"
               >
                 <X className="h-3 w-3" />
               </button>
             </div>
           </div>
 
-          {/* 고객 상세 정보 (컴팩트) */}
-          {customerDetail && (
-            <div className="rounded-md border border-gray-200 bg-white px-3 py-2 space-y-1.5 text-[11px]">
-              <div className="flex items-center gap-2">
-                <User className="h-3 w-3 text-gray-400 shrink-0" />
-                <span className="text-gray-400 w-10 shrink-0">담당자</span>
-                <span className={customerDetail.contact_name ? "text-gray-700" : "text-gray-300"}>
-                  {customerDetail.contact_name || "미등록"}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Phone className="h-3 w-3 text-gray-400 shrink-0" />
-                <span className="text-gray-400 w-10 shrink-0">연락처</span>
-                <span className={customerDetail.phone ? "text-gray-700" : "text-gray-300"}>
-                  {customerDetail.phone ? formatPhone(customerDetail.phone) : "미등록"}
-                </span>
-              </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-gray-50 px-2.5 py-2">
+              <p className="text-[9px] text-gray-400">담당자</p>
+              <p className={cn("text-[10px] mt-0.5 truncate", customerDetail?.contact_name ? "text-gray-700" : "text-gray-300")}>
+                {customerDetail?.contact_name || "미등록"}
+              </p>
             </div>
-          )}
+            <div className="rounded-lg bg-gray-50 px-2.5 py-2">
+              <p className="text-[9px] text-gray-400">연락처</p>
+              <p className={cn("text-[10px] mt-0.5 truncate", customerDetail?.phone ? "text-gray-700" : "text-gray-300")}>
+                {customerDetail?.phone ? formatPhone(customerDetail.phone) : "미등록"}
+              </p>
+            </div>
+          </div>
         </div>
       )}
-
-      <div className="my-5" />
-
-      {/* 하단 탭: 견적서 / 파일 */}
-      <QuotationsTab
-        quotations={quotations}
-        onAddQuote={onAddQuote}
-        onEditQuote={onEditQuote}
-      />
 
       {/* 고객 연결 모달 (가운데 Dialog) */}
       <Dialog open={isModalOpen} onOpenChange={(open) => !open && closeModal()}>
@@ -1297,6 +1269,27 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [quotations, setQuotations] = useState<QuotationListItem[]>([])
   const [isQuoteSheetOpen, setIsQuoteSheetOpen] = useState(false)
   const [editingQuotation, setEditingQuotation] = useState<QuotationWithItems | null>(null)
+  const [confirmedQuotes, setConfirmedQuotes] = useState<Record<string, ConfirmedQuoteInfo>>({})
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("requests:confirmedQuotes:v1")
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, ConfirmedQuoteInfo>
+        setConfirmedQuotes(parsed)
+      }
+    } catch {
+      setConfirmedQuotes({})
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("requests:confirmedQuotes:v1", JSON.stringify(confirmedQuotes))
+    } catch {
+      // localStorage 사용 불가 환경에서는 조용히 무시
+    }
+  }, [confirmedQuotes])
 
   // 의뢰 선택 시 견적서 목록 로드
   const loadQuotations = useCallback(async (reqId: string) => {
@@ -1320,6 +1313,40 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       setQuotations([])
     }
   }, [selectedItemId, loadQuotations])
+
+  useEffect(() => {
+    if (!selectedItemId) return
+    const current = confirmedQuotes[selectedItemId]
+    if (!current) return
+
+    const matched = quotations.find((q) => q.id === current.quoteId)
+    if (!matched) {
+      setConfirmedQuotes((prev) => {
+        const next = { ...prev }
+        delete next[selectedItemId]
+        return next
+      })
+      return
+    }
+
+    if (
+      matched.grand_total !== current.grandTotal ||
+      matched.total_amount !== current.totalAmount ||
+      matched.quotation_number !== current.quotationNumber ||
+      matched.title !== current.title
+    ) {
+      setConfirmedQuotes((prev) => ({
+        ...prev,
+        [selectedItemId]: {
+          quoteId: matched.id,
+          title: matched.title,
+          quotationNumber: matched.quotation_number,
+          totalAmount: matched.total_amount,
+          grandTotal: matched.grand_total,
+        },
+      }))
+    }
+  }, [selectedItemId, quotations, confirmedQuotes])
 
   // 견적서 편집 열기 (상세 데이터 fetch)
   const handleEditQuote = useCallback(async (quoteId: string) => {
@@ -1373,6 +1400,28 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     }
     router.refresh()
   }, [selectedItem, loadQuotations, router])
+
+  const handleToggleConfirmedQuote = useCallback((quote: QuotationListItem) => {
+    if (!selectedItem) return
+    setConfirmedQuotes((prev) => {
+      const current = prev[selectedItem.id]
+      if (current?.quoteId === quote.id) {
+        const next = { ...prev }
+        delete next[selectedItem.id]
+        return next
+      }
+      return {
+        ...prev,
+        [selectedItem.id]: {
+          quoteId: quote.id,
+          title: quote.title,
+          quotationNumber: quote.quotation_number,
+          totalAmount: quote.total_amount,
+          grandTotal: quote.grand_total,
+        },
+      }
+    })
+  }, [selectedItem])
 
   // 의뢰 필드 수정 + 자동저장
   const updateRequestField = useCallback(async (field: string, value: string | null) => {
@@ -2038,9 +2087,16 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
       {/* 의뢰 상세 패널 (오른쪽 슬라이드) */}
       <Sheet open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-[800px] p-0 flex flex-col [&>button:first-child]:hidden">
+        <SheetContent side="right" className="w-full sm:max-w-[900px] p-0 flex flex-col [&>button:first-child]:hidden">
           {selectedItem && (() => {
-            const itemStyle = COLUMN_STYLES[selectedItem.status] || COLUMN_STYLES["견적 문의"]
+            const confirmedQuote = confirmedQuotes[selectedItem.id] ?? null
+            const confirmedQuoteFromList = confirmedQuote
+              ? quotations.find((q) => q.id === confirmedQuote.quoteId) ?? null
+              : null
+            const confirmedQuoteTitle = confirmedQuoteFromList?.title ?? confirmedQuote?.title ?? "미확정"
+            const confirmedQuotationNumber = confirmedQuoteFromList?.quotation_number ?? confirmedQuote?.quotationNumber ?? "미확정"
+            const confirmedTotalAmount = confirmedQuoteFromList?.total_amount ?? confirmedQuote?.totalAmount ?? null
+            const confirmedGrandTotal = confirmedQuoteFromList?.grand_total ?? confirmedQuote?.grandTotal ?? null
             return (
               <>
                 {/* 상단 헤더 */}
@@ -2082,12 +2138,23 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                 {/* 본문: 좌우 분리 */}
                 <div className="flex-1 flex overflow-hidden">
                   {/* ===== 왼쪽 영역: 의뢰 상세 정보 ===== */}
-                  <div className="flex-1 overflow-y-auto px-6 py-6 border-r">
-                    {/* 상태 배지 + 생성일 */}
-                    <div className="flex items-center gap-3 mb-4">
-                      <Badge className={cn("text-xs", itemStyle.badge)}>
-                        {selectedItem.status}
-                      </Badge>
+                  <div className="w-1/2 shrink-0 overflow-y-auto px-6 py-6 border-r [&_.text-2xl]:text-lg [&_.text-base]:text-sm [&_.text-sm]:text-xs [&_.text-xs]:text-[10px] [&_.text-\\[11px\\]]:text-[9px] [&_.text-\\[10px\\]]:text-[8px]">
+                    {/* 상태 배지(클릭 변경) + 생성일 */}
+                    <div className="flex items-center gap-2.5 mb-4">
+                      <InlineSelect
+                        value={selectedItem.status}
+                        displayValue={selectedItem.status}
+                        placeholder="상태를 선택하세요"
+                        options={REQUEST_STATUSES.filter((s) => s.value !== "숨김").map((s) => ({ value: s.value, label: s.label }))}
+                        onConfirm={(v) => updateRequestField("status", v)}
+                        badgeStyles={{
+                          "견적 문의": COLUMN_STYLES["견적 문의"].badge,
+                          "영업중": COLUMN_STYLES["영업중"].badge,
+                          "계약 성공": COLUMN_STYLES["계약 성공"].badge,
+                          "수주 실패": COLUMN_STYLES["수주 실패"].badge,
+                        }}
+                        align="left"
+                      />
                       <span className="text-[10px] text-gray-400">
                         {formatDateTime(selectedItem.created_at).replace(/^\d{2}/, '')} 생성
                       </span>
@@ -2109,117 +2176,155 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
                     {/* 상세 정보 */}
                     <div className="space-y-5">
-                      {/* 단계 (인라인 선택 - 배지 스타일) */}
                       <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-sky-aqua/5 transition-colors">
-                        <span className="text-sm text-gray-500">단계</span>
-                        <InlineSelect
-                          value={selectedItem.status}
-                          displayValue={selectedItem.status}
-                          placeholder="단계를 선택하세요"
-                          options={REQUEST_STATUSES.filter((s) => s.value !== "숨김").map((s) => ({ value: s.value, label: s.label }))}
-                          onConfirm={(v) => updateRequestField("status", v)}
-                          badgeStyles={{
-                            "견적 문의": COLUMN_STYLES["견적 문의"].badge,
-                            "영업중": COLUMN_STYLES["영업중"].badge,
-                            "계약 성공": COLUMN_STYLES["계약 성공"].badge,
-                            "수주 실패": COLUMN_STYLES["수주 실패"].badge,
-                          }}
-                        />
-                      </div>
-
-                      {/* 문의 일시 (인라인 날짜) */}
-                      <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-sky-aqua/5 transition-colors">
-                        <span className="text-sm text-gray-500">문의 일시</span>
+                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
+                          <Box className="h-3.5 w-3.5 text-gray-500" />
+                          문의 일시
+                        </span>
                         <InlineDate
                           value={selectedItem.inquiry_date || ""}
                           displayValue={selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : ""}
-                          placeholder="날짜를 선택하세요"
+                          placeholder="날짜 선택"
                           onConfirm={(v) => updateRequestField("inquiry_date", v || null)}
                         />
                       </div>
-                    </div>
 
-                    <Separator className="my-6" />
+                      <CustomerPanel
+                        customer={selectedItem.customer}
+                        customers={localCustomers}
+                        onLink={(id) => updateRequestField("customer_id", id)}
+                        onUnlink={() => updateRequestField("customer_id", null)}
+                        onOpenDetail={() => {
+                          if (selectedItem.customer?.id) setCustomerDetailId(selectedItem.customer.id)
+                        }}
+                        onCreateAndLink={async (form) => {
+                          // 1. 고객 생성
+                          const res = await fetch("/api/customers", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(form),
+                          })
+                          const result = await res.json()
+                          if (!res.ok) throw new Error(result.error)
+                          const nc = result.data
 
-                    {/* 메모 (인라인 편집) */}
-                    <div>
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">내용</h3>
-                      <InlineMemo
-                        value={selectedItem.memo || ""}
-                        placeholder="내용을 입력하세요"
-                        onConfirm={(v) => updateRequestField("memo", v || null)}
+                          // 2. 로컬 고객 목록에 추가
+                          setLocalCustomers((prev) => [...prev, {
+                            id: nc.id,
+                            company_name: nc.company_name,
+                            contact_name: nc.contact_name ?? null,
+                            phone: nc.phone ?? null,
+                            email: nc.email ?? null,
+                            address: nc.address ?? null,
+                            representative: nc.representative ?? null,
+                            business_number: nc.business_number ?? null,
+                            memo: nc.memo ?? null,
+                          }])
+
+                          // 3. 의뢰에 고객 직접 연결 (stale closure 우회)
+                          const updatedItem = {
+                            ...selectedItem,
+                            customer: { id: nc.id, company_name: nc.company_name, deleted_at: null },
+                          }
+                          setSelectedItem((prev) => prev ? updatedItem : null)
+                          setColumns((prev) => prev.map((col) => ({
+                            ...col,
+                            items: col.items.map((i) => i.id === selectedItem.id ? updatedItem : i),
+                          })))
+
+                          setSaveMessage("저장 중...")
+                          try {
+                            const linkRes = await fetch("/api/requests", {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ id: selectedItem.id, customer_id: nc.id }),
+                            })
+                            if (!linkRes.ok) {
+                              setSaveMessage("저장 실패")
+                              setTimeout(() => setSaveMessage(""), 2000)
+                            } else {
+                              setSaveMessage("자동 저장됨")
+                              setTimeout(() => setSaveMessage(""), 1500)
+                              router.refresh()
+                            }
+                          } catch {
+                            setSaveMessage("저장 실패")
+                            setTimeout(() => setSaveMessage(""), 2000)
+                          }
+                        }}
                       />
+
+                      <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1">
+                        <div className="w-full space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
+                              <Box className="h-3.5 w-3.5 text-gray-500" />
+                              확정 견적서
+                            </p>
+                            {!confirmedQuote?.quoteId && (
+                              <span className="text-[10px] text-gray-400">견적서를 확정 지어주세요</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirmedQuote?.quoteId) handleEditQuote(confirmedQuote.quoteId)
+                            }}
+                            disabled={!confirmedQuote?.quoteId}
+                            aria-label={confirmedQuote?.quoteId ? "확정 견적서 열기" : "확정 견적서 없음"}
+                            className={cn(
+                              "w-full rounded-xl border border-gray-200 bg-white p-4 space-y-3 text-left transition-colors",
+                              confirmedQuote?.quoteId
+                                ? "cursor-pointer hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
+                                : "cursor-default"
+                            )}
+                          >
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="rounded-lg bg-gray-50 px-2.5 py-2">
+                                <p className="text-[9px] text-gray-400">견적서명</p>
+                                <p className={cn("text-[10px] mt-0.5 truncate", confirmedQuote ? "text-gray-700" : "text-gray-300")}>
+                                  {confirmedQuote ? confirmedQuoteTitle : "미확정"}
+                                </p>
+                              </div>
+                              <div className="rounded-lg bg-gray-50 px-2.5 py-2">
+                                <p className="text-[9px] text-gray-400">견적번호</p>
+                                <p className={cn("text-[10px] mt-0.5 truncate", confirmedQuote ? "text-gray-700" : "text-gray-300")}>
+                                  {confirmedQuote ? confirmedQuotationNumber : "미확정"}
+                                </p>
+                              </div>
+                              <div className="rounded-lg bg-gray-50 px-2.5 py-2">
+                                <p className="text-[9px] text-gray-400">VAT별도</p>
+                                <p className={cn(
+                                  "text-[10px] mt-0.5 truncate tabular-nums",
+                                  confirmedQuote && confirmedTotalAmount !== null ? "text-gray-700" : "text-gray-300"
+                                )}>
+                                  {confirmedQuote && confirmedTotalAmount !== null ? formatCurrency(confirmedTotalAmount) : "미확정"}
+                                </p>
+                              </div>
+                              <div className="rounded-lg bg-sky-aqua/5 px-2.5 py-2">
+                                <p className="text-[9px] text-gray-400">VAT합계</p>
+                                <p className={cn(
+                                  "text-[10px] mt-0.5 truncate font-semibold tabular-nums",
+                                  confirmedQuote && confirmedGrandTotal !== null ? "text-sky-aqua" : "text-gray-300"
+                                )}>
+                                  {confirmedQuote && confirmedGrandTotal !== null ? formatCurrency(confirmedGrandTotal) : "미확정"}
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* ===== 오른쪽 영역: 고객 정보 패널 ===== */}
+                  {/* ===== 오른쪽 영역: 영업 흐름 ===== */}
                   <div className="w-1/2 shrink-0 overflow-y-auto px-6 py-6 bg-gray-50/50">
-                    <CustomerPanel
-                      customer={selectedItem.customer}
-                      customers={localCustomers}
-                      onLink={(id) => updateRequestField("customer_id", id)}
-                      onUnlink={() => updateRequestField("customer_id", null)}
-                      onOpenDetail={() => {
-                        if (selectedItem.customer?.id) setCustomerDetailId(selectedItem.customer.id)
-                      }}
+                    <SalesFlowPanel
                       quotations={quotations}
                       onAddQuote={handleAddQuote}
                       onEditQuote={handleEditQuote}
-                      onCreateAndLink={async (form) => {
-                        // 1. 고객 생성
-                        const res = await fetch("/api/customers", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify(form),
-                        })
-                        const result = await res.json()
-                        if (!res.ok) throw new Error(result.error)
-                        const nc = result.data
-
-                        // 2. 로컬 고객 목록에 추가
-                        setLocalCustomers((prev) => [...prev, {
-                          id: nc.id,
-                          company_name: nc.company_name,
-                          contact_name: nc.contact_name ?? null,
-                          phone: nc.phone ?? null,
-                          email: nc.email ?? null,
-                          address: nc.address ?? null,
-                          representative: nc.representative ?? null,
-                          business_number: nc.business_number ?? null,
-                          memo: nc.memo ?? null,
-                        }])
-
-                        // 3. 의뢰에 고객 직접 연결 (stale closure 우회)
-                        const updatedItem = {
-                          ...selectedItem,
-                          customer: { id: nc.id, company_name: nc.company_name, deleted_at: null },
-                        }
-                        setSelectedItem((prev) => prev ? updatedItem : null)
-                        setColumns((prev) => prev.map((col) => ({
-                          ...col,
-                          items: col.items.map((i) => i.id === selectedItem.id ? updatedItem : i),
-                        })))
-
-                        setSaveMessage("저장 중...")
-                        try {
-                          const linkRes = await fetch("/api/requests", {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ id: selectedItem.id, customer_id: nc.id }),
-                          })
-                          if (!linkRes.ok) {
-                            setSaveMessage("저장 실패")
-                            setTimeout(() => setSaveMessage(""), 2000)
-                          } else {
-                            setSaveMessage("자동 저장됨")
-                            setTimeout(() => setSaveMessage(""), 1500)
-                            router.refresh()
-                          }
-                        } catch {
-                          setSaveMessage("저장 실패")
-                          setTimeout(() => setSaveMessage(""), 2000)
-                        }
-                      }}
+                      confirmedQuoteId={confirmedQuote?.quoteId ?? null}
+                      onToggleConfirm={handleToggleConfirmedQuote}
                     />
                   </div>
                 </div>
