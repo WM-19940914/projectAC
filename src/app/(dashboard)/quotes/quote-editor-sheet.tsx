@@ -530,17 +530,23 @@ export default function QuoteEditorSheet({
   const buildPayload = useCallback((isUpdate = false) => {
     // 품목명 없어도 단가·수량·규격 중 하나라도 입력된 행은 유효 처리
     const hasData = (i: ItemRow) =>
-      i.item_name.trim() || i.unit_price > 0 || i.quantity > 0 || i.specification.trim() || i.retrieval_price > 0
+      i.item_name.trim() ||
+      i.specification.trim() ||
+      i.unit.trim() ||
+      i.memo.trim() ||
+      i.quantity > 0 ||
+      i.unit_price > 0 ||
+      i.retrieval_price > 0
     const validEquip = equipItems.filter(hasData)
     const validInstall = installItems.filter(hasData)
-    if (!title.trim()) return null
-    // 신규 생성은 품목 필수, 기존 수정은 빈 행 포함 전체 저장 (행 수 유지)
-    if (!isUpdate && validEquip.length === 0 && validInstall.length === 0) return null
-    // 기존 수정: 빈 행 포함 전체 저장 (행 추가한 것도 보존)
-    const saveEquip = isUpdate ? equipItems : validEquip
-    const saveInstall = isUpdate ? installItems : validInstall
     const validCover = coverItems.filter(hasData)
-    const saveCover = isUpdate ? coverItems : validCover
+    if (!title.trim()) return null
+    // 신규 생성은 최소 1행 이상 입력 필요
+    if (!isUpdate && validEquip.length === 0 && validInstall.length === 0 && validCover.length === 0) return null
+    // DB에는 실제 입력된 행만 저장
+    const saveEquip = validEquip
+    const saveInstall = validInstall
+    const saveCover = validCover
 
     const allItems = [
       ...saveEquip.map((item) => ({ ...item, category: "장비" })),
@@ -589,7 +595,7 @@ export default function QuoteEditorSheet({
       grand_total: grandTotal,
       tax_amount: taxAmount,
     }
-  }, [title, quotationDate, requestId, customerId, receiver, supplier, supplierMode, notes, equipItems, installItems, supplyAmount, grandTotal, taxAmount, quoteType, deliveryDate, deliveryPlace, paymentCondition])
+  }, [title, quotationDate, requestId, customerId, receiver, supplier, supplierMode, notes, equipItems, installItems, coverItems, supplyAmount, grandTotal, taxAmount, quoteType, deliveryDate, deliveryPlace, paymentCondition])
 
   const doSave = useCallback(async (isAuto = false): Promise<boolean> => {
     const isUpdate = !!savedIdRef.current

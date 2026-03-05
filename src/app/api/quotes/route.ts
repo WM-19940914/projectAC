@@ -2,6 +2,19 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 
+function hasMeaningfulItem(item: Record<string, unknown>): boolean {
+  const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0
+  return (
+    hasText(item.item_name) ||
+    hasText(item.specification) ||
+    hasText(item.unit) ||
+    hasText(item.memo) ||
+    (Number(item.quantity) || 0) > 0 ||
+    (Number(item.unit_price) || 0) > 0 ||
+    (Number(item.retrieval_price) || 0) > 0
+  )
+}
+
 // 견적서 목록 조회 (request_id 필터 지원)
 export async function GET(req: NextRequest) {
   try {
@@ -138,9 +151,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: headerError.message }, { status: 500 })
     }
 
-    // 품목 삽입
-    if (items && items.length > 0) {
-      const itemRows = items.map((item: Record<string, unknown>, index: number) => ({
+    // 품목 삽입 (빈 행은 저장하지 않음)
+    const normalizedCreateItems = (Array.isArray(items) ? items : []).filter((item) =>
+      hasMeaningfulItem(item as Record<string, unknown>)
+    ) as Record<string, unknown>[]
+
+    if (normalizedCreateItems.length > 0) {
+      const itemRows = normalizedCreateItems.map((item, index: number) => ({
         quotation_id: quotation.id,
         category: item.category || "장비",
         item_order: index,
@@ -242,12 +259,16 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: headerError.message }, { status: 500 })
     }
 
-    // 품목 교체: 기존 삭제 후 재삽입
-    if (items) {
+    // 품목 교체: 기존 삭제 후 재삽입 (빈 행은 저장하지 않음)
+    if (items !== undefined) {
       await supabase.from("quotation_items").delete().eq("quotation_id", id)
 
-      if (items.length > 0) {
-        const itemRows = items.map((item: Record<string, unknown>, index: number) => ({
+      const normalizedUpdateItems = (Array.isArray(items) ? items : []).filter((item) =>
+        hasMeaningfulItem(item as Record<string, unknown>)
+      ) as Record<string, unknown>[]
+
+      if (normalizedUpdateItems.length > 0) {
+        const itemRows = normalizedUpdateItems.map((item, index: number) => ({
           quotation_id: id,
           category: item.category || "장비",
           item_order: index,

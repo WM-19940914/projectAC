@@ -74,6 +74,13 @@ interface Props {
   hiddenItems: RequestItem[]
 }
 
+interface ContractSummary {
+  totalWithVat: number
+  paidAmount: number
+  unpaidAmount: number
+  progressPercent: number
+}
+
 // ----- 컬럼별 색상 (커스텀 팔레트) -----
 // 컬럼별 카드 타이틀 아이콘 (흑백, Calendar/Building2와 동일 스타일)
 const COLUMN_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -878,27 +885,107 @@ interface SettlementStatusInput {
   actual_amount: number
   received_date: string
   tax_invoice_issued: boolean
+  payment_entries: SettlementPaymentEntry[]
+}
+
+interface SettlementPaymentEntry {
+  id: string
+  amount: number
+  paid_at: string
+  note: string
+}
+
+function normalizeSettlementStatusKey(rawKey: string): string {
+  const key = rawKey.trim()
+  if (!key) return key
+  if (key.startsWith("middle-")) return key
+
+  const compact = key.replace(/\s+/g, "")
+  const depositStage = SETTLEMENT_STAGE_ORDER[0]
+  const middleStage = SETTLEMENT_STAGE_ORDER[1]
+  const finalStage = SETTLEMENT_STAGE_ORDER[2]
+
+  const depositAliases = new Set([depositStage, "선급금", "선금", "선수금", "착수금"])
+  const middleAliases = new Set([middleStage, "중도금"])
+  const finalAliases = new Set([finalStage, "잔금"])
+
+  if (depositAliases.has(compact)) return depositStage
+  if (middleAliases.has(compact)) return middleStage
+  if (finalAliases.has(compact)) return finalStage
+  return key
 }
 
 function normalizeSettlementStatusInput(raw: unknown): SettlementStatusInput {
   if (!raw || typeof raw !== "object") {
-    return { payment_confirmed: false, actual_amount: 0, received_date: "", tax_invoice_issued: false }
+    return { payment_confirmed: false, actual_amount: 0, received_date: "", tax_invoice_issued: false, payment_entries: [] }
   }
   const obj = raw as Record<string, unknown>
   const amount = Number(obj.actual_amount ?? 0)
+  const fallbackAmount = Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0
+  const fallbackReceivedDate = typeof obj.received_date === "string" ? obj.received_date : ""
+  const paymentEntries = Array.isArray(obj.payment_entries)
+    ? obj.payment_entries.reduce<SettlementPaymentEntry[]>((acc, entry, index) => {
+      if (!entry || typeof entry !== "object") return acc
+      const parsed = entry as Record<string, unknown>
+      const parsedAmount = Number(parsed.amount ?? 0)
+      const normalizedAmount = Number.isFinite(parsedAmount) ? Math.max(0, Math.round(parsedAmount)) : 0
+      const id = typeof parsed.id === "string" && parsed.id.trim()
+        ? parsed.id
+        : `entry-${index + 1}`
+      acc.push({
+        id,
+        amount: normalizedAmount,
+        paid_at: typeof parsed.paid_at === "string" ? parsed.paid_at : "",
+        note: typeof parsed.note === "string" ? parsed.note : "",
+      })
+      return acc
+    }, [])
+    : []
+
+  // Backward compatibility: convert legacy single amount/date into one payment entry.
+  if (paymentEntries.length === 0 && fallbackAmount > 0) {
+    paymentEntries.push({
+      id: "legacy-1",
+      amount: fallbackAmount,
+      paid_at: fallbackReceivedDate,
+      note: "",
+    })
+  }
+
+  const totalFromEntries = paymentEntries.reduce((sum, entry) => sum + entry.amount, 0)
+  const latestPaidAt = paymentEntries.reduce((latest, entry) => {
+    if (!entry.paid_at) return latest
+    return entry.paid_at > latest ? entry.paid_at : latest
+  }, "")
+  const effectiveAmount = paymentEntries.length > 0 ? totalFromEntries : fallbackAmount
+
   return {
-    payment_confirmed: obj.payment_confirmed === true,
-    actual_amount: Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0,
-    received_date: typeof obj.received_date === "string" ? obj.received_date : "",
+    payment_confirmed: obj.payment_confirmed === true || effectiveAmount > 0,
+    actual_amount: effectiveAmount,
+    received_date: latestPaidAt || fallbackReceivedDate,
     tax_invoice_issued: obj.tax_invoice_issued === true,
+    payment_entries: paymentEntries,
   }
 }
 
 function sanitizeSettlementStatusMap(raw: unknown): Record<string, SettlementStatusInput> {
   if (!raw || typeof raw !== "object") return {}
   const parsed = raw as Record<string, unknown>
-  return Object.fromEntries(
-    Object.entries(parsed).map(([key, value]) => [key, normalizeSettlementStatusInput(value)])
+  return Object.entries(parsed).reduce<Record<string, SettlementStatusInput>>((acc, [key, value]) => {
+    const normalizedKey = normalizeSettlementStatusKey(key)
+    if (!normalizedKey) return acc
+    acc[normalizedKey] = normalizeSettlementStatusInput(value)
+    return acc
+  }, {})
+}
+
+function hasMeaningfulSettlementStatus(map: Record<string, SettlementStatusInput>): boolean {
+  return Object.values(map).some((row) =>
+    row.payment_confirmed ||
+    row.actual_amount > 0 ||
+    !!row.received_date ||
+    row.tax_invoice_issued ||
+    row.payment_entries.some((entry) => entry.amount > 0 || !!entry.paid_at || !!entry.note)
   )
 }
 
@@ -1084,20 +1171,27 @@ function ContractFlowTab({
   requestContractId,
   confirmedQuoteSupplyAmount,
   onLinkContract,
+  onSavedContract,
+  onSummaryChange,
 }: {
   requestId: string
   requestTitle: string
   requestCustomer: { id: string; company_name: string; deleted_at: string | null } | null
   requestContractId: string | null
   confirmedQuoteSupplyAmount: number | null
-  onLinkContract: (contractId: string) => Promise<void>
+  onLinkContract: (contractId: string | null) => Promise<void>
+  onSavedContract?: (contractId: string) => void
+  onSummaryChange?: (summary: ContractSummary) => void
 }) {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isUnlinkingContract, setIsUnlinkingContract] = useState(false)
+  const [isUnlinkDialogOpen, setIsUnlinkDialogOpen] = useState(false)
   const [saveMessage, setSaveMessage] = useState("")
   const [isAmountModalOpen, setIsAmountModalOpen] = useState(false)
   const [amountInputValue, setAmountInputValue] = useState("")
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false)
+  const [isContractFormVisible, setIsContractFormVisible] = useState(!!requestContractId)
   const [activeContractTab, setActiveContractTab] = useState<"계약서" | "정산 현황">("계약서")
   const [modalStages, setModalStages] = useState<SettlementStage[]>(["잔금"])
   const [modalRatios, setModalRatios] = useState<Record<SettlementStage, number>>({ ...EMPTY_STAGE_RATIOS, 잔금: 100 })
@@ -1111,17 +1205,19 @@ function ContractFlowTab({
   const initialSnapshotRef = useRef("")
   const lastSavedSnapshotRef = useRef("")
   const failedSnapshotRef = useRef<string | null>(null)
+  const lastSummarySignatureRef = useRef<string>("")
   const latestPendingRef = useRef<PendingContractDraftSnapshot | null>(null)
-  const [draft, setDraft] = useState<ContractDraft>({
+  const createDefaultDraft = useCallback((): ContractDraft => ({
     id: null,
     title: `${requestTitle} 계약`,
     status: "계약 준비 중",
     customer_id: requestCustomer?.id || "",
     contract_amount: 0,
-    settlement_type: ["잔금"],
+    settlement_type: [SETTLEMENT_STAGE_ORDER[SETTLEMENT_STAGE_ORDER.length - 1]],
     start_date: "",
     end_date: "",
-  })
+  }), [requestTitle, requestCustomer?.id])
+  const [draft, setDraft] = useState<ContractDraft>(() => createDefaultDraft())
 
   const saveRatioToLocal = useCallback((
     key: string,
@@ -1229,19 +1325,14 @@ function ContractFlowTab({
   }, [])
 
   useEffect(() => {
+    setIsContractFormVisible(!!requestContractId)
+  }, [requestContractId])
+
+  useEffect(() => {
     let cancelled = false
 
     const loadContract = async () => {
-      const defaultDraft: ContractDraft = {
-        id: null,
-        title: `${requestTitle} 계약`,
-        status: "계약 준비 중",
-        customer_id: requestCustomer?.id || "",
-        contract_amount: 0,
-        settlement_type: ["잔금"],
-        start_date: "",
-        end_date: "",
-      }
+      const defaultDraft = createDefaultDraft()
 
       if (!requestContractId) {
         if (cancelled) return
@@ -1344,13 +1435,13 @@ function ContractFlowTab({
           : {}
         const pending = loadPendingDraftFromLocal()
         const pendingDraft = pending?.draft ?? null
+        const pendingDraftId = pendingDraft && typeof pendingDraft.id === "string" && pendingDraft.id.trim()
+          ? pendingDraft.id
+          : null
         const pendingStages = pendingDraft
           ? SETTLEMENT_STAGE_ORDER.filter((stage) => pendingDraft.settlement_type.includes(stage))
           : []
-        const canApplyPending = !!pendingDraft && (
-          !pendingDraft.id ||
-          pendingDraft.id === nextDraft.id
-        )
+        const canApplyPending = !!pendingDraft && !!pendingDraftId && pendingDraftId === nextDraft.id
         const resolvedDraft = canApplyPending ? {
           ...nextDraft,
           ...pendingDraft,
@@ -1368,6 +1459,11 @@ function ContractFlowTab({
         const resolvedSettlementStatusMap = canApplyPending && pending
           ? sanitizeSettlementStatusMap(pending.settlementStatusMap)
           : nextSettlementStatusFromDb
+
+        if (pending && pendingDraft && !pendingDraftId) {
+          // id 없는 stale pending이 기존 계약 DB를 덮지 않도록 정리
+          clearPendingDraftFromLocal()
+        }
 
         setDraft(resolvedDraft)
         setStageRatios(resolvedRatios)
@@ -1424,7 +1520,7 @@ function ContractFlowTab({
 
     loadContract()
     return () => { cancelled = true }
-  }, [requestContractId, requestCustomer?.id, requestId, requestTitle, loadRatioFromLocal, loadPendingDraftFromLocal])
+  }, [requestContractId, requestCustomer?.id, requestId, requestTitle, createDefaultDraft, loadRatioFromLocal, loadPendingDraftFromLocal, clearPendingDraftFromLocal])
 
   const selectedStages = SETTLEMENT_STAGE_ORDER.filter((stage) => draft.settlement_type.includes(stage))
   const supplyAmount = Math.max(0, Math.round(Number(draft.contract_amount || 0)))
@@ -1444,23 +1540,57 @@ function ContractFlowTab({
     const status = normalizeSettlementStatusInput(settlementStatusMap[row.key])
     const plannedAmount = Math.max(0, Math.round(Number(row.total || 0)))
     const actualAmount = Math.max(0, Math.round(Number(status.actual_amount || 0)))
+    const paymentConfirmed = plannedAmount > 0
+      ? actualAmount >= plannedAmount
+      : (actualAmount > 0 || status.payment_confirmed)
+    const paymentStatusLabel = paymentConfirmed
+      ? "정산완료"
+      : actualAmount > 0
+        ? "부분정산"
+        : "미정산"
     let scheduledDate = ""
     if (row.key === "선금") scheduledDate = stageScheduledDates.선금
     else if (row.key === "잔금") scheduledDate = stageScheduledDates.잔금
     else if (row.key === "중도금" || row.key.startsWith("middle-")) scheduledDate = stageScheduledDates.중도금
     return {
       key: row.key,
-      label: row.label.replace(/^선금/, "선급금"),
-      paymentConfirmed: status.payment_confirmed,
+      label: row.label,
+      paymentConfirmed,
+      paymentStatusLabel,
+      paymentEntries: status.payment_entries,
       plannedAmount,
       actualAmount,
       shortfallAmount: Math.max(0, plannedAmount - actualAmount),
       scheduledDate,
       receivedDate: status.received_date,
       taxInvoiceIssued: status.tax_invoice_issued,
-      overdueDays: !status.payment_confirmed ? getOverdueDays(scheduledDate) : 0,
+      overdueDays: !paymentConfirmed ? getOverdueDays(scheduledDate) : 0,
     }
   })
+
+  useEffect(() => {
+    if (!onSummaryChange) return
+
+    const paidAmount = settlementStatusRows.reduce((sum, row) => {
+      return sum + row.actualAmount
+    }, 0)
+    const clampedPaid = Math.min(Math.max(0, paidAmount), totalWithVat)
+    const unpaidAmount = Math.max(0, totalWithVat - clampedPaid)
+    const progressPercent = totalWithVat > 0
+      ? Math.min(100, Math.round((clampedPaid / totalWithVat) * 100))
+      : 0
+
+    const signature = `${totalWithVat}|${clampedPaid}|${unpaidAmount}|${progressPercent}`
+    if (lastSummarySignatureRef.current === signature) return
+    lastSummarySignatureRef.current = signature
+
+    onSummaryChange({
+      totalWithVat,
+      paidAmount: clampedPaid,
+      unpaidAmount,
+      progressPercent,
+    })
+  }, [onSummaryChange, requestContractId, draft.id, settlementStatusRows, totalWithVat])
   const stageSummary = selectedStages.length > 0
     ? selectedStages.map((stage) => (
       stage === "중도금"
@@ -1473,7 +1603,8 @@ function ContractFlowTab({
     return sum + (Number.isFinite(value) ? value : 0)
   }, 0)
 
-  const canSave = draft.title.trim().length > 0 && !isSaving
+  const canSave = draft.title.trim().length > 0 && !isSaving && !isUnlinkingContract
+  const isPersistedContract = !!draft.id
   const saveSnapshot = buildContractSnapshot({
     draft,
     selectedStages,
@@ -1535,9 +1666,14 @@ function ContractFlowTab({
     try {
       const raw = localStorage.getItem(settlementStatusStorageKey)
       const parsed = raw ? sanitizeSettlementStatusMap(JSON.parse(raw)) : {}
-      setSettlementStatusMap(parsed)
+      setSettlementStatusMap((prev) => {
+        if (hasMeaningfulSettlementStatus(prev) && !hasMeaningfulSettlementStatus(parsed)) {
+          return prev
+        }
+        return parsed
+      })
     } catch {
-      setSettlementStatusMap({})
+      setSettlementStatusMap((prev) => (hasMeaningfulSettlementStatus(prev) ? prev : {}))
     } finally {
       setIsSettlementStatusHydrated(true)
     }
@@ -1545,17 +1681,24 @@ function ContractFlowTab({
 
   useEffect(() => {
     if (!contractSettlementStatusKey) return
+    if (requestContractId) return
     try {
       const existingContractData = localStorage.getItem(contractSettlementStatusKey)
       if (existingContractData) return
       const requestData = localStorage.getItem(requestSettlementStatusKey)
       if (!requestData) return
       localStorage.setItem(contractSettlementStatusKey, requestData)
-      setSettlementStatusMap(sanitizeSettlementStatusMap(JSON.parse(requestData)))
+      const copied = sanitizeSettlementStatusMap(JSON.parse(requestData))
+      setSettlementStatusMap((prev) => {
+        if (hasMeaningfulSettlementStatus(prev) && !hasMeaningfulSettlementStatus(copied)) {
+          return prev
+        }
+        return copied
+      })
     } catch {
       // localStorage 미지원 환경 무시
     }
-  }, [contractSettlementStatusKey, requestSettlementStatusKey])
+  }, [contractSettlementStatusKey, requestSettlementStatusKey, requestContractId])
 
   useEffect(() => {
     setSettlementStatusMap((prev) => {
@@ -1570,7 +1713,8 @@ function ContractFlowTab({
           prevValue.payment_confirmed !== normalized.payment_confirmed ||
           prevValue.actual_amount !== normalized.actual_amount ||
           prevValue.received_date !== normalized.received_date ||
-          prevValue.tax_invoice_issued !== normalized.tax_invoice_issued
+          prevValue.tax_invoice_issued !== normalized.tax_invoice_issued ||
+          JSON.stringify(prevValue.payment_entries ?? []) !== JSON.stringify(normalized.payment_entries)
         ) {
           changed = true
         }
@@ -1591,14 +1735,97 @@ function ContractFlowTab({
   }, [isSettlementStatusHydrated, settlementStatusStorageKey, settlementStatusMap])
 
   const updateSettlementStatus = useCallback((rowKey: string, patch: Partial<SettlementStatusInput>) => {
+    const normalizedRowKey = normalizeSettlementStatusKey(rowKey)
     setSettlementStatusMap((prev) => {
-      const current = normalizeSettlementStatusInput(prev[rowKey])
+      const current = normalizeSettlementStatusInput(prev[normalizedRowKey])
+      const merged = {
+        ...current,
+        ...patch,
+      }
+      const normalizedMerged = normalizeSettlementStatusInput(merged)
       return {
         ...prev,
-        [rowKey]: {
-          ...current,
-          ...patch,
-        },
+        [normalizedRowKey]: normalizedMerged,
+      }
+    })
+  }, [])
+
+  const addSettlementPaymentEntry = useCallback((rowKey: string) => {
+    const normalizedRowKey = normalizeSettlementStatusKey(rowKey)
+    const nextEntry: SettlementPaymentEntry = {
+      id: `entry-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      amount: 0,
+      paid_at: getTodayDateString(),
+      note: "",
+    }
+    setSettlementStatusMap((prev) => {
+      const current = normalizeSettlementStatusInput(prev[normalizedRowKey])
+      if (current.payment_entries.some((entry) => entry.id === nextEntry.id)) {
+        return prev
+      }
+      const nextEntries = [
+        ...current.payment_entries,
+        nextEntry,
+      ]
+      const normalized = normalizeSettlementStatusInput({
+        ...current,
+        payment_entries: nextEntries,
+      })
+      return {
+        ...prev,
+        [normalizedRowKey]: normalized,
+      }
+    })
+  }, [])
+
+  const updateSettlementPaymentEntry = useCallback((
+    rowKey: string,
+    entryId: string,
+    patch: Partial<SettlementPaymentEntry>
+  ) => {
+    const normalizedRowKey = normalizeSettlementStatusKey(rowKey)
+    setSettlementStatusMap((prev) => {
+      const current = normalizeSettlementStatusInput(prev[normalizedRowKey])
+      const nextEntries = current.payment_entries.map((entry) =>
+        entry.id === entryId
+          ? {
+            ...entry,
+            ...patch,
+            amount: Number.isFinite(Number((patch.amount ?? entry.amount)))
+              ? Math.max(0, Math.round(Number((patch.amount ?? entry.amount))))
+              : 0,
+            paid_at: typeof (patch.paid_at ?? entry.paid_at) === "string"
+              ? String(patch.paid_at ?? entry.paid_at)
+              : "",
+            note: typeof (patch.note ?? entry.note) === "string"
+              ? String(patch.note ?? entry.note)
+              : "",
+          }
+          : entry
+      )
+      const normalized = normalizeSettlementStatusInput({
+        ...current,
+        payment_entries: nextEntries,
+      })
+      return {
+        ...prev,
+        [normalizedRowKey]: normalized,
+      }
+    })
+  }, [])
+
+  const removeSettlementPaymentEntry = useCallback((rowKey: string, entryId: string) => {
+    const normalizedRowKey = normalizeSettlementStatusKey(rowKey)
+    setSettlementStatusMap((prev) => {
+      const current = normalizeSettlementStatusInput(prev[normalizedRowKey])
+      const nextEntries = current.payment_entries.filter((entry) => entry.id !== entryId)
+      const normalized = normalizeSettlementStatusInput({
+        ...current,
+        payment_entries: nextEntries,
+      })
+      return {
+        ...prev,
+        [normalizedRowKey]: normalized,
       }
     })
   }, [])
@@ -1612,7 +1839,13 @@ function ContractFlowTab({
   const handleApplyAmount = () => {
     const digitsOnly = amountInputValue.replace(/[^0-9]/g, "")
     const next = digitsOnly ? Number(digitsOnly) : 0
-    setDraft((prev) => ({ ...prev, contract_amount: Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0 }))
+    const nextAmount = Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0
+    const hasAmountChanged = nextAmount !== supplyAmount
+    setDraft((prev) => (prev.contract_amount === nextAmount ? prev : { ...prev, contract_amount: nextAmount }))
+    if (hasAmountChanged) {
+      // Reset settlement status when total contract amount changes.
+      setSettlementStatusMap({})
+    }
     setIsAmountModalOpen(false)
   }
 
@@ -1660,6 +1893,9 @@ function ContractFlowTab({
   const handleApplySettlement = () => {
     if (modalStages.length === 0 || modalSelectedRatioSum > 100) return
     const normalized = SETTLEMENT_STAGE_ORDER.filter((stage) => modalStages.includes(stage))
+    const hasSettlementTypeChanged =
+      normalized.length !== selectedStages.length ||
+      normalized.some((stage, idx) => stage !== selectedStages[idx])
     setDraft((prev) => ({ ...prev, settlement_type: normalized }))
     setStageRatios(normalizeRatios(modalRatios, normalized))
     setStageScheduledDates(() => {
@@ -1674,13 +1910,19 @@ function ContractFlowTab({
         ? normalizeMiddleInstallments(modalMiddleInstallments)
         : DEFAULT_MIDDLE_INSTALLMENTS
     )
+    if (hasSettlementTypeChanged) {
+      // Reset settlement status when settlement type composition changes.
+      setSettlementStatusMap({})
+    }
     setIsSettlementModalOpen(false)
   }
 
   const handleSave = useCallback(async (mode: "manual" | "auto" = "manual") => {
     if (!canSave || isLoading || isSaving) return
+    const isUpdate = !!draft.id
+    if (mode === "auto" && !isUpdate) return
     if (mode === "auto" && failedSnapshotRef.current === saveSnapshot) return
-    if (saveSnapshot === lastSavedSnapshotRef.current) {
+    if (isUpdate && saveSnapshot === lastSavedSnapshotRef.current) {
       if (mode === "manual") {
         setSaveMessage("변경사항 없음")
         setTimeout(() => setSaveMessage(""), 1200)
@@ -1704,6 +1946,7 @@ function ContractFlowTab({
       const payload = {
         title: draft.title.trim(),
         status: draft.status,
+        request_id: requestId,
         customer_id: requestCustomer?.id || draft.customer_id || null,
         contract_amount: supplyAmount,
         settlement_type: selectedStages,
@@ -1717,7 +1960,6 @@ function ContractFlowTab({
         },
       }
 
-      const isUpdate = !!draft.id
       const res = await fetch("/api/contracts", {
         method: isUpdate ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -1734,7 +1976,13 @@ function ContractFlowTab({
       if (!requestContractId || requestContractId !== saved.id) {
         await onLinkContract(saved.id)
       }
+      // Avoid stale overwrite during frequent autosaves.
+      // For update saves, keep using in-memory realtime summary; only refetch on new link/create.
+      if (!isUpdate || !requestContractId || requestContractId !== saved.id) {
+        onSavedContract?.(saved.id)
+      }
 
+      setIsContractFormVisible(true)
       lastSavedSnapshotRef.current = saveSnapshot
       clearPendingDraftFromLocal()
       failedSnapshotRef.current = null
@@ -1767,11 +2015,85 @@ function ContractFlowTab({
     settlementRows,
     requestContractId,
     onLinkContract,
+    onSavedContract,
     saveRatioToLocal,
     clearPendingDraftFromLocal,
   ])
 
+  const handleUnlinkContract = useCallback(async () => {
+    if (!draft.id || isUnlinkingContract) return
+    const targetId = draft.id
+    setIsUnlinkingContract(true)
+    setSaveMessage("연결 해제 및 삭제 중...")
+    try {
+      const res = await fetch(`/api/contracts?id=${targetId}`, { method: "DELETE" })
+      const result = await res.json()
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "계약 삭제 실패")
+      }
+
+      try {
+        localStorage.removeItem(`requests:settlementStatus:v1:contract:${targetId}`)
+        const ratioRaw = localStorage.getItem("requests:contractRatios:v1")
+        if (ratioRaw) {
+          const ratioMap = JSON.parse(ratioRaw) as Record<string, unknown>
+          delete ratioMap[`contract:${targetId}`]
+          localStorage.setItem("requests:contractRatios:v1", JSON.stringify(ratioMap))
+        }
+      } catch {
+        // localStorage 미지원 환경 무시
+      }
+
+      await onLinkContract(null)
+      clearPendingDraftFromLocal()
+
+      const defaultDraft = createDefaultDraft()
+      const defaultStage = SETTLEMENT_STAGE_ORDER[SETTLEMENT_STAGE_ORDER.length - 1]
+      const defaultRatios = { ...EMPTY_STAGE_RATIOS, [defaultStage]: 100 } as Record<SettlementStage, number>
+      const defaultDates = { ...EMPTY_STAGE_SCHEDULED_DATES }
+
+      setDraft(defaultDraft)
+      setStageRatios(defaultRatios)
+      setMiddleInstallments(DEFAULT_MIDDLE_INSTALLMENTS)
+      setStageScheduledDates(defaultDates)
+      setSettlementStatusMap({})
+      setIsContractFormVisible(false)
+
+      const initialSnapshot = buildContractSnapshot({
+        draft: defaultDraft,
+        selectedStages: defaultDraft.settlement_type,
+        stageRatios: defaultRatios,
+        middleInstallments: DEFAULT_MIDDLE_INSTALLMENTS,
+        stageScheduledDates: defaultDates,
+        settlementStatusMap: {},
+        customerId: requestCustomer?.id || defaultDraft.customer_id || null,
+      })
+      initialSnapshotRef.current = initialSnapshot
+      lastSavedSnapshotRef.current = initialSnapshot
+      failedSnapshotRef.current = null
+
+      setSaveMessage("연결 해제 및 삭제됨")
+      setTimeout(() => setSaveMessage(""), 1500)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "연결 해제/삭제 실패"
+      setSaveMessage(`해제 실패: ${message}`)
+      setTimeout(() => {
+        setSaveMessage((prev) => (prev.startsWith("해제 실패") ? prev : ""))
+      }, 2500)
+    } finally {
+      setIsUnlinkingContract(false)
+    }
+  }, [
+    draft.id,
+    isUnlinkingContract,
+    onLinkContract,
+    clearPendingDraftFromLocal,
+    createDefaultDraft,
+    requestCustomer?.id,
+  ])
+
   useEffect(() => {
+    if (!isPersistedContract) return
     if (!canSave || isLoading) return
     if (!initialSnapshotRef.current) return
     if (saveSnapshot === lastSavedSnapshotRef.current) return
@@ -1782,7 +2104,7 @@ function ContractFlowTab({
     }, 700)
 
     return () => clearTimeout(timer)
-  }, [canSave, isLoading, saveSnapshot, handleSave])
+  }, [isPersistedContract, canSave, isLoading, saveSnapshot, handleSave])
 
   return (
     <div>
@@ -1808,7 +2130,45 @@ function ContractFlowTab({
           </div>
         ) : (
     <div className="space-y-3">
-      <div className="rounded-xl border border-gray-200/80 bg-white p-2.5 space-y-2 shadow-[0_1px_0_rgba(17,24,39,0.03)]">
+      <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold text-gray-700">{isPersistedContract ? "계약서" : "계약을 생성해주세요"}</p>
+            <p className="text-[10px] text-gray-400">
+              {isPersistedContract ? "계약 정보는 자동 저장됩니다." : "상단 버튼으로 계약 생성 후 저장이 시작됩니다."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {!isPersistedContract && (
+              <button
+                type="button"
+                onClick={() => { void handleSave("manual") }}
+                disabled={!canSave || isUnlinkingContract}
+                className="inline-flex h-8 items-center justify-center rounded-md bg-sky-aqua px-3 text-xs font-semibold text-white hover:bg-sky-aqua/90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isSaving ? "생성 중..." : "계약 생성하기"}
+              </button>
+            )}
+            {isPersistedContract && (
+              <button
+                type="button"
+                onClick={() => setIsUnlinkDialogOpen(true)}
+                disabled={isUnlinkingContract}
+                className="inline-flex h-8 items-center justify-center rounded-md border border-soft-blush/50 bg-white px-3 text-xs font-semibold text-soft-blush hover:bg-soft-blush/10 disabled:opacity-40"
+              >
+                {isUnlinkingContract ? "해제 중..." : "연결 해제"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className={cn("rounded-xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center", isContractFormVisible && "hidden")}>
+        <p className="text-sm font-semibold text-gray-600">계약을 생성해주세요</p>
+        <p className="mt-1 text-xs text-gray-400">`계약 생성하기`를 누르면 계약이 생성되고 입력 폼이 열립니다.</p>
+      </div>
+
+      <div className={cn("rounded-xl border border-gray-200/80 bg-white p-2.5 space-y-2 shadow-[0_1px_0_rgba(17,24,39,0.03)]", !isContractFormVisible && "hidden")}>
         <p className="text-xs font-semibold text-gray-700">계약 정보</p>
 
         <div className="grid grid-cols-1 gap-1.5">
@@ -1975,7 +2335,7 @@ function ContractFlowTab({
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-3 space-y-2.5">
+      <div className={cn("rounded-xl border border-gray-200 bg-white p-3 space-y-2.5", !isContractFormVisible && "hidden")}>
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-semibold text-gray-700">정산 형태</p>
           <div className="flex items-center gap-2">
@@ -2025,19 +2385,51 @@ function ContractFlowTab({
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2 px-0.5">
+      <div className={cn("flex items-center justify-between gap-2 px-0.5", !isContractFormVisible && "hidden")}>
         <p className={cn("text-[10px]", saveMessage.includes("실패") ? "text-soft-blush" : "text-gray-500")}>
-          {saveMessage || "입력값은 자동 저장됩니다."}
+          {saveMessage || (isPersistedContract ? "입력값은 자동 저장됩니다." : "계약 생성 버튼을 눌러주세요.")}
         </p>
-        <button
-          type="button"
-          onClick={() => { void handleSave("manual") }}
-          disabled={!canSave}
-          className="inline-flex h-8 items-center justify-center rounded-md bg-sky-aqua px-3 text-xs font-semibold text-white hover:bg-sky-aqua/90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {isSaving ? "저장 중..." : "즉시 저장"}
-        </button>
+        {isPersistedContract && (
+          <button
+            type="button"
+            onClick={() => { void handleSave("manual") }}
+            disabled={!canSave}
+            className="inline-flex h-8 items-center justify-center rounded-md bg-sky-aqua px-3 text-xs font-semibold text-white hover:bg-sky-aqua/90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isSaving ? "저장 중..." : "즉시 저장"}
+          </button>
+        )}
       </div>
+
+      <Dialog open={isUnlinkDialogOpen} onOpenChange={setIsUnlinkDialogOpen}>
+        <DialogContent className="sm:max-w-[320px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm">연결 해제 및 계약 삭제</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              현재 카드의 연결을 해제하고 계약 정보도 함께 삭제합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setIsUnlinkDialogOpen(false)}
+              className="px-3 py-1.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsUnlinkDialogOpen(false)
+                void handleUnlinkContract()
+              }}
+              className="px-3 py-1.5 text-xs rounded-md bg-soft-blush text-white hover:bg-soft-blush/90"
+            >
+              확인
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isSettlementModalOpen} onOpenChange={setIsSettlementModalOpen}>
         <DialogContent className="sm:max-w-[420px]">
@@ -2188,30 +2580,17 @@ function ContractFlowTab({
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <p className="truncate text-[11px] font-semibold text-gray-700">{row.label}</p>
-                    <label className="inline-flex shrink-0 cursor-pointer items-center gap-1 text-[10px] text-gray-500">
-                      <input
-                        type="checkbox"
-                        checked={row.paymentConfirmed}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            updateSettlementStatus(row.key, {
-                              payment_confirmed: true,
-                              actual_amount: row.plannedAmount,
-                              received_date: row.receivedDate || getTodayDateString(),
-                            })
-                            return
-                          }
-                          updateSettlementStatus(row.key, {
-                            payment_confirmed: false,
-                            actual_amount: 0,
-                            received_date: "",
-                          })
-                        }}
-                        className="h-3.5 w-3.5 rounded border-sky-aqua accent-sky-aqua focus:ring-2 focus:ring-sky-aqua/60"
-                      />
-                      {row.paymentConfirmed ? "입금완료" : "미입금"}
-                    </label>
-                    <span className="shrink-0 text-[9px] text-gray-400">입금예정일 {row.scheduledDate || "-"}</span>
+                    <span className={cn(
+                      "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold",
+                      row.paymentConfirmed
+                        ? "border-sky-aqua/40 bg-sky-aqua/10 text-sky-aqua"
+                        : row.actualAmount > 0
+                          ? "border-amber-300 bg-amber-50 text-amber-700"
+                          : "border-gray-200 bg-gray-50 text-gray-500"
+                    )}>
+                      {row.paymentStatusLabel}
+                    </span>
+                    <span className="shrink-0 text-[9px] text-gray-400">정산예정일 {row.scheduledDate || "-"}</span>
                     {row.overdueDays > 0 && (
                       <span className="inline-flex shrink-0 items-center rounded-full border border-red-300 bg-red-100 px-1.5 py-0.5 text-[9px] font-bold text-red-700">
                         D+{row.overdueDays}
@@ -2224,40 +2603,86 @@ function ContractFlowTab({
                   </div>
                 </div>
 
+                <div className="space-y-1.5 rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-medium text-gray-500">입금내역</p>
+                    <button
+                      type="button"
+                      onClick={() => addSettlementPaymentEntry(row.key)}
+                      className="inline-flex items-center gap-1 px-1 py-0.5 text-[10px] text-gray-500 hover:text-sky-aqua"
+                    >
+                      <Plus className="h-3 w-3" />
+                      추가
+                    </button>
+                  </div>
+
+                  {row.paymentEntries.length === 0 ? (
+                    <p className="text-[10px] text-gray-400">입금내역을 추가하면 정산금액이 자동 계산됩니다.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {row.paymentEntries.map((entry, index) => (
+                        <div key={entry.id} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9,]*"
+                            value={entry.amount > 0 ? entry.amount.toLocaleString("ko-KR") : ""}
+                            onChange={(e) => {
+                              const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                              const nextAmount = digitsOnly ? Number(digitsOnly) : 0
+                              updateSettlementPaymentEntry(row.key, entry.id, {
+                                amount: Number.isFinite(nextAmount) ? Math.max(0, Math.round(nextAmount)) : 0,
+                              })
+                            }}
+                            placeholder="0"
+                            className="h-7 min-w-0 flex-1 border-0 border-b border-gray-200 bg-transparent px-0 text-left text-[10px] font-semibold tabular-nums text-gray-700 outline-none focus:border-sky-aqua"
+                          />
+                          <input
+                            type="date"
+                            value={entry.paid_at}
+                            onChange={(e) => updateSettlementPaymentEntry(row.key, entry.id, { paid_at: e.target.value })}
+                            className="h-7 w-[118px] border-0 border-b border-gray-200 bg-transparent px-0 text-right text-[10px] text-gray-600 outline-none focus:border-sky-aqua"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeSettlementPaymentEntry(row.key, entry.id)}
+                            className="inline-flex h-6 w-6 items-center justify-center text-gray-400 hover:text-soft-blush"
+                            aria-label={`입금내역 ${index + 1} 삭제`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <p className="text-[10px] text-gray-400">입금금액</p>
+                    <p className="text-[10px] text-gray-400">정산금액</p>
                     <Input
                       type="text"
-                      inputMode="numeric"
-                      pattern="[0-9,]*"
                       value={row.actualAmount > 0 ? row.actualAmount.toLocaleString("ko-KR") : ""}
-                      onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
-                        const nextAmount = digitsOnly ? Number(digitsOnly) : 0
-                        updateSettlementStatus(row.key, {
-                          actual_amount: Number.isFinite(nextAmount) ? Math.max(0, Math.round(nextAmount)) : 0,
-                        })
-                      }}
+                      readOnly
                       placeholder="0"
-                      className="h-8 border-gray-200 bg-white px-2 text-right text-[11px] font-semibold tabular-nums focus:ring-sky-aqua/40"
+                      className="h-8 border-gray-200 bg-gray-50 px-2 text-right text-[11px] font-semibold tabular-nums text-gray-700"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <p className="text-[10px] text-gray-400">입금 완료일</p>
+                    <p className="text-[10px] text-gray-400">정산 완료일</p>
                     <Input
                       type="date"
                       value={row.receivedDate}
-                      onChange={(e) => updateSettlementStatus(row.key, { received_date: e.target.value })}
-                      className="h-8 border-gray-200 bg-white px-2 text-[11px] text-gray-600 focus:ring-sky-aqua/40"
+                      readOnly
+                      className="h-8 border-gray-200 bg-gray-50 px-2 text-[11px] text-gray-600"
                     />
                   </div>
                 </div>
 
                 {row.shortfallAmount > 0 && (
                   <p className="text-right text-[10px] font-medium text-soft-blush">
-                    미입금 {formatCurrency(row.shortfallAmount)}
+                    미정산 {formatCurrency(row.shortfallAmount)}
                   </p>
                 )}
 
@@ -2292,6 +2717,8 @@ function SalesFlowPanel({
   requestCustomer,
   requestContractId,
   onLinkContract,
+  onSavedContract,
+  onSummaryChange,
 }: {
   quotations: QuotationListItem[]
   onAddQuote: () => void
@@ -2302,7 +2729,9 @@ function SalesFlowPanel({
   requestTitle: string
   requestCustomer: { id: string; company_name: string; deleted_at: string | null } | null
   requestContractId: string | null
-  onLinkContract: (contractId: string) => Promise<void>
+  onLinkContract: (contractId: string | null) => Promise<void>
+  onSavedContract?: (contractId: string) => void
+  onSummaryChange?: (summary: ContractSummary) => void
 }) {
   const [activeFlow, setActiveFlow] = useState<"견적" | "계약" | "주문·배송" | "매입·매출">("견적")
 
@@ -2361,6 +2790,8 @@ function SalesFlowPanel({
           requestContractId={requestContractId}
           confirmedQuoteSupplyAmount={confirmedQuote?.total_amount ?? null}
           onLinkContract={onLinkContract}
+          onSavedContract={onSavedContract}
+          onSummaryChange={onSummaryChange}
         />
       )}
 
@@ -2719,6 +3150,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [quotations, setQuotations] = useState<QuotationListItem[]>([])
   const [isQuoteSheetOpen, setIsQuoteSheetOpen] = useState(false)
   const [editingQuotation, setEditingQuotation] = useState<QuotationWithItems | null>(null)
+  const [contractSummary, setContractSummary] = useState<ContractSummary | null>(null)
+  const contractSummaryFetchSeqRef = useRef(0)
 
   // 의뢰 선택 시 견적서 목록 로드
   const loadQuotations = useCallback(async (reqId: string) => {
@@ -2734,14 +3167,163 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   }, [])
 
   // selectedItem 변경 시 견적서 로드
-  const selectedItemId = selectedItem?.id
+  const selectedItemIdForQuotes = selectedItem?.id
   useEffect(() => {
-    if (selectedItemId) {
-      loadQuotations(selectedItemId)
+    if (selectedItemIdForQuotes) {
+      loadQuotations(selectedItemIdForQuotes)
     } else {
       setQuotations([])
     }
-  }, [selectedItemId, loadQuotations])
+  }, [selectedItemIdForQuotes, loadQuotations])
+
+  const loadContractSummaryById = useCallback(async (contractId: string | null, requestId?: string | null) => {
+    const fetchSeq = ++contractSummaryFetchSeqRef.current
+
+    if (!contractId) {
+      if (fetchSeq !== contractSummaryFetchSeqRef.current) return
+      setContractSummary(null)
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/contracts?id=${contractId}`)
+      if (!res.ok) {
+        if (fetchSeq !== contractSummaryFetchSeqRef.current) return
+        setContractSummary(null)
+        return
+      }
+
+      const result = await res.json()
+      const contract = (result?.data ?? null) as Record<string, unknown> | null
+      if (!contract) {
+        if (fetchSeq !== contractSummaryFetchSeqRef.current) return
+        setContractSummary(null)
+        return
+      }
+
+      const settlementTypes = normalizeSettlementTypes(contract.settlement_type)
+      const baseSelectedStages = settlementTypes.length > 0
+        ? settlementTypes
+        : [SETTLEMENT_STAGE_ORDER[SETTLEMENT_STAGE_ORDER.length - 1]]
+      const baseSupplyAmount = Math.max(0, Math.round(Number(contract.contract_amount || 0)))
+
+      const contractMeta = (
+        contract.contract_meta && typeof contract.contract_meta === "object"
+          ? contract.contract_meta as Record<string, unknown>
+          : null
+      )
+      const baseStageRatios = contractMeta
+        ? normalizeRatios(contractMeta.stage_ratios, baseSelectedStages)
+        : createEvenRatios(baseSelectedStages)
+      const baseMiddleInstallments = contractMeta
+        ? normalizeMiddleInstallments(contractMeta.middle_installments)
+        : DEFAULT_MIDDLE_INSTALLMENTS
+      const baseSettlementStatusMap = contractMeta
+        ? sanitizeSettlementStatusMap(contractMeta.settlement_status_map)
+        : {}
+
+      let effectiveSelectedStages = baseSelectedStages
+      let effectiveSupplyAmount = baseSupplyAmount
+      let effectiveStageRatios = baseStageRatios
+      let effectiveMiddleInstallments = baseMiddleInstallments
+      let effectiveSettlementStatusMap = baseSettlementStatusMap
+
+      try {
+        const pendingRaw = requestId
+          ? localStorage.getItem(`requests:contractDraftPending:v1:${requestId}`)
+          : null
+        if (pendingRaw) {
+          const pending = JSON.parse(pendingRaw) as Partial<PendingContractDraftSnapshot>
+          const pendingDraft = pending?.draft && typeof pending.draft === "object"
+            ? pending.draft as Partial<ContractDraft>
+            : null
+          const pendingDraftId = pendingDraft && typeof pendingDraft.id === "string" && pendingDraft.id.trim()
+            ? pendingDraft.id
+            : null
+          const canApplyPending = !!pendingDraftId && pendingDraftId === contractId
+
+          if (canApplyPending) {
+            const pendingStages = normalizeSettlementTypes(pendingDraft?.settlement_type)
+            effectiveSelectedStages = pendingStages.length > 0
+              ? pendingStages
+              : effectiveSelectedStages
+
+            const pendingContractAmount = Number(pendingDraft?.contract_amount)
+            if (Number.isFinite(pendingContractAmount)) {
+              effectiveSupplyAmount = Math.max(0, Math.round(pendingContractAmount))
+            }
+
+            effectiveStageRatios = normalizeRatios(pending?.stageRatios, effectiveSelectedStages)
+            effectiveMiddleInstallments = normalizeMiddleInstallments(pending?.middleInstallments)
+            effectiveSettlementStatusMap = sanitizeSettlementStatusMap(pending?.settlementStatusMap)
+          }
+        }
+      } catch {
+        // Ignore pending draft parse errors and fallback to DB values.
+      }
+
+      try {
+        const localContractRaw = contractId
+          ? localStorage.getItem(`requests:settlementStatus:v1:contract:${contractId}`)
+          : null
+        const localRequestRaw = requestId
+          ? localStorage.getItem(`requests:settlementStatus:v1:request:${requestId}`)
+          : null
+        const localContractMap = localContractRaw
+          ? sanitizeSettlementStatusMap(JSON.parse(localContractRaw))
+          : {}
+        const localRequestMap = localRequestRaw
+          ? sanitizeSettlementStatusMap(JSON.parse(localRequestRaw))
+          : {}
+
+        if (hasMeaningfulSettlementStatus(localContractMap)) {
+          effectiveSettlementStatusMap = localContractMap
+        } else if (hasMeaningfulSettlementStatus(localRequestMap)) {
+          effectiveSettlementStatusMap = localRequestMap
+        }
+      } catch {
+        // Ignore localStorage parse errors and fallback to DB values.
+      }
+
+      const settlementRows = buildSettlementRows(
+        effectiveSupplyAmount,
+        effectiveSelectedStages,
+        effectiveStageRatios,
+        effectiveMiddleInstallments
+      )
+      const totalWithVat = effectiveSupplyAmount + Math.round(effectiveSupplyAmount * 0.1)
+
+      const paidAmount = settlementRows.reduce((sum, row) => {
+        const status = normalizeSettlementStatusInput(effectiveSettlementStatusMap[row.key])
+        const actualPaid = Math.max(0, Math.round(Number(status.actual_amount || 0)))
+        if (actualPaid > 0) return sum + actualPaid
+        return sum
+      }, 0)
+
+      const clampedPaid = Math.min(Math.max(0, paidAmount), totalWithVat)
+      const unpaidAmount = Math.max(0, totalWithVat - clampedPaid)
+      const progressPercent = totalWithVat > 0
+        ? Math.min(100, Math.round((clampedPaid / totalWithVat) * 100))
+        : 0
+
+      if (fetchSeq !== contractSummaryFetchSeqRef.current) return
+      setContractSummary({
+        totalWithVat,
+        paidAmount: clampedPaid,
+        unpaidAmount,
+        progressPercent,
+      })
+    } catch {
+      if (fetchSeq !== contractSummaryFetchSeqRef.current) return
+      setContractSummary(null)
+    }
+  }, [])
+
+  const selectedContractId = selectedItem?.contract_id ?? null
+  const selectedItemId = selectedItem?.id ?? null
+  useEffect(() => {
+    void loadContractSummaryById(selectedContractId, selectedItemId)
+  }, [selectedContractId, selectedItemId, loadContractSummaryById])
 
   // 견적서 편집 열기 (상세 데이터 fetch)
   const handleEditQuote = useCallback(async (quoteId: string) => {
@@ -3099,7 +3681,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       {/* 칸반 보드 */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex-1 bg-white">
-          <div className="flex gap-4 p-4">
+          <div className="flex gap-4 p-4 [&_.text-\\[10px\\]]:text-xs [&_.text-\\[9px\\]]:text-[10px] [&_.text-xs]:text-sm">
             {columns.map((col) => {
               const style = COLUMN_STYLES[col.status] || COLUMN_STYLES["견적 문의"]
 
@@ -3192,13 +3774,13 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                 </button>
 
                                 {/* 상태 배지 (우측 상단 모서리) */}
-                                <Badge className={cn("absolute top-2 right-2 text-[8px] px-1 py-0", style.badge)}>
+                                <Badge className={cn("absolute top-2 right-2 text-[9px] px-1 py-0", style.badge)}>
                                   {col.status}
                                 </Badge>
 
                                 {/* 제목 */}
                                 <div className="mb-2 pr-16">
-                                  <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-900 truncate" title={item.title}>
+                                  <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 truncate" title={item.title}>
                                     {(() => {
                                       const Icon = COLUMN_ICONS[col.status] || ClipboardList
                                       return <Icon className="h-3 w-3 text-gray-500 shrink-0" />
@@ -3209,17 +3791,17 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
                                 {/* 문의 일시 + 고객명 (제목과 간격 두고 하단 배치) */}
                                 <div className="mt-4 space-y-1">
-                                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                     <Calendar className="h-3 w-3 shrink-0" />
                                     <span>{item.inquiry_date ? formatDate(item.inquiry_date) : "없음"}</span>
                                   </div>
-                                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                     <Building2 className="h-3 w-3 shrink-0" />
                                     <span className={item.customer?.deleted_at ? "text-soft-blush" : ""}>
                                       {item.customer ? (item.customer.deleted_at ? "삭제된 고객" : item.customer.company_name) : "없음"}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                     <FileText className="h-3 w-3 shrink-0" />
                                     <span>없음</span>
                                   </div>
@@ -3517,7 +4099,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                 {/* 본문: 좌우 분리 */}
                 <div className="flex-1 flex overflow-hidden">
                   {/* ===== 왼쪽 영역: 의뢰 상세 정보 ===== */}
-                  <div className="w-1/2 shrink-0 overflow-y-auto px-6 py-6 border-r [&_.text-2xl]:text-lg [&_.text-base]:text-sm [&_.text-sm]:text-xs [&_.text-xs]:text-[10px] [&_.text-\\[11px\\]]:text-[9px] [&_.text-\\[10px\\]]:text-[8px]">
+                  <div className="w-1/2 shrink-0 overflow-y-auto px-6 py-6 border-r [&_.text-\\[10px\\]]:text-xs [&_.text-\\[9px\\]]:text-[10px] [&_.text-xs]:text-sm [&_.no-scale_.text-\\[10px\\]]:text-[10px] [&_.no-scale_.text-\\[9px\\]]:text-[9px] [&_.no-scale_.text-xs]:text-xs">
                     {/* 상태 배지(클릭 변경) + 생성일 */}
                     <div className="flex items-center gap-2.5 mb-4">
                       <InlineSelect
@@ -3633,7 +4215,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         }}
                       />
 
-                      <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1">
+                      <div className="no-scale flex items-center justify-between rounded-md px-2 -mx-2 py-1">
                         <div className="w-full space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
@@ -3691,6 +4273,30 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                               </div>
                             </div>
                           </button>
+                          {contractSummary && (
+                            <div className="mt-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+                              <div className="flex items-center justify-between">
+                                <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
+                                  <Box className="h-3.5 w-3.5 text-gray-500" />
+                                  정산 진행률
+                                </p>
+                                <p className="text-sm font-semibold text-sky-aqua tabular-nums">{contractSummary.progressPercent}%</p>
+                              </div>
+                              <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-sky-aqua to-tropical-teal transition-all duration-500"
+                                  style={{ width: `${contractSummary.progressPercent}%` }}
+                                />
+                              </div>
+                              <div className="mt-2 flex items-center justify-between text-xs tabular-nums">
+                                <span className="text-muted-teal">입금 {formatCurrency(contractSummary.paidAmount)}</span>
+                                <span className="text-soft-blush">미수 {formatCurrency(contractSummary.unpaidAmount)}</span>
+                              </div>
+                              <p className="mt-1 text-[10px] text-gray-400 tabular-nums">
+                                총 계약금(VAT포함) {formatCurrency(contractSummary.totalWithVat)}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3710,6 +4316,25 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                       requestContractId={selectedItem.contract_id}
                       onLinkContract={async (contractId) => {
                         await updateRequestField("contract_id", contractId)
+                      }}
+                      onSavedContract={(contractId) => {
+                        void loadContractSummaryById(contractId, selectedItem.id)
+                      }}
+                      onSummaryChange={(summary) => {
+                        setContractSummary((prev) => {
+                          if (
+                            prev &&
+                            prev.totalWithVat === summary.totalWithVat &&
+                            prev.paidAmount === summary.paidAmount &&
+                            prev.unpaidAmount === summary.unpaidAmount &&
+                            prev.progressPercent === summary.progressPercent
+                          ) {
+                            return prev
+                          }
+                          // Invalidate in-flight GET results so they cannot overwrite latest UI summary.
+                          contractSummaryFetchSeqRef.current += 1
+                          return summary
+                        })
                       }}
                     />
                   </div>

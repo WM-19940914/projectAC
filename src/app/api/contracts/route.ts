@@ -396,17 +396,38 @@ export async function DELETE(req: Request) {
         }
 
         const supabase = createAdminClient();
+        const nowIso = new Date().toISOString();
 
-        const { error } = await supabase
+        // 연결된 요청 카드 참조 해제
+        const { error: unlinkError } = await supabase
+            .from('requests')
+            .update({ contract_id: null, updated_at: nowIso })
+            .eq('contract_id', id);
+        if (unlinkError) throw unlinkError;
+
+        // 관련 테이블 데이터 정리(테이블이 없는 환경은 건너뜀)
+        const relatedTables = ['settlements', 'expenses', 'transactions'];
+        for (const table of relatedTables) {
+            const { error } = await supabase
+                .from(table)
+                .delete()
+                .eq('contract_id', id);
+
+            if (error && error.code !== '42P01') {
+                throw error;
+            }
+        }
+
+        // 계약 물리 삭제
+        const { error: deleteError } = await supabase
             .from('contracts')
-            .update({
-                status: '숨김',
-            })
+            .delete()
             .eq('id', id);
 
-        if (error) throw error;
+        if (deleteError) throw deleteError;
 
         revalidatePath('/contracts');
+        revalidatePath('/requests');
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('계약 삭제 오류:', error);
