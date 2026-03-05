@@ -182,7 +182,11 @@ export default function QuotesList({ quotations, customers }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
-      if (!res.ok) { alert("견적서 생성 실패"); return }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert("견적서 생성 실패: " + (err.error || res.status))
+        return
+      }
       const result = await res.json()
       // 생성된 견적서 상세 fetch → 에디터 열기
       const detailRes = await fetch(`/api/quotes?id=${result.data.id}`)
@@ -229,7 +233,11 @@ export default function QuotesList({ quotations, customers }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(quotePayload),
       })
-      if (!quoteRes.ok) { alert("견적서 생성 실패"); return }
+      if (!quoteRes.ok) {
+        const err = await quoteRes.json().catch(() => ({}))
+        alert("견적서 생성 실패: " + (err.error || quoteRes.status))
+        return
+      }
       const quoteResult = await quoteRes.json()
 
       // 3. 생성된 견적서 상세 fetch → 에디터 열기

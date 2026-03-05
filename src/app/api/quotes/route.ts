@@ -15,6 +15,42 @@ function hasMeaningfulItem(item: Record<string, unknown>): boolean {
   )
 }
 
+function normalizeOptionalId(value: unknown): string | null {
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+async function ensureRequestExists(
+  supabase: ReturnType<typeof createAdminClient>,
+  requestId: string
+): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
+  const { data, error } = await supabase
+    .from("requests")
+    .select("id")
+    .eq("id", requestId)
+    .maybeSingle()
+
+  if (error) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "의뢰 확인 중 오류가 발생했습니다." }, { status: 500 }),
+    }
+  }
+
+  if (!data) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "선택한 의뢰를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요." },
+        { status: 400 }
+      ),
+    }
+  }
+
+  return { ok: true }
+}
+
 // 견적서 목록 조회 (request_id 필터 지원)
 export async function GET(req: NextRequest) {
   try {
@@ -85,6 +121,13 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = createAdminClient()
+    const requestId = normalizeOptionalId(header.request_id)
+    const customerId = normalizeOptionalId(header.customer_id)
+
+    if (requestId) {
+      const requestValidation = await ensureRequestExists(supabase, requestId)
+      if (!requestValidation.ok) return requestValidation.response
+    }
 
     // 견적번호 생성: Q-YYYYMMDD-NNN 형식
     const today = new Date().toISOString().split("T")[0].replace(/-/g, "")
@@ -112,8 +155,8 @@ export async function POST(req: NextRequest) {
         quotation_number: quotationNumber,
         type: header.type || "간이",
         title: header.title.trim(),
-        request_id: header.request_id || null,
-        customer_id: header.customer_id || null,
+        request_id: requestId,
+        customer_id: customerId,
         quotation_date: header.quotation_date || new Date().toISOString().split("T")[0],
         valid_until: header.valid_until || null,
         total_amount: totalAmount,
@@ -211,6 +254,14 @@ export async function PATCH(req: NextRequest) {
     }
 
     const supabase = createAdminClient()
+    const requestIdFromFields = "request_id" in fields
+      ? normalizeOptionalId(fields.request_id)
+      : undefined
+
+    if (typeof requestIdFromFields === "string") {
+      const requestValidation = await ensureRequestExists(supabase, requestIdFromFields)
+      if (!requestValidation.ok) return requestValidation.response
+    }
 
     // 헤더 업데이트 (items가 없는 경우 합계 재계산 생략 - supplier 등 부분 업데이트 허용)
     const updateData: Record<string, unknown> = {
@@ -246,6 +297,10 @@ export async function PATCH(req: NextRequest) {
     ]
     for (const key of allowedFields) {
       if (key in fields) {
+        if (key === "request_id") {
+          updateData.request_id = requestIdFromFields ?? null
+          continue
+        }
         updateData[key] = fields[key] || null
       }
     }

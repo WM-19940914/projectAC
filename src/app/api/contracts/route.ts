@@ -251,9 +251,15 @@ export async function GET(req: Request) {
                 customer:customers(id, company_name, deleted_at)
             `)
             .eq('id', id)
-            .single();
+            .maybeSingle();
 
         if (error) throw error;
+        if (!data) {
+            return NextResponse.json(
+                { success: false, error: 'Contract not found', data: null },
+                { status: 200 }
+            );
+        }
 
         return NextResponse.json({ success: true, data: normalizeContractOutput(data as Record<string, unknown>) });
     } catch (error) {

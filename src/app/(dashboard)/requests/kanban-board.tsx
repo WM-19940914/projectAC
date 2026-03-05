@@ -3313,7 +3313,18 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
-      if (!res.ok) { const err = await res.json(); alert("견적서 생성 실패: " + (err.error || res.status)); return }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({} as { error?: string }))
+        const errorMessage = err?.error || String(res.status)
+        alert("견적서 생성 실패: " + errorMessage)
+        if (res.status === 400) {
+          setSelectedItem(null)
+          setIsQuoteSheetOpen(false)
+          setEditingQuotation(null)
+          router.refresh()
+        }
+        return
+      }
       const result = await res.json()
       // 생성된 견적서 상세 fetch → 에디터 열기
       const detailRes = await fetch(`/api/quotes?id=${result.data.id}`)
@@ -3326,7 +3337,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     } catch {
       alert("견적서 생성 중 오류가 발생했습니다.")
     }
-  }, [selectedItem, loadQuotations])
+  }, [selectedItem, loadQuotations, router])
 
   // 견적서 저장 후 콜백
   const handleQuoteSaved = useCallback(() => {
