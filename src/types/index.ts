@@ -1,8 +1,8 @@
-// ============================================
-// SAC 프로젝트 - 전체 데이터 타입 정의
+﻿// ============================================
+// SAC ?꾨줈?앺듃 - ?꾩껜 ?곗씠??????뺤쓽
 // ============================================
 
-// ----- 프로필 -----
+// ----- ?꾨줈??-----
 export interface Profile {
   id: string;
   email: string;
@@ -15,7 +15,7 @@ export interface Profile {
   updated_at: string;
 }
 
-// ----- 고객 -----
+// ----- 怨좉컼 -----
 export interface Customer {
   id: string;
   company_name: string;
@@ -37,13 +37,13 @@ export interface Customer {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 집계 (view/computed)
+  // 吏묎퀎 (view/computed)
   request_count?: number;
   contract_count?: number;
 }
 
-// ----- 의뢰 -----
-export type RequestStatus = '견적 문의' | '영업중' | '계약 성공' | '수주 실패' | '숨김';
+// ----- ?섎ː -----
+export type RequestStatus = '견적서 작성중' | '계약 진행' | '계약 체결' | '주문·배송 진행' | '완료';
 
 export interface Request {
   id: string;
@@ -57,14 +57,11 @@ export interface Request {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 조인
+  // 議곗씤
   customer?: Customer;
   contract?: Contract;
   assigned_user?: Profile;
 }
-
-// ----- 계약 -----
-export type ContractStatus = '계약 준비 중' | '계약 진행 중' | '계약 종료' | '계약 중단' | '숨김';
 
 export interface Contract {
   id: string;
@@ -75,19 +72,18 @@ export interface Contract {
   settlement_type?: string | null;
   start_date?: string | null;
   end_date?: string | null;
-  status: ContractStatus;
   memo?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
-  // 조인
+  // 議곗씤
   customer?: Customer;
   settlements?: Settlement[];
   expenses?: Expense[];
 }
 
-// ----- 정산 -----
-export type SettlementStatus = '정산 예정' | '정산 지연' | '정산 완료' | '정산 중단' | '숨김';
+// ----- ?뺤궛 -----
+export type SettlementStatus = '정산 예정' | '정산 진행중' | '정산 완료' | '정산 보류' | '취소';
 
 export interface Settlement {
   id: string;
@@ -109,12 +105,12 @@ export interface Settlement {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 조인
+  // 議곗씤
   contract?: Contract;
   customer?: Customer;
 }
 
-// ----- 지출 -----
+// ----- 吏異?-----
 export interface Expense {
   id: string;
   contract_id: string;
@@ -138,13 +134,13 @@ export interface Expense {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 조인
+  // 議곗씤
   contract?: Contract;
 }
 
-// ----- 견적서 -----
-export type QuotationType = '간이' | '상세';
-export type QuotationItemCategory = '일반' | '장비' | '설치비' | '갑지';
+// ----- 寃ъ쟻??-----
+export type QuotationType = string;
+export type QuotationItemCategory = string;
 
 export interface Quotation {
   id: string;
@@ -160,12 +156,12 @@ export interface Quotation {
   grand_total: number;
   notes?: string;
   terms?: string;
-  // 견적서 헤더 추가 필드
+  // 寃ъ쟻???ㅻ뜑 異붽? ?꾨뱶
   site_name?: string;        // 현장명
   recipient?: string;        // 수신
   contact_person?: string;   // 담당자
-  contact_phone?: string;    // 전화번호
-  // 공급자 정보
+  contact_phone?: string;    // 연락처
+  // 怨듦툒???뺣낫
   supplier_company_name?: string;
   supplier_biz_number?: string;
   supplier_ceo_name?: string;
@@ -174,11 +170,11 @@ export interface Quotation {
   supplier_manager?: string;
   supplier_manager_phone?: string;
   supplier_manager_email?: string;
-  // 납기/결제 정보
-  delivery_date?: string;         // 납기일자
-  delivery_place?: string;        // 납기장소
-  payment_condition?: string;     // 결제조건
-  // 수신자 확장
+  // ?⑷린/寃곗젣 ?뺣낫
+  delivery_date?: string;         // ?⑷린?쇱옄
+  delivery_place?: string;        // ?⑷린?μ냼
+  payment_condition?: string;     // 寃곗젣議곌굔
+  // ?섏떊???뺤옣
   receiver_company_name?: string;
   receiver_biz_number?: string;
   receiver_email?: string;
@@ -186,7 +182,7 @@ export interface Quotation {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 조인
+  // 議곗씤
   items?: QuotationItem[];
   customer?: Customer;
   request?: Request;
@@ -204,25 +200,56 @@ export interface QuotationItem {
   unit_price: number;
   amount: number;
   memo?: string;
-  // 내부 단가 계산 필드 (AH~AP열)
-  retrieval_price?: number;       // 반출가
-  discount_rate?: number;         // DC율 (%)
-  purchase_unit_price?: number;   // 매입단가
-  purchase_amount?: number;       // 매입금액
-  margin_rate?: number;           // MG율 (%)
-  proposed_price?: number;        // 제안가
-  profit?: number;                // 이윤
-  incentive_rate?: number;        // 장려금률 (%)
+  // ?대? ?④? 怨꾩궛 ?꾨뱶 (AH~AP??
+  retrieval_price?: number;       // 諛섏텧媛
+  discount_rate?: number;         // DC??(%)
+  purchase_unit_price?: number;   // 留ㅼ엯?④?
+  purchase_amount?: number;       // 留ㅼ엯湲덉븸
+  margin_rate?: number;           // MG??(%)
+  proposed_price?: number;        // ?쒖븞媛
+  profit?: number;                // ?댁쑄
+  incentive_rate?: number;        // ?λ젮湲덈쪧 (%)
   created_at: string;
   updated_at: string;
 }
 
-// 견적서 + 품목 조인 타입
+// 견적서 + 품목 확장 타입
 export interface QuotationWithItems extends Quotation {
   items: QuotationItem[];
 }
 
-// ----- 입출금내역 -----
+// ----- 二쇰Ц/諛곗넚 ?댁뿭 -----
+export interface OrderDeliveryLine {
+  id: string;
+  order_delivery_id: string;
+  supplier?: string | null;
+  site_name?: string | null;
+  order_date?: string | null;
+  order_number?: string | null;
+  model_name?: string | null;
+  quantity?: number | null;
+  delivery_request_date?: string | null;
+  delivery_expected_date?: string | null;
+  delivery_confirmed_date?: string | null;
+  delivery_place?: string | null;
+  delivery_address?: string | null;
+  row_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderDelivery {
+  id: string;
+  request_id: string;
+  opti_name?: string | null;
+  opti_number?: string | null;
+  contract_number?: string | null;
+  lines?: OrderDeliveryLine[];
+  created_at: string;
+  updated_at: string;
+}
+
+// ----- ?낆텧湲덈궡??-----
 export interface Transaction {
   id: string;
   contract_id?: string;
@@ -239,13 +266,13 @@ export interface Transaction {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 조인
+  // 議곗씤
   contract?: Contract;
   settlement?: Settlement;
   expense?: Expense;
 }
 
-// ----- 첨부파일 -----
+// ----- 泥⑤??뚯씪 -----
 export interface Attachment {
   id: string;
   entity_type: 'customer' | 'request' | 'contract' | 'settlement' | 'expense' | 'quotation';
@@ -258,7 +285,7 @@ export interface Attachment {
   created_at: string;
 }
 
-// ----- 위치 (고객 지도용) -----
+// ----- ?꾩튂 (怨좉컼 吏?꾩슜) -----
 export interface Location {
   id: string;
   customer_id: string;
@@ -270,7 +297,7 @@ export interface Location {
   phone?: string;
 }
 
-// ----- 공통 -----
+// ----- 怨듯넻 -----
 export interface PaginationParams {
   page?: number;
   limit?: number;
@@ -282,12 +309,15 @@ export interface PaginatedResponse<T> {
   count: number;
 }
 
-// ----- 칸반 보드 타입 -----
+// ----- 移몃컲 蹂대뱶 ???-----
 export interface KanbanColumn<T> {
   id: string;
   title: string;
-  color: string;     // 배경색/텍스트색
+  color: string;     // 諛곌꼍???띿뒪?몄깋
   items: T[];
   count: number;
   totalAmount?: number;
 }
+
+
+

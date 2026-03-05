@@ -73,6 +73,7 @@ function toModernContractInput(
 
     delete mappedData.name;
     delete mappedData.amount;
+    delete mappedData.status;
 
     const incomingMeta = sanitizeContractMeta(mappedData.contract_meta);
     delete mappedData.contract_meta;

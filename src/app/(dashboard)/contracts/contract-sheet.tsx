@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { formatDate, formatDateTime, formatCurrency, formatPhone } from "@/lib/format"
-import { Badge } from "@/components/ui/badge"
 import {
   Sheet,
   SheetContent,
@@ -20,7 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Building2, Calendar, CheckCircle2, Phone, Plus, Search, User, X } from "lucide-react"
-import { CONTRACT_STATUSES, SETTLEMENT_TYPES } from "@/lib/constants"
+import { SETTLEMENT_TYPES } from "@/lib/constants"
 import type { Contract } from "@/types"
 
 // ----- 타입 -----
@@ -109,89 +108,6 @@ function InlineTitle({
     >
       {value}
     </h2>
-  )
-}
-
-// ----- 인라인 선택 편집 컴포넌트 -----
-function InlineSelect({
-  value,
-  displayValue,
-  placeholder,
-  options,
-  onConfirm,
-  badgeStyles,
-}: {
-  value: string
-  displayValue: string
-  placeholder: string
-  options: { value: string; label: string }[]
-  onConfirm: (value: string) => void
-  badgeStyles?: Record<string, string>
-}) {
-  const [isOpen, setIsOpen] = useState(false)
-  const wrapperRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!isOpen) return
-    const handleClickOutside = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [isOpen])
-
-  return (
-    <div
-      ref={wrapperRef}
-      onClick={() => setIsOpen(true)}
-      className={cn(
-        "relative flex-1 cursor-pointer py-1 px-2 -mx-2 text-right",
-        !displayValue && "border-b border-dashed border-gray-300"
-      )}
-    >
-      {badgeStyles && displayValue ? (
-        <Badge className={cn("text-xs", badgeStyles[value] || "")}>
-          {displayValue}
-        </Badge>
-      ) : (
-        <span className={cn("text-sm", displayValue ? "text-gray-900" : "text-gray-400")}>
-          {displayValue || placeholder}
-        </span>
-      )}
-
-      {isOpen && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          className="absolute top-full right-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-1.5 min-w-[200px] max-h-[240px] overflow-y-auto"
-        >
-          {options.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => {
-                onConfirm(opt.value)
-                setIsOpen(false)
-              }}
-              className={cn(
-                "w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors",
-                opt.value === value ? "bg-gray-100" : "hover:bg-gray-50"
-              )}
-            >
-              {badgeStyles ? (
-                <Badge className={cn("text-xs", badgeStyles[opt.value] || "")}>
-                  {opt.label}
-                </Badge>
-              ) : (
-                <span className={opt.value === value ? "text-sky-aqua font-medium" : "text-gray-700"}>
-                  {opt.label}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   )
 }
 
@@ -776,14 +692,6 @@ function CustomerPanel({
   )
 }
 
-// ----- 계약 상세 Sheet 본체 -----
-const COLUMN_STYLES: Record<string, { badge: string }> = {
-  "계약 준비 중": { badge: "bg-sky-aqua/20 text-sky-aqua" },
-  "계약 진행 중": { badge: "bg-tropical-teal/20 text-tropical-teal" },
-  "계약 종료": { badge: "bg-muted-teal/20 text-muted-teal" },
-  "계약 중단": { badge: "bg-soft-blush/20 text-soft-blush" },
-}
-
 export default function ContractSheet({
   contract,
   customers,
@@ -793,8 +701,6 @@ export default function ContractSheet({
   saveMessage,
 }: ContractSheetProps) {
   if (!contract) return null
-
-  const statusStyle = COLUMN_STYLES[contract.status] || COLUMN_STYLES["계약 준비 중"]
 
   // 고객 정보 구성
   const customerForPanel = contract.customer
@@ -840,11 +746,8 @@ export default function ContractSheet({
         <div className="flex-1 flex overflow-hidden">
           {/* ===== 왼쪽 영역: 계약 상세 정보 ===== */}
           <div className="flex-1 overflow-y-auto px-6 py-6 border-r">
-            {/* 상태 배지 + 생성일 */}
+            {/* 생성일 */}
             <div className="flex items-center gap-3 mb-4">
-              <Badge className={cn("text-xs", statusStyle.badge)}>
-                {contract.status}
-              </Badge>
               <span className="text-[10px] text-gray-400">
                 {formatDateTime(contract.created_at).replace(/^\d{2}/, '')} 생성
               </span>
@@ -866,26 +769,6 @@ export default function ContractSheet({
 
             {/* 상세 정보 */}
             <div className="space-y-3">
-              {/* 단계 (인라인 선택 - 배지 스타일) */}
-              <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-sky-aqua/5 transition-colors">
-                <span className="text-sm text-gray-500">단계</span>
-                <InlineSelect
-                  value={contract.status}
-                  displayValue={contract.status}
-                  placeholder="단계를 선택하세요"
-                  options={CONTRACT_STATUSES.filter((s) => s.value !== "숨김").map((s) => ({ value: s.value, label: s.label }))}
-                  onConfirm={(v) => onFieldUpdate("status", v)}
-                  badgeStyles={{
-                    "계약 준비 중": COLUMN_STYLES["계약 준비 중"].badge,
-                    "계약 진행 중": COLUMN_STYLES["계약 진행 중"].badge,
-                    "계약 종료": COLUMN_STYLES["계약 종료"].badge,
-                    "계약 중단": COLUMN_STYLES["계약 중단"].badge,
-                  }}
-                />
-              </div>
-
-              <Separator />
-
               {/* 계약 금액 + 부가세 */}
               <InlineAmount
                 amount={contract.contract_amount}

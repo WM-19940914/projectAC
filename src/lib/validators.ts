@@ -99,7 +99,6 @@ export const contractSchema = z.object({
     .string()
     .min(1, '계약 제목을 입력해주세요')
     .max(200, '제목은 200자 이내로 입력해주세요'),
-  status: z.enum(['계약 준비 중', '계약 진행 중', '계약 종료', '계약 중단', '숨김']).default('계약 준비 중'),
   customer_id: z.string().uuid('올바른 고객을 선택해주세요').optional().or(z.literal('')),
   contract_amount: z
     .number()

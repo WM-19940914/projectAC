@@ -11,15 +11,6 @@ export const REQUEST_STATUSES = [
   { value: '숨김', label: '숨김', color: 'bg-gray-50 text-gray-500', columnColor: 'border-t-gray-300' },
 ] as const;
 
-// ----- 계약 상태 -----
-export const CONTRACT_STATUSES = [
-  { value: '계약 준비 중', label: '계약 준비 중', color: 'bg-sky-aqua/10 text-sky-aqua', columnColor: 'border-t-sky-aqua' },
-  { value: '계약 진행 중', label: '계약 진행 중', color: 'bg-tropical-teal/10 text-tropical-teal', columnColor: 'border-t-tropical-teal' },
-  { value: '계약 종료', label: '계약 종료', color: 'bg-muted-teal/10 text-muted-teal', columnColor: 'border-t-muted-teal' },
-  { value: '계약 중단', label: '계약 중단', color: 'bg-soft-blush/30 text-soft-blush', columnColor: 'border-t-soft-blush' },
-  { value: '숨김', label: '숨김', color: 'bg-gray-50 text-gray-500', columnColor: 'border-t-gray-300' },
-] as const;
-
 // ----- 정산 상태 -----
 export const SETTLEMENT_STATUSES = [
   { value: '정산 예정', label: '정산 예정', color: 'bg-sky-aqua/10 text-sky-aqua', columnColor: 'border-t-sky-aqua' },

@@ -72,7 +72,6 @@ export default function NewContractDialog({ open, onOpenChange, customers }: New
         customer_id: formData.customer_id && formData.customer_id !== "" ? formData.customer_id : null,
         contract_amount: 0,
         settlement_type: null,
-        status: "계약 준비 중",
         start_date: null,
         end_date: null,
         memo: null,

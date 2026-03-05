@@ -22,7 +22,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
-import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CheckCircle2, Circle, ClipboardList, EyeOff, FileText, Hash, Mail, Pencil, Phone, Plus, Search, Trash2, Truck, User, X, XCircle } from "lucide-react"
+import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CheckCircle2, Circle, ClipboardList, EyeOff, FileText, Hash, Mail, Pencil, Phone, Plus, Search, Trash2, Truck, Unlink, User, X, XCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -30,6 +30,7 @@ import { useRouter } from "next/navigation"
 import { REQUEST_STATUSES } from "@/lib/constants"
 import SalesTabNav from "@/components/layout/sales-tab-nav"
 import QuoteEditorSheet from "../quotes/quote-editor-sheet"
+import OrderDeliveryTab from "./order-delivery-tab"
 import type { QuotationWithItems } from "@/types"
 
 // ----- 타입 -----
@@ -864,7 +865,6 @@ const DEFAULT_MIDDLE_INSTALLMENTS = 1
 interface ContractDraft {
   id: string | null
   title: string
-  status: string
   customer_id: string
   contract_amount: number
   start_date: string
@@ -1071,7 +1071,6 @@ function buildContractSnapshot(params: {
   const normalizedStatus = sanitizeSettlementStatusMap(params.settlementStatusMap)
   return JSON.stringify({
     title: params.draft.title.trim(),
-    status: params.draft.status,
     customer_id: params.customerId,
     contract_amount: Math.max(0, Math.round(Number(params.draft.contract_amount || 0))),
     settlement_type: selectedStages,
@@ -1210,7 +1209,6 @@ function ContractFlowTab({
   const createDefaultDraft = useCallback((): ContractDraft => ({
     id: null,
     title: `${requestTitle} 계약`,
-    status: "계약 준비 중",
     customer_id: requestCustomer?.id || "",
     contract_amount: 0,
     settlement_type: [SETTLEMENT_STAGE_ORDER[SETTLEMENT_STAGE_ORDER.length - 1]],
@@ -1399,7 +1397,6 @@ function ContractFlowTab({
         const nextDraft: ContractDraft = {
           id: String(contract.id || requestContractId),
           title: typeof contract.title === "string" && contract.title.trim() ? contract.title : `${requestTitle} 계약`,
-          status: typeof contract.status === "string" ? contract.status : "계약 준비 중",
           customer_id: typeof contract.customer_id === "string" ? contract.customer_id : (requestCustomer?.id || ""),
           contract_amount: Math.max(0, Math.round(Number(contract.contract_amount || 0))),
           settlement_type: settlementTypes.length > 0 ? settlementTypes : ["잔금"],
@@ -1945,7 +1942,6 @@ function ContractFlowTab({
 
       const payload = {
         title: draft.title.trim(),
-        status: draft.status,
         request_id: requestId,
         customer_id: requestCustomer?.id || draft.customer_id || null,
         contract_amount: supplyAmount,
@@ -2130,38 +2126,24 @@ function ContractFlowTab({
           </div>
         ) : (
     <div className="space-y-3">
-      <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <p className="text-xs font-semibold text-gray-700">{isPersistedContract ? "계약서" : "계약을 생성해주세요"}</p>
-            <p className="text-[10px] text-gray-400">
-              {isPersistedContract ? "계약 정보는 자동 저장됩니다." : "상단 버튼으로 계약 생성 후 저장이 시작됩니다."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {!isPersistedContract && (
-              <button
-                type="button"
-                onClick={() => { void handleSave("manual") }}
-                disabled={!canSave || isUnlinkingContract}
-                className="inline-flex h-8 items-center justify-center rounded-md bg-sky-aqua px-3 text-xs font-semibold text-white hover:bg-sky-aqua/90 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {isSaving ? "생성 중..." : "계약 생성하기"}
-              </button>
-            )}
-            {isPersistedContract && (
-              <button
-                type="button"
-                onClick={() => setIsUnlinkDialogOpen(true)}
-                disabled={isUnlinkingContract}
-                className="inline-flex h-8 items-center justify-center rounded-md border border-soft-blush/50 bg-white px-3 text-xs font-semibold text-soft-blush hover:bg-soft-blush/10 disabled:opacity-40"
-              >
-                {isUnlinkingContract ? "해제 중..." : "연결 해제"}
-              </button>
-            )}
+      {!isPersistedContract && (
+        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold text-gray-700">계약을 생성해주세요</p>
+              <p className="text-[10px] text-gray-400">상단 버튼으로 계약 생성 후 저장이 시작됩니다.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { void handleSave("manual") }}
+              disabled={!canSave || isUnlinkingContract}
+              className="inline-flex h-8 items-center justify-center rounded-md bg-sky-aqua px-3 text-xs font-semibold text-white hover:bg-sky-aqua/90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isSaving ? "생성 중..." : "계약 생성하기"}
+            </button>
           </div>
         </div>
-      </div>
+      )}
 
       <div className={cn("rounded-xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center", isContractFormVisible && "hidden")}>
         <p className="text-sm font-semibold text-gray-600">계약을 생성해주세요</p>
@@ -2169,7 +2151,21 @@ function ContractFlowTab({
       </div>
 
       <div className={cn("rounded-xl border border-gray-200/80 bg-white p-2.5 space-y-2 shadow-[0_1px_0_rgba(17,24,39,0.03)]", !isContractFormVisible && "hidden")}>
-        <p className="text-xs font-semibold text-gray-700">계약 정보</p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-gray-700">계약 정보</p>
+          {isPersistedContract && (
+            <button
+              type="button"
+              onClick={() => setIsUnlinkDialogOpen(true)}
+              disabled={isUnlinkingContract}
+              aria-label={isUnlinkingContract ? "연결 해제 중" : "연결 해제"}
+              title={isUnlinkingContract ? "연결 해제 중" : "연결 해제"}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-soft-blush/50 bg-white text-soft-blush hover:bg-soft-blush/10 disabled:opacity-40"
+            >
+              <Unlink className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 gap-1.5">
           <div className="max-w-[520px] rounded-lg border border-gray-100 bg-gray-50/50 p-2 space-y-1">
@@ -2181,48 +2177,6 @@ function ContractFlowTab({
               placeholder="계약 제목을 입력하세요"
               className="h-7 border-gray-200 bg-white text-sm focus:ring-sky-aqua/40"
             />
-          </div>
-
-          <div className="max-w-[520px] rounded-lg border border-gray-100 bg-gray-50/50 p-2 space-y-1">
-            <Label className="text-[10px] font-medium text-gray-500">계약 상태</Label>
-            <div className="rounded-md bg-gray-100 p-1 grid grid-cols-3 gap-1">
-              {(["계약 준비 중", "계약 진행 중", "계약 종료"] as const).map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setDraft((prev) => ({ ...prev, status }))}
-                  className={cn(
-                    "h-6 rounded-md text-[10px] font-medium transition-colors",
-                    draft.status === status
-                      ? "bg-white text-sky-aqua shadow-sm"
-                      : "text-gray-500 hover:text-gray-700"
-                  )}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end">
-              <label className={cn(
-                "inline-flex items-center gap-1 text-[9px] cursor-pointer select-none",
-                draft.status === "계약 중단" ? "text-soft-blush" : "text-gray-400"
-              )}>
-                <input
-                  type="checkbox"
-                  checked={draft.status === "계약 중단"}
-                  onChange={(e) => {
-                    setDraft((prev) => ({
-                      ...prev,
-                      status: e.target.checked
-                        ? "계약 중단"
-                        : (prev.status === "계약 중단" ? "계약 진행 중" : prev.status),
-                    }))
-                  }}
-                  className="h-3 w-3 rounded border-gray-300 text-soft-blush focus:ring-soft-blush/40"
-                />
-                계약중단
-              </label>
-            </div>
           </div>
         </div>
 
@@ -2335,50 +2289,50 @@ function ContractFlowTab({
         </div>
       </div>
 
-      <div className={cn("rounded-xl border border-gray-200 bg-white p-3 space-y-2.5", !isContractFormVisible && "hidden")}>
+      <div className={cn("rounded-xl border border-gray-200 bg-white p-3.5 space-y-3", !isContractFormVisible && "hidden")}>
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold text-gray-700">정산 형태</p>
+          <p className="text-sm font-semibold text-gray-700">정산 형태</p>
           <div className="flex items-center gap-2">
-            <p className="text-[10px] text-gray-400">{stageSummary}</p>
+            <p className="text-xs text-gray-500">{stageSummary}</p>
             <button
               type="button"
               onClick={openSettlementModal}
-              className="inline-flex items-center justify-center rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 hover:border-sky-aqua/40 hover:text-sky-aqua"
+              className="inline-flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 hover:border-sky-aqua/40 hover:text-sky-aqua"
             >
               설정
             </button>
           </div>
         </div>
 
-        <p className="text-[10px] font-medium text-gray-500">정산 금액 자동 계산</p>
+        <p className="text-xs font-medium text-gray-500">정산 금액 자동 계산</p>
 
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-md bg-gray-50 px-2.5 py-2">
-            <p className="text-[9px] text-gray-400">VAT별도</p>
-            <p className="text-[10px] mt-0.5 font-semibold tabular-nums text-gray-700">{formatCurrency(supplyAmount)}</p>
+          <div className="rounded-md bg-gray-50 px-3 py-2.5">
+            <p className="text-xs text-gray-400">VAT별도</p>
+            <p className="mt-1 text-sm font-semibold tabular-nums text-gray-700">{formatCurrency(supplyAmount)}</p>
           </div>
-          <div className="rounded-md bg-sky-aqua/5 px-2.5 py-2">
-            <p className="text-[9px] text-gray-400">VAT 포함</p>
-            <p className="text-[10px] mt-0.5 font-semibold tabular-nums text-sky-aqua">{formatCurrency(totalWithVat)}</p>
+          <div className="rounded-md bg-sky-aqua/5 px-3 py-2.5">
+            <p className="text-xs text-gray-400">VAT 포함</p>
+            <p className="mt-1 text-sm font-semibold tabular-nums text-sky-aqua">{formatCurrency(totalWithVat)}</p>
           </div>
         </div>
 
         {settlementRows.length === 0 ? (
-          <p className="text-[10px] text-gray-400">설정 버튼에서 정산 형태를 선택하세요.</p>
+          <p className="text-xs text-gray-400">설정 버튼에서 정산 형태를 선택하세요.</p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-gray-100">
-            <div className="grid grid-cols-[90px_96px_1fr_1fr] gap-2 bg-gray-50 px-2.5 py-1.5">
-              <p className="text-[9px] text-gray-400">구분</p>
-              <p className="text-[9px] text-gray-400">입금예정일</p>
-              <p className="text-[9px] text-right text-gray-400">VAT별도</p>
-              <p className="text-[9px] text-right text-gray-400">VAT포함</p>
+            <div className="grid grid-cols-[120px_124px_1fr_1fr] gap-3 bg-gray-50 px-3 py-2">
+              <p className="text-[11px] text-gray-500">구분</p>
+              <p className="text-[11px] text-gray-500">입금예정일</p>
+              <p className="text-[11px] text-right text-gray-500">VAT별도</p>
+              <p className="text-[11px] text-right text-gray-500">VAT포함</p>
             </div>
             {settlementRowsWithScheduledDate.map((row) => (
-              <div key={row.key} className="grid grid-cols-[90px_96px_1fr_1fr] gap-2 border-t border-gray-100 bg-white px-2.5 py-2">
-                <p className="text-[10px] font-medium text-gray-600">{row.label}</p>
-                <p className="text-[10px] text-gray-500">{row.scheduledDate || "-"}</p>
-                <p className="text-[10px] text-right tabular-nums text-gray-600">{formatCurrency(row.supply)}</p>
-                <p className="text-[10px] text-right tabular-nums font-semibold text-sky-aqua">{formatCurrency(row.total)}</p>
+              <div key={row.key} className="grid grid-cols-[120px_124px_1fr_1fr] gap-3 border-t border-gray-100 bg-white px-3 py-2.5">
+                <p className="text-sm font-medium text-gray-700">{row.label}</p>
+                <p className="text-sm text-gray-600">{row.scheduledDate || "-"}</p>
+                <p className="text-sm text-right tabular-nums text-gray-700">{formatCurrency(row.supply)}</p>
+                <p className="text-sm text-right tabular-nums font-semibold text-sky-aqua">{formatCurrency(row.total)}</p>
               </div>
             ))}
           </div>
@@ -2795,7 +2749,11 @@ function SalesFlowPanel({
         />
       )}
 
-      {activeFlow !== "견적" && activeFlow !== "계약" && (
+      {activeFlow === "주문·배송" && (
+        <OrderDeliveryTab requestId={requestId} />
+      )}
+
+      {activeFlow !== "견적" && activeFlow !== "계약" && activeFlow !== "주문·배송" && (
         <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
           <p className="text-sm font-medium text-gray-500">{activeFlow} 흐름은 다음 단계에서 연결됩니다.</p>
         </div>
