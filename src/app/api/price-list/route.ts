@@ -1,5 +1,6 @@
-// 가격표 API
+// 가격표 API - UTF-8 강제
 import { createAdminClient } from "@/lib/supabase/admin"
+import { jsonWithUTF8, sanitizeDBResponse } from "@/lib/utf8-response"
 import { NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 
@@ -12,10 +13,10 @@ export async function GET() {
     .order("product_name")
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return jsonWithUTF8({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ data: data || [] })
+  return jsonWithUTF8({ data: sanitizeDBResponse(data || []) })
 }
 
 export async function POST(req: Request) {
@@ -31,9 +32,9 @@ export async function POST(req: Request) {
 
     if (error) throw error
     revalidatePath("/price-list")
-    return NextResponse.json({ data })
+    return jsonWithUTF8({ data: sanitizeDBResponse(data) })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
+    return jsonWithUTF8({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
 }
 
@@ -42,7 +43,7 @@ export async function PATCH(req: Request) {
   try {
     const body = await req.json()
     const { id, ...updates } = body
-    if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
+    if (!id) return jsonWithUTF8({ error: "id is required" }, { status: 400 })
 
     const { data, error } = await supabase
       .from("price_list")
@@ -53,9 +54,9 @@ export async function PATCH(req: Request) {
 
     if (error) throw error
     revalidatePath("/price-list")
-    return NextResponse.json({ data })
+    return jsonWithUTF8({ data: sanitizeDBResponse(data) })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
+    return jsonWithUTF8({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
 }
 
@@ -64,7 +65,7 @@ export async function DELETE(req: Request) {
   try {
     const body = await req.json()
     const { id } = body
-    if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 })
+    if (!id) return jsonWithUTF8({ error: "id is required" }, { status: 400 })
 
     const { error } = await supabase
       .from("price_list")
@@ -73,8 +74,8 @@ export async function DELETE(req: Request) {
 
     if (error) throw error
     revalidatePath("/price-list")
-    return NextResponse.json({ success: true })
+    return jsonWithUTF8({ success: true })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
+    return jsonWithUTF8({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
 }

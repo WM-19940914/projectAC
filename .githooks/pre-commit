@@ -1,6 +1,6 @@
 #!/bin/sh
 
-node scripts/check-utf8-staged.mjs
+node scripts/check-utf8-repo.mjs
 status=$?
 
 if [ $status -ne 0 ]; then

@@ -1,8 +1,8 @@
-﻿// ============================================
-// SAC ?꾨줈?앺듃 - ?꾩껜 ?곗씠??????뺤쓽
+// ============================================
+// SAC 프로젝트 - 전체 타입 정의
 // ============================================
 
-// ----- ?꾨줈??-----
+// ----- 프로필 -----
 export interface Profile {
   id: string;
   email: string;
@@ -15,7 +15,7 @@ export interface Profile {
   updated_at: string;
 }
 
-// ----- 怨좉컼 -----
+// ----- 고객 -----
 export interface Customer {
   id: string;
   company_name: string;
@@ -37,12 +37,12 @@ export interface Customer {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 吏묎퀎 (view/computed)
+  // 집계 (view/computed)
   request_count?: number;
   contract_count?: number;
 }
 
-// ----- ?섎ː -----
+// ----- 의뢰 -----
 export type RequestStatus = '견적서 작성중' | '계약 진행' | '계약 체결' | '주문·배송 진행' | '완료';
 
 export interface Request {
@@ -57,7 +57,7 @@ export interface Request {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 議곗씤
+  // 조인
   customer?: Customer;
   contract?: Contract;
   assigned_user?: Profile;
@@ -76,13 +76,13 @@ export interface Contract {
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
-  // 議곗씤
+  // 조인
   customer?: Customer;
   settlements?: Settlement[];
   expenses?: Expense[];
 }
 
-// ----- ?뺤궛 -----
+// ----- 정산 -----
 export type SettlementStatus = '정산 예정' | '정산 진행중' | '정산 완료' | '정산 보류' | '취소';
 
 export interface Settlement {
@@ -105,12 +105,12 @@ export interface Settlement {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 議곗씤
+  // 조인
   contract?: Contract;
   customer?: Customer;
 }
 
-// ----- 吏異?-----
+// ----- 지출 -----
 export interface Expense {
   id: string;
   contract_id: string;
@@ -134,11 +134,11 @@ export interface Expense {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 議곗씤
+  // 조인
   contract?: Contract;
 }
 
-// ----- 寃ъ쟻??-----
+// ----- 견적서 -----
 export type QuotationType = string;
 export type QuotationItemCategory = string;
 
@@ -156,12 +156,12 @@ export interface Quotation {
   grand_total: number;
   notes?: string;
   terms?: string;
-  // 寃ъ쟻???ㅻ뜑 異붽? ?꾨뱶
+  // 견적서 헤더 추가 필드
   site_name?: string;        // 현장명
   recipient?: string;        // 수신
   contact_person?: string;   // 담당자
   contact_phone?: string;    // 연락처
-  // 怨듦툒???뺣낫
+  // 공급자 정보
   supplier_company_name?: string;
   supplier_biz_number?: string;
   supplier_ceo_name?: string;
@@ -170,11 +170,11 @@ export interface Quotation {
   supplier_manager?: string;
   supplier_manager_phone?: string;
   supplier_manager_email?: string;
-  // ?⑷린/寃곗젣 ?뺣낫
-  delivery_date?: string;         // ?⑷린?쇱옄
-  delivery_place?: string;        // ?⑷린?μ냼
-  payment_condition?: string;     // 寃곗젣議곌굔
-  // ?섏떊???뺤옣
+  // 납기/결제 정보
+  delivery_date?: string;         // 납기일자
+  delivery_place?: string;        // 납기장소
+  payment_condition?: string;     // 결제조건
+  // 수신처 확장
   receiver_company_name?: string;
   receiver_biz_number?: string;
   receiver_email?: string;
@@ -182,7 +182,7 @@ export interface Quotation {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 議곗씤
+  // 조인
   items?: QuotationItem[];
   customer?: Customer;
   request?: Request;
@@ -200,15 +200,15 @@ export interface QuotationItem {
   unit_price: number;
   amount: number;
   memo?: string;
-  // ?대? ?④? 怨꾩궛 ?꾨뱶 (AH~AP??
-  retrieval_price?: number;       // 諛섏텧媛
-  discount_rate?: number;         // DC??(%)
-  purchase_unit_price?: number;   // 留ㅼ엯?④?
-  purchase_amount?: number;       // 留ㅼ엯湲덉븸
-  margin_rate?: number;           // MG??(%)
-  proposed_price?: number;        // ?쒖븞媛
-  profit?: number;                // ?댁쑄
-  incentive_rate?: number;        // ?λ젮湲덈쪧 (%)
+  // 엑셀 추가 계산 필드 (AH~AP)
+  retrieval_price?: number;       // 반출가
+  discount_rate?: number;         // DC율 (%)
+  purchase_unit_price?: number;   // 매입단가
+  purchase_amount?: number;       // 매입금액
+  margin_rate?: number;           // MG율 (%)
+  proposed_price?: number;        // 제안가
+  profit?: number;                // 이윤
+  incentive_rate?: number;        // 장려금비율 (%)
   created_at: string;
   updated_at: string;
 }
@@ -218,7 +218,7 @@ export interface QuotationWithItems extends Quotation {
   items: QuotationItem[];
 }
 
-// ----- 二쇰Ц/諛곗넚 ?댁뿭 -----
+// ----- 주문/배송 내역 -----
 export interface OrderDeliveryLine {
   id: string;
   order_delivery_id: string;
@@ -250,7 +250,7 @@ export interface OrderDelivery {
   updated_at: string;
 }
 
-// ----- ?낆텧湲덈궡??-----
+// ----- 입출금 내역 -----
 export interface Transaction {
   id: string;
   contract_id?: string;
@@ -267,13 +267,13 @@ export interface Transaction {
   created_by?: string;
   created_at: string;
   updated_at: string;
-  // 議곗씤
+  // 조인
   contract?: Contract;
   settlement?: Settlement;
   expense?: Expense;
 }
 
-// ----- 泥⑤??뚯씪 -----
+// ----- 첨부파일 -----
 export interface Attachment {
   id: string;
   entity_type: 'customer' | 'request' | 'contract' | 'settlement' | 'expense' | 'quotation';
@@ -286,7 +286,7 @@ export interface Attachment {
   created_at: string;
 }
 
-// ----- ?꾩튂 (怨좉컼 吏?꾩슜) -----
+// ----- 위치 (고객 지도용) -----
 export interface Location {
   id: string;
   customer_id: string;
@@ -298,7 +298,7 @@ export interface Location {
   phone?: string;
 }
 
-// ----- 怨듯넻 -----
+// ----- 공통 -----
 export interface PaginationParams {
   page?: number;
   limit?: number;
@@ -310,15 +310,12 @@ export interface PaginatedResponse<T> {
   count: number;
 }
 
-// ----- 移몃컲 蹂대뱶 ???-----
+// ----- 칸반 보드 타입 -----
 export interface KanbanColumn<T> {
   id: string;
   title: string;
-  color: string;     // 諛곌꼍???띿뒪?몄깋
+  color: string;     // 배경/텍스트색
   items: T[];
   count: number;
   totalAmount?: number;
 }
-
-
-

@@ -1,4 +1,4 @@
-﻿import { createAdminClient } from "@/lib/supabase/admin"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 

@@ -3,10 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "prepare": "node scripts/setup-githooks.mjs",
+    "check:utf8": "node scripts/check-utf8-repo.mjs",
+    "check:utf8:staged": "node scripts/check-utf8-staged.mjs",
+    "predev": "npm run check:utf8",
+    "prebuild": "npm run check:utf8",
+    "prelint": "npm run check:utf8",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "import:customers": "node --input-type=commonjs scripts/import-customers.js",
+    "import:prices": "node --input-type=commonjs scripts/import-price-list.js",
+    "utf8:enable": "powershell -ExecutionPolicy Bypass -File scripts/enable-utf8.ps1"
   },
   "dependencies": {
     "@fontsource/plus-jakarta-sans": "^5.2.8",
