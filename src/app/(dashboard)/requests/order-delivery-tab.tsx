@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -9,45 +9,46 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Calendar as CalendarPicker } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
-import { Plus, Trash2 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar, Eraser, Plus, Trash2, Truck } from "lucide-react"
 import type { OrderDelivery, OrderDeliveryLine } from "@/types"
 
 export type OrderDeliveryItem = OrderDelivery
 
-type HeaderField = "opti_name" | "opti_number" | "contract_number"
+type HeaderField = "site_name" | "opti_name" | "opti_number" | "contract_number"
 type LineField =
   | "supplier"
-  | "site_name"
   | "order_date"
   | "order_number"
   | "model_name"
   | "quantity"
+  | "order_amount"
   | "delivery_request_date"
   | "delivery_expected_date"
   | "delivery_confirmed_date"
   | "delivery_place"
-  | "delivery_address"
 
 type OrderDeliveryLineDraft = {
   id?: string
   supplier: string
-  site_name: string
   order_date: string
   order_number: string
   model_name: string
-  quantity: number
+  quantity: number | ""
+  order_amount: number | ""
   delivery_request_date: string
   delivery_expected_date: string
   delivery_confirmed_date: string
   delivery_place: string
-  delivery_address: string
   row_order: number
 }
 
 type OrderDeliveryDraft = {
   id: string
   request_id: string
+  site_name: string
   opti_name: string
   opti_number: string
   contract_number: string
@@ -62,75 +63,221 @@ const ORDER_DELIVERY_LINE_COLUMNS: Array<{
   placeholder?: string
 }> = [
   { key: "supplier", label: "매입처", type: "text", width: "7.5%", placeholder: "매입처" },
-  { key: "site_name", label: "현장명", type: "text", width: "8%", placeholder: "현장명" },
-  { key: "order_date", label: "주문일", type: "date", width: "7.5%" },
+  { key: "order_date", label: "주문일", type: "date", width: "7.5%", placeholder: "YYYY-MM-DD" },
   { key: "order_number", label: "주문번호", type: "text", width: "8.5%", placeholder: "주문번호" },
   { key: "model_name", label: "모델명", type: "text", width: "11%", placeholder: "모델명" },
-  { key: "quantity", label: "수량", type: "number", width: "4.5%" },
-  { key: "delivery_request_date", label: "배송요청일", type: "date", width: "7%" },
-  { key: "delivery_expected_date", label: "배송예정일", type: "date", width: "7%" },
-  { key: "delivery_confirmed_date", label: "배송확정일", type: "date", width: "7%" },
+  { key: "quantity", label: "수량", type: "number", width: "3.2%" },
+  { key: "order_amount", label: "주문금액(VAT포함)", type: "number", width: "8%" },
+  { key: "delivery_request_date", label: "배송요청일", type: "date", width: "7%", placeholder: "YYYY-MM-DD" },
+  { key: "delivery_expected_date", label: "배송예정일", type: "date", width: "7%", placeholder: "YYYY-MM-DD" },
+  { key: "delivery_confirmed_date", label: "배송확정일", type: "date", width: "7%", placeholder: "YYYY-MM-DD" },
   { key: "delivery_place", label: "인도처", type: "text", width: "8%", placeholder: "인도처" },
-  { key: "delivery_address", label: "인도처 주소", type: "text", width: "12%", placeholder: "인도처 주소" },
 ]
 
 const MIN_VISIBLE_ROWS = 5
+const DATE_LINE_FIELDS = new Set<LineField>([
+  "order_date",
+  "delivery_request_date",
+  "delivery_expected_date",
+  "delivery_confirmed_date",
+])
 
 function toInputValue(value: string | null | undefined): string {
   return value ?? ""
 }
 
-function toNumberValue(value: number | null | undefined): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0
+function toNumberValue(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
+}
+
+function formatNumberWithCommas(value: number | ""): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return ""
+  return value.toLocaleString("ko-KR")
+}
+
+function toNullableIntegerString(value: string): number | "" {
+  const normalized = value.replace(/,/g, "").trim()
+  if (!normalized) return ""
+
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : ""
+}
+
+function parseClipboardGrid(rawText: string): string[][] {
+  const rows = rawText
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((row) => row.split("\t").map((cell) => cell.trim()))
+
+  while (rows.length > 0 && rows[rows.length - 1].every((cell) => cell === "")) {
+    rows.pop()
+  }
+
+  return rows.length > 0 ? rows : [[""]]
+}
+
+function toIsoDate(year: number, month: number, day: number): string {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return ""
+  if (month < 1 || month > 12 || day < 1 || day > 31) return ""
+
+  const candidate = new Date(year, month - 1, day)
+  if (
+    candidate.getFullYear() !== year ||
+    candidate.getMonth() !== month - 1 ||
+    candidate.getDate() !== day
+  ) {
+    return ""
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+}
+
+function formatDateFromDate(date: Date): string {
+  return toIsoDate(date.getFullYear(), date.getMonth() + 1, date.getDate())
+}
+
+function parseIsoDateToDate(value: string): Date | undefined {
+  const normalized = normalizeFlexibleDateInput(value)
+  if (!normalized) return undefined
+
+  const [year, month, day] = normalized.split("-").map(Number)
+  if (!year || !month || !day) return undefined
+
+  const date = new Date(year, month - 1, day)
+  return Number.isNaN(date.getTime()) ? undefined : date
+}
+
+function normalizeFlexibleDateInput(value: string, now = new Date()): string {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+
+  const normalizedToken = trimmed
+    .split(" ")[0]
+    .replace(/년|월/g, "-")
+    .replace(/일/g, "")
+    .replace(/\./g, "-")
+    .replace(/\//g, "-")
+
+  if (/^\d{8}$/.test(normalizedToken)) {
+    const year = Number(normalizedToken.slice(0, 4))
+    const month = Number(normalizedToken.slice(4, 6))
+    const day = Number(normalizedToken.slice(6, 8))
+    return toIsoDate(year, month, day)
+  }
+
+  if (/^\d{6}$/.test(normalizedToken)) {
+    const year = 2000 + Number(normalizedToken.slice(0, 2))
+    const month = Number(normalizedToken.slice(2, 4))
+    const day = Number(normalizedToken.slice(4, 6))
+    return toIsoDate(year, month, day)
+  }
+
+  if (/^\d{4}$/.test(normalizedToken)) {
+    const year = now.getFullYear()
+    const month = Number(normalizedToken.slice(0, 2))
+    const day = Number(normalizedToken.slice(2, 4))
+    return toIsoDate(year, month, day)
+  }
+
+  const fullYearMatch = normalizedToken.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (fullYearMatch) {
+    return toIsoDate(Number(fullYearMatch[1]), Number(fullYearMatch[2]), Number(fullYearMatch[3]))
+  }
+
+  const shortYearMatch = normalizedToken.match(/^(\d{2})-(\d{1,2})-(\d{1,2})$/)
+  if (shortYearMatch) {
+    return toIsoDate(2000 + Number(shortYearMatch[1]), Number(shortYearMatch[2]), Number(shortYearMatch[3]))
+  }
+
+  const monthDayMatch = normalizedToken.match(/^(\d{1,2})-(\d{1,2})$/)
+  if (monthDayMatch) {
+    return toIsoDate(now.getFullYear(), Number(monthDayMatch[1]), Number(monthDayMatch[2]))
+  }
+
+  return ""
+}
+
+function normalizePastedLineValue(key: LineField, value: string): string {
+  if (key === "quantity") {
+    const normalized = toNullableIntegerString(value)
+    return typeof normalized === "number" ? String(normalized) : ""
+  }
+
+  if (key === "order_amount") {
+    const normalized = toNullableIntegerString(value)
+    return typeof normalized === "number" ? String(normalized) : ""
+  }
+
+  if (DATE_LINE_FIELDS.has(key)) {
+    return normalizeFlexibleDateInput(value)
+  }
+
+  return value.trim()
+}
+
+function normalizeLineDates(line: OrderDeliveryLineDraft): OrderDeliveryLineDraft {
+  return {
+    ...line,
+    order_date: normalizeFlexibleDateInput(line.order_date),
+    delivery_request_date: normalizeFlexibleDateInput(line.delivery_request_date),
+    delivery_expected_date: normalizeFlexibleDateInput(line.delivery_expected_date),
+    delivery_confirmed_date: normalizeFlexibleDateInput(line.delivery_confirmed_date),
+  }
 }
 
 function createEmptyLine(rowOrder: number): OrderDeliveryLineDraft {
   return {
-    supplier: "",
-    site_name: "",
+    supplier: "삼성전자",
     order_date: "",
     order_number: "",
     model_name: "",
-    quantity: 0,
+    quantity: "",
+    order_amount: "",
     delivery_request_date: "",
     delivery_expected_date: "",
     delivery_confirmed_date: "",
     delivery_place: "",
-    delivery_address: "",
     row_order: rowOrder,
   }
 }
 
 function isLineEmpty(line: OrderDeliveryLineDraft): boolean {
+  const supplier = line.supplier.trim()
+  const supplierIsDefault = supplier.length === 0 || supplier === "삼성전자"
+
   return (
-    !line.supplier.trim() &&
-    !line.site_name.trim() &&
+    supplierIsDefault &&
     !line.order_date.trim() &&
     !line.order_number.trim() &&
     !line.model_name.trim() &&
     (Number(line.quantity) || 0) <= 0 &&
+    (Number(line.order_amount) || 0) <= 0 &&
     !line.delivery_request_date.trim() &&
     !line.delivery_expected_date.trim() &&
     !line.delivery_confirmed_date.trim() &&
-    !line.delivery_place.trim() &&
-    !line.delivery_address.trim()
+    !line.delivery_place.trim()
   )
 }
 
 function toLineDraft(line: OrderDeliveryLine, rowOrder: number): OrderDeliveryLineDraft {
   return {
     id: line.id,
-    supplier: toInputValue(line.supplier),
-    site_name: toInputValue(line.site_name),
+    supplier: toInputValue(line.supplier) || "삼성전자",
     order_date: toInputValue(line.order_date),
     order_number: toInputValue(line.order_number),
     model_name: toInputValue(line.model_name),
-    quantity: toNumberValue(line.quantity),
+    quantity: toNumberValue(line.quantity) > 0 ? toNumberValue(line.quantity) : "",
+    order_amount: toNumberValue(line.order_amount) > 0 ? toNumberValue(line.order_amount) : "",
     delivery_request_date: toInputValue(line.delivery_request_date),
     delivery_expected_date: toInputValue(line.delivery_expected_date),
     delivery_confirmed_date: toInputValue(line.delivery_confirmed_date),
     delivery_place: toInputValue(line.delivery_place),
-    delivery_address: toInputValue(line.delivery_address),
     row_order: rowOrder,
   }
 }
@@ -143,7 +290,115 @@ function ensureMinimumRows(lines: OrderDeliveryLineDraft[], minRows = MIN_VISIBL
   return next.map((line, index) => ({ ...line, row_order: index + 1 }))
 }
 
+type DeliveryCardStatus = "주문 생성" | "배송 준비중" | "부분 배송완료" | "배송 완료"
+
+type DeliveryCardSummary = {
+  status: DeliveryCardStatus
+  badgeClassName: string
+  progressBadgeClassName: string
+  completedCount: number
+  totalCount: number
+}
+
+function isMeaningfulOrderDeliveryLine(line: OrderDeliveryLine): boolean {
+  return !isLineEmpty({
+    supplier: toInputValue(line.supplier) || "삼성전자",
+    order_date: toInputValue(line.order_date),
+    order_number: toInputValue(line.order_number),
+    model_name: toInputValue(line.model_name),
+    quantity: toNumberValue(line.quantity) > 0 ? toNumberValue(line.quantity) : "",
+    order_amount: toNumberValue(line.order_amount) > 0 ? toNumberValue(line.order_amount) : "",
+    delivery_request_date: toInputValue(line.delivery_request_date),
+    delivery_expected_date: toInputValue(line.delivery_expected_date),
+    delivery_confirmed_date: toInputValue(line.delivery_confirmed_date),
+    delivery_place: toInputValue(line.delivery_place),
+    row_order: line.row_order,
+  })
+}
+
+function formatCardCreatedDate(value: string): string {
+  if (!value) return "-"
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value.replace("T", " ").slice(0, 16)
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+}
+
+function getDeliveryCardSummary(item: OrderDeliveryItem): DeliveryCardSummary {
+  const today = formatDateFromDate(new Date())
+  const meaningfulLines = (item.lines ?? []).filter(isMeaningfulOrderDeliveryLine)
+
+  if (meaningfulLines.length === 0) {
+    return {
+      status: "주문 생성",
+      badgeClassName: "border-sky-aqua/25 bg-sky-aqua/8 text-sky-aqua",
+      progressBadgeClassName: "bg-red-50 text-red-600",
+      completedCount: 0,
+      totalCount: 0,
+    }
+  }
+
+  const completedCount = meaningfulLines.filter((line) => {
+    const confirmedDate = normalizeFlexibleDateInput(toInputValue(line.delivery_confirmed_date))
+    return Boolean(confirmedDate) && confirmedDate <= today
+  }).length
+
+  const hasSchedule = meaningfulLines.some((line) => {
+    const expectedDate = normalizeFlexibleDateInput(toInputValue(line.delivery_expected_date))
+    const requestDate = normalizeFlexibleDateInput(toInputValue(line.delivery_request_date))
+    return Boolean(expectedDate || requestDate || normalizeFlexibleDateInput(toInputValue(line.delivery_confirmed_date)))
+  })
+
+  if (completedCount === meaningfulLines.length) {
+    return {
+      status: "배송 완료",
+      badgeClassName: "border-sky-aqua/45 bg-sky-aqua/18 text-sky-aqua",
+      progressBadgeClassName: "bg-sky-aqua text-white",
+      completedCount,
+      totalCount: meaningfulLines.length,
+    }
+  }
+
+  if (completedCount > 0) {
+    return {
+      status: "부분 배송완료",
+      badgeClassName: "border-sky-aqua/35 bg-sky-aqua/14 text-sky-aqua",
+      progressBadgeClassName: "bg-red-50 text-red-600",
+      completedCount,
+      totalCount: meaningfulLines.length,
+    }
+  }
+
+  if (hasSchedule) {
+    return {
+      status: "배송 준비중",
+      badgeClassName: "border-sky-aqua/30 bg-sky-aqua/10 text-sky-aqua",
+      progressBadgeClassName: "bg-red-50 text-red-600",
+      completedCount: 0,
+      totalCount: meaningfulLines.length,
+    }
+  }
+
+  return {
+    status: "주문 생성",
+    badgeClassName: "border-sky-aqua/25 bg-sky-aqua/8 text-sky-aqua",
+    progressBadgeClassName: "bg-red-50 text-red-600",
+    completedCount: 0,
+    totalCount: meaningfulLines.length,
+  }
+}
+
+function toSortableTimestamp(value: string): number {
+  const timestamp = new Date(value).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
 function toDraft(item: OrderDeliveryItem): OrderDeliveryDraft {
+  const siteNameFromLine =
+    item.lines?.map((line) => toInputValue(line.site_name)).find((value) => value.trim().length > 0) ?? ""
   const normalizedLines = Array.isArray(item.lines)
     ? item.lines.map((line, index) => toLineDraft(line, index + 1))
     : []
@@ -151,6 +406,7 @@ function toDraft(item: OrderDeliveryItem): OrderDeliveryDraft {
   return {
     id: item.id,
     request_id: item.request_id,
+    site_name: toInputValue(item.site_name) || siteNameFromLine,
     opti_name: toInputValue(item.opti_name),
     opti_number: toInputValue(item.opti_number),
     contract_number: toInputValue(item.contract_number),
@@ -158,11 +414,26 @@ function toDraft(item: OrderDeliveryItem): OrderDeliveryDraft {
   }
 }
 
-interface OrderDeliveryTabProps {
-  requestId: string
+function normalizeDraftForSave(draft: OrderDeliveryDraft): OrderDeliveryDraft {
+  return {
+    ...draft,
+    lines: draft.lines.map((line, index) => ({
+      ...normalizeLineDates(line),
+      row_order: index + 1,
+    })),
+  }
 }
 
-export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
+function getDraftSnapshot(draft: OrderDeliveryDraft): string {
+  return JSON.stringify(normalizeDraftForSave(draft))
+}
+
+interface OrderDeliveryTabProps {
+  requestId: string
+  defaultSiteName?: string
+}
+
+export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: OrderDeliveryTabProps) {
   const [items, setItems] = useState<OrderDeliveryItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -170,6 +441,17 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [draft, setDraft] = useState<OrderDeliveryDraft | null>(null)
+  const [resolvedSiteName, setResolvedSiteName] = useState("")
+  const [isFieldEditing, setIsFieldEditing] = useState(false)
+  const lastSavedSnapshotRef = useRef("")
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const effectiveSiteName = defaultSiteName.trim() || resolvedSiteName.trim()
+  const sortedItems = useMemo(
+    () => [...items].sort((a, b) => toSortableTimestamp(a.created_at) - toSortableTimestamp(b.created_at)),
+    [items]
+  )
 
   const loadItems = useCallback(async () => {
     if (!requestId) {
@@ -184,7 +466,8 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
       if (!res.ok || !result.success) {
         throw new Error(result.error || "주문 내역을 불러오지 못했습니다.")
       }
-      setItems(Array.isArray(result.data) ? result.data : [])
+      const nextItems = Array.isArray(result.data) ? result.data : []
+      setItems(nextItems)
     } catch {
       setItems([])
     } finally {
@@ -196,8 +479,55 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
     void loadItems()
   }, [loadItems])
 
+  useEffect(() => {
+    if (!requestId || defaultSiteName.trim()) return
+    let isCancelled = false
+
+    const loadSiteName = async () => {
+      try {
+        const res = await fetch(`/api/quotes?request_id=${requestId}`)
+        if (!res.ok) return
+
+        const result = await res.json()
+        const quotes = Array.isArray(result?.data) ? (result.data as Array<{ site_name?: string | null }>) : []
+        const nextSiteName =
+          quotes
+            .map((quote) => toInputValue(quote.site_name).trim())
+            .find((value) => value.length > 0) ?? ""
+
+        if (!isCancelled) {
+          setResolvedSiteName(nextSiteName)
+        }
+      } catch {
+        if (!isCancelled) {
+          setResolvedSiteName("")
+        }
+      }
+    }
+
+    void loadSiteName()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [requestId, defaultSiteName])
+
+  useEffect(() => {
+    if (!effectiveSiteName) return
+    setDraft((prev) => {
+      if (!prev || prev.site_name.trim()) return prev
+      return { ...prev, site_name: effectiveSiteName }
+    })
+  }, [effectiveSiteName])
+
   const openEditor = (item: OrderDeliveryItem) => {
-    setDraft(toDraft(item))
+    const nextDraft = toDraft(item)
+    const nextEditorDraft = {
+      ...nextDraft,
+      site_name: nextDraft.site_name || effectiveSiteName,
+    }
+    lastSavedSnapshotRef.current = getDraftSnapshot(nextEditorDraft)
+    setDraft(nextEditorDraft)
     setIsEditorOpen(true)
   }
 
@@ -209,7 +539,10 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
       const res = await fetch("/api/order-deliveries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request_id: requestId }),
+        body: JSON.stringify({
+          request_id: requestId,
+          site_name: effectiveSiteName || null,
+        }),
       })
       const result = await res.json()
       if (!res.ok || !result.success) {
@@ -217,8 +550,14 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
       }
 
       const created = result.data as OrderDeliveryItem
-      setItems((prev) => [created, ...prev])
-      setDraft(toDraft(created))
+      setItems((prev) => [...prev, created])
+      const nextDraft = toDraft(created)
+      const nextEditorDraft = {
+        ...nextDraft,
+        site_name: nextDraft.site_name || effectiveSiteName,
+      }
+      lastSavedSnapshotRef.current = getDraftSnapshot(nextEditorDraft)
+      setDraft(nextEditorDraft)
       setIsEditorOpen(true)
     } catch (error) {
       const message = error instanceof Error ? error.message : "생성 중 오류가 발생했습니다."
@@ -228,15 +567,24 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
     }
   }
 
-  const handleSave = async () => {
-    if (!draft?.id || isSaving) return
+  const performSave = useCallback(async (sourceDraft: OrderDeliveryDraft) => {
+    if (!sourceDraft.id || isSaving) return false
 
+    const normalizedDraft = normalizeDraftForSave(sourceDraft)
+    const nextSnapshot = JSON.stringify(normalizedDraft)
+
+    if (nextSnapshot === lastSavedSnapshotRef.current) {
+      setDraft((prev) => (prev ? normalizeDraftForSave(prev) : prev))
+      return true
+    }
+
+    setDraft(normalizedDraft)
     setIsSaving(true)
     try {
       const res = await fetch("/api/order-deliveries", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
+        body: JSON.stringify(normalizedDraft),
       })
       const result = await res.json()
       if (!res.ok || !result.success) {
@@ -245,14 +593,69 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
 
       const saved = result.data as OrderDeliveryItem
       setItems((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
-      setIsEditorOpen(false)
+      const nextDraft = toDraft(saved)
+      const nextEditorDraft = {
+        ...nextDraft,
+        site_name: nextDraft.site_name || effectiveSiteName,
+      }
+      lastSavedSnapshotRef.current = getDraftSnapshot(nextEditorDraft)
+      setDraft(nextEditorDraft)
+      return true
     } catch (error) {
       const message = error instanceof Error ? error.message : "저장 중 오류가 발생했습니다."
       alert(message)
+      return false
     } finally {
       setIsSaving(false)
     }
+  }, [effectiveSiteName, isSaving])
+
+  const handleSave = async () => {
+    if (!draft) return
+    await performSave(draft)
   }
+
+  const handleEditorOpenChange = async (open: boolean) => {
+    if (open) {
+      setIsEditorOpen(true)
+      return
+    }
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
+
+    if (draft) {
+      const saved = await performSave(draft)
+      if (!saved) return
+    }
+
+    setIsEditorOpen(false)
+  }
+
+  useEffect(() => {
+    if (!isEditorOpen || !draft?.id || isSaving || isFieldEditing) return
+
+    const nextSnapshot = getDraftSnapshot(draft)
+    if (nextSnapshot === lastSavedSnapshotRef.current) return
+
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+    }
+
+    autosaveTimerRef.current = setTimeout(() => {
+      autosaveTimerRef.current = null
+      void performSave(draft)
+    }, 800)
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current)
+        autosaveTimerRef.current = null
+      }
+    }
+  }, [draft, isEditorOpen, isSaving, isFieldEditing, performSave])
 
   const handleDeleteById = async (cardId: string, fromEditor = false) => {
     if (!cardId || isDeleting) return
@@ -288,6 +691,24 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
     setDraft((prev) => (prev ? { ...prev, [key]: value } : prev))
   }
 
+  const handleFieldFocus = () => {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current)
+      blurTimerRef.current = null
+    }
+    setIsFieldEditing(true)
+  }
+
+  const handleFieldBlur = () => {
+    if (blurTimerRef.current) {
+      clearTimeout(blurTimerRef.current)
+    }
+    blurTimerRef.current = setTimeout(() => {
+      setIsFieldEditing(false)
+      blurTimerRef.current = null
+    }, 120)
+  }
+
   const handleLineChange = (rowIndex: number, key: LineField, value: string) => {
     setDraft((prev) => {
       if (!prev) return prev
@@ -295,12 +716,53 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
       const nextLines = prev.lines.map((line, index) => {
         if (index !== rowIndex) return line
 
-        if (key === "quantity") {
-          const parsed = Number(value)
-          return { ...line, quantity: Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0 }
+        if (key === "quantity" || key === "order_amount") {
+          const normalized = toNullableIntegerString(value)
+          return {
+            ...line,
+            [key]: normalized,
+          }
         }
 
         return { ...line, [key]: value }
+      })
+
+      return { ...prev, lines: nextLines }
+    })
+  }
+
+  const handleLineBlur = (rowIndex: number, key: LineField) => {
+    if (!DATE_LINE_FIELDS.has(key)) return
+
+    setDraft((prev) => {
+      if (!prev) return prev
+
+      const nextLines = prev.lines.map((line, index) => {
+        if (index !== rowIndex) return line
+
+        return {
+          ...line,
+          [key]: normalizeFlexibleDateInput(String(line[key] ?? "")),
+        }
+      })
+
+      return { ...prev, lines: nextLines }
+    })
+  }
+
+  const handleDateSelect = (rowIndex: number, key: LineField, date?: Date) => {
+    if (!DATE_LINE_FIELDS.has(key)) return
+
+    setDraft((prev) => {
+      if (!prev) return prev
+
+      const nextLines = prev.lines.map((line, index) => {
+        if (index !== rowIndex) return line
+
+        return {
+          ...line,
+          [key]: date ? formatDateFromDate(date) : "",
+        }
       })
 
       return { ...prev, lines: nextLines }
@@ -321,6 +783,100 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
     })
   }
 
+  const handleClearRow = (rowIndex: number) => {
+    setDraft((prev) => {
+      if (!prev) return prev
+
+      const nextLines = prev.lines.map((line, index) =>
+        index === rowIndex
+          ? {
+              ...createEmptyLine(index + 1),
+              id: line.id,
+            }
+          : line
+      )
+
+      return { ...prev, lines: nextLines }
+    })
+  }
+
+  const handleDeleteRow = (rowIndex: number) => {
+    setDraft((prev) => {
+      if (!prev) return prev
+
+      const nextLines = prev.lines
+        .filter((_, index) => index !== rowIndex)
+        .map((line, index) => ({ ...line, row_order: index + 1 }))
+
+      return {
+        ...prev,
+        lines: nextLines.length > 0 ? nextLines : [createEmptyLine(1)],
+      }
+    })
+  }
+
+  const handleLinePaste = (rowIndex: number, startKey: LineField, text: string) => {
+    const grid = parseClipboardGrid(text)
+    const startColumnIndex = ORDER_DELIVERY_LINE_COLUMNS.findIndex((column) => column.key === startKey)
+
+    if (startColumnIndex < 0) return
+
+    setDraft((prev) => {
+      if (!prev) return prev
+
+      const requiredRowCount = rowIndex + grid.length
+      const nextLines = [...prev.lines]
+
+      while (nextLines.length < requiredRowCount) {
+        nextLines.push(createEmptyLine(nextLines.length + 1))
+      }
+
+      grid.forEach((row, rowOffset) => {
+        const targetRowIndex = rowIndex + rowOffset
+        const sourceLine = nextLines[targetRowIndex]
+        if (!sourceLine) return
+
+        let nextLine = { ...sourceLine }
+
+        row.forEach((cellValue, columnOffset) => {
+          const targetColumn = ORDER_DELIVERY_LINE_COLUMNS[startColumnIndex + columnOffset]
+          if (!targetColumn) return
+
+          const normalizedValue = normalizePastedLineValue(targetColumn.key, cellValue)
+
+          if (targetColumn.key === "quantity" || targetColumn.key === "order_amount") {
+            if (!normalizedValue) {
+              nextLine = {
+                ...nextLine,
+                [targetColumn.key]: "",
+              }
+              return
+            }
+
+            const parsed = Number(normalizedValue)
+            nextLine = {
+              ...nextLine,
+              [targetColumn.key]: Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : "",
+            }
+            return
+          }
+
+          nextLine = {
+            ...nextLine,
+            [targetColumn.key]: normalizedValue,
+          }
+        })
+
+        nextLines[targetRowIndex] = nextLine
+      })
+
+      return {
+        ...prev,
+        lines: nextLines.map((line, index) => ({ ...line, row_order: index + 1 })),
+      }
+    })
+  }
+
   const handleTrimEmptyRows = () => {
     setDraft((prev) => {
       if (!prev) return prev
@@ -335,51 +891,7 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
     })
   }
 
-  const handleDuplicateRow = (rowIndex: number) => {
-    setDraft((prev) => {
-      if (!prev) return prev
-      const source = prev.lines[rowIndex]
-      if (!source) return prev
-
-      const duplicated: OrderDeliveryLineDraft = {
-        ...source,
-        id: undefined,
-        row_order: 0,
-      }
-      const nextLines = [...prev.lines]
-      nextLines.splice(rowIndex + 1, 0, duplicated)
-
-      return {
-        ...prev,
-        lines: nextLines.map((line, index) => ({ ...line, row_order: index + 1 })),
-      }
-    })
-  }
-
-  const handleDeleteRow = (rowIndex: number) => {
-    setDraft((prev) => {
-      if (!prev) return prev
-      if (prev.lines.length <= 1) return prev
-
-      const nextLines = prev.lines
-        .filter((_, index) => index !== rowIndex)
-        .map((line, index) => ({ ...line, row_order: index + 1 }))
-
-      return { ...prev, lines: nextLines }
-    })
-  }
-
   const cardCount = useMemo(() => items.length, [items.length])
-  const rowCount = draft?.lines.length ?? 0
-  const filledRowCount = useMemo(
-    () => (draft ? draft.lines.filter((line) => !isLineEmpty(line)).length : 0),
-    [draft]
-  )
-  const totalQuantity = useMemo(
-    () => (draft ? draft.lines.reduce((sum, line) => sum + Math.max(0, Number(line.quantity) || 0), 0) : 0),
-    [draft]
-  )
-
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-gray-200 bg-white p-3">
@@ -412,87 +924,99 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
         </div>
       ) : (
         <div className="space-y-2.5">
-          {items.map((item) => (
-            <div key={item.id} className="relative">
-              <button
-                type="button"
-                onClick={() => openEditor(item)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
-              >
-                <div className="space-y-2 pr-9">
-                  <div className="rounded-md bg-gray-50 px-2.5 py-2">
-                    <p className="text-[10px] text-gray-400">{"\uC635\uD2F0\uBA85"}</p>
-                    <p className="mt-0.5 min-h-[2.5rem] break-all text-sm font-medium leading-5 text-gray-700">
-                      {item.opti_name?.trim() || ""}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div className="rounded-md bg-gray-50 px-2.5 py-2">
-                      <p className="text-[10px] text-gray-400">{"\uC635\uD2F0\uBC88\uD638"}</p>
-                      <p className="mt-0.5 text-sm font-medium text-gray-700">
-                        {item.opti_number?.trim() || ""}
+          {sortedItems.map((item, index) => {
+            const summary = getDeliveryCardSummary(item)
+
+            return (
+              <div key={item.id} className="relative">
+                <button
+                  type="button"
+                  onClick={() => openEditor(item)}
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3 text-left transition-colors hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
+                >
+                  <div className="grid gap-3 pr-9 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+                    <span className="relative inline-flex h-8 w-10 shrink-0 items-center justify-center self-start rounded-xl border border-sky-aqua/20 bg-sky-aqua/10 text-sky-aqua sm:self-center">
+                      <Truck className="h-4.5 w-4.5" />
+                      <span className="absolute -right-1 -top-1 inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-sky-aqua px-1 text-[9px] font-semibold leading-none text-white">
+                        {index + 1}
+                      </span>
+                    </span>
+
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 break-all text-[16px] font-semibold leading-5 text-gray-800">
+                        {item.site_name?.trim() || "현장명 미입력"}
                       </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="inline-flex rounded-full bg-gray-100 px-2 py-1 text-[10px] font-medium text-gray-500">
+                          주문생성일
+                        </span>
+                        <span className="text-[11px] font-medium text-gray-400">
+                          {formatCardCreatedDate(item.created_at)}
+                        </span>
+                      </div>
                     </div>
-                    <div className="rounded-md bg-gray-50 px-2.5 py-2">
-                      <p className="text-[10px] text-gray-400">{"\uACC4\uC57D\uBC88\uD638"}</p>
-                      <p className="mt-0.5 text-sm font-medium text-gray-700">
-                        {item.contract_number?.trim() || ""}
-                      </p>
+
+                    <div className="flex items-center justify-start sm:justify-end">
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${summary.progressBadgeClassName}`}
+                      >
+                        완료 {summary.completedCount}/{summary.totalCount}
+                      </span>
                     </div>
                   </div>
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void handleDeleteById(item.id)
-                }}
-                disabled={isDeleting}
-                aria-label="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
-                title="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
-                className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-soft-blush transition-colors hover:bg-soft-blush/10 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ))}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleDeleteById(item.id)
+                  }}
+                  disabled={isDeleting}
+                  aria-label="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
+                  title="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
+                  className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-soft-blush transition-colors hover:bg-soft-blush/10 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
 
-      <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
+      <Dialog open={isEditorOpen} onOpenChange={(open) => { void handleEditorOpenChange(open) }}>
         <DialogContent className="w-[97vw] max-w-[1620px] overflow-hidden p-0">
           {draft && (
             <div className="flex h-[88vh] min-h-0 flex-col bg-white">
               <DialogHeader className="border-b border-gray-200 bg-gradient-to-r from-white via-sky-aqua/5 to-white px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <DialogTitle className="font-sans text-base">주문/배송 관리</DialogTitle>
-                    <DialogDescription className="mt-1 text-xs text-gray-500">
-                      상단 기본정보와 하단 행 편집 테이블을 한 화면에서 관리합니다.
-                    </DialogDescription>
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px]">
-                    <span className="rounded-md border border-gray-200 bg-white px-2 py-1 text-gray-600">
-                      총 {rowCount}행
-                    </span>
-                    <span className="rounded-md border border-sky-aqua/20 bg-sky-aqua/10 px-2 py-1 text-sky-aqua">
-                      입력완료 {filledRowCount}행
-                    </span>
-                    <span className="rounded-md border border-tropical-teal/20 bg-tropical-teal/10 px-2 py-1 text-tropical-teal">
-                      총 수량 {totalQuantity.toLocaleString("ko-KR")}
-                    </span>
-                  </div>
+                <div>
+                  <DialogTitle className="font-sans text-base">주문/배송 관리</DialogTitle>
+                  <DialogDescription className="mt-1 text-xs text-gray-500">
+                    상단 정보와 하단 목록을 확인하고 필요한 값만 수정하세요.
+                  </DialogDescription>
                 </div>
               </DialogHeader>
 
               <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 py-3">
                 <section className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
-                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-4">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-gray-500">현장명</p>
+                      <Input
+                        value={draft.site_name}
+                        onChange={(event) => handleHeaderChange("site_name", event.target.value)}
+                        onFocus={handleFieldFocus}
+                        onBlur={handleFieldBlur}
+                        placeholder="현장명을 입력하세요"
+                        className="h-9 bg-white text-sm"
+                      />
+                    </div>
                     <div className="space-y-1">
                       <p className="text-xs font-medium text-gray-500">옵티명</p>
                       <Input
                         value={draft.opti_name}
                         onChange={(event) => handleHeaderChange("opti_name", event.target.value)}
+                        onFocus={handleFieldFocus}
+                        onBlur={handleFieldBlur}
                         placeholder="옵티명을 입력하세요"
                         className="h-9 bg-white text-sm"
                       />
@@ -502,6 +1026,8 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
                       <Input
                         value={draft.opti_number}
                         onChange={(event) => handleHeaderChange("opti_number", event.target.value)}
+                        onFocus={handleFieldFocus}
+                        onBlur={handleFieldBlur}
                         placeholder="옵티번호를 입력하세요"
                         className="h-9 bg-white text-sm"
                       />
@@ -511,6 +1037,8 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
                       <Input
                         value={draft.contract_number}
                         onChange={(event) => handleHeaderChange("contract_number", event.target.value)}
+                        onFocus={handleFieldFocus}
+                        onBlur={handleFieldBlur}
                         placeholder="계약번호를 입력하세요"
                         className="h-9 bg-white text-sm"
                       />
@@ -544,94 +1072,145 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
                         빈 행 정리
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500">
-                      입력 완료율 {rowCount > 0 ? Math.round((filledRowCount / rowCount) * 100) : 0}%
-                    </p>
                   </div>
 
                   <div className="min-h-0 flex-1 overflow-y-auto">
-                    <div className="w-full">
-                      <table className="w-full table-fixed border-separate border-spacing-0">
-                      <thead className="sticky top-0 z-20">
-                        <tr className="bg-gray-100">
-                          <th
-                            className="border-b border-r border-gray-200 px-1.5 py-1.5 text-center text-[11px] font-semibold text-gray-500"
-                            style={{ width: "42px" }}
-                          >
-                            #
-                          </th>
-                          {ORDER_DELIVERY_LINE_COLUMNS.map((column) => (
-                            <th
-                              key={column.key}
-                              className="border-b border-r border-gray-200 px-1.5 py-1.5 text-left text-[11px] font-semibold text-gray-500"
-                              style={{ width: column.width }}
-                            >
-                              {column.label}
-                            </th>
-                          ))}
-                          <th
-                            className="border-b border-gray-200 px-1.5 py-1.5 text-center text-[11px] font-semibold text-gray-500"
-                            style={{ width: "80px" }}
-                          >
-                            행작업
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                    <div className="relative pl-9">
+                      <div className="absolute left-0 top-[35px] z-10">
                         {draft.lines.map((line, rowIndex) => (
-                          <tr
-                            key={`${line.id ?? "new"}-${rowIndex}`}
-                            className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/40"}
+                          <div
+                            key={`row-actions-${line.id ?? "new"}-${rowIndex}`}
+                            className="flex h-[33px] w-8 items-center justify-center gap-0.5"
                           >
-                            <td className="border-b border-r border-gray-200 px-1.5 py-0 text-center text-[11px] font-semibold text-gray-500">
-                              {rowIndex + 1}
-                            </td>
-                            {ORDER_DELIVERY_LINE_COLUMNS.map((column) => {
-                              const value =
-                                column.type === "number"
-                                  ? String(typeof line[column.key] === "number" ? line[column.key] : 0)
-                                  : String(line[column.key] ?? "")
-
-                              return (
-                                <td key={column.key} className="border-b border-r border-gray-200 p-0 align-middle">
-                                  <Input
-                                    type={column.type}
-                                    min={column.type === "number" ? 0 : undefined}
-                                    value={value}
-                                    onChange={(event) => handleLineChange(rowIndex, column.key, event.target.value)}
-                                    placeholder={column.placeholder}
-                                    className={`h-8 rounded-none border-0 bg-transparent px-1.5 text-[11px] text-gray-700 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-aqua/50 ${column.type === "number" ? "text-right tabular-nums" : ""}`}
-                                  />
-                                </td>
-                              )
-                            })}
-                            <td className="border-b border-gray-200 px-0.5 py-0 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleDuplicateRow(rowIndex)}
-                                  className="inline-flex h-6 items-center justify-center rounded-md border border-gray-200 px-1.5 text-[10px] font-medium text-gray-600 transition-colors hover:bg-gray-100"
-                                  aria-label={`${rowIndex + 1}행 복제`}
-                                  title="행 복제"
-                                >
-                                  복제
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteRow(rowIndex)}
-                                  disabled={draft.lines.length <= 1}
-                                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-soft-blush transition-colors hover:bg-soft-blush/10 disabled:cursor-not-allowed disabled:opacity-30"
-                                  aria-label={`${rowIndex + 1}행 삭제`}
-                                  title={draft.lines.length <= 1 ? "최소 1행은 유지됩니다." : "행 삭제"}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
+                            <button
+                              type="button"
+                              onClick={() => handleClearRow(rowIndex)}
+                              className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                              aria-label={`${rowIndex + 1}행 비우기`}
+                              title="행 비우기"
+                            >
+                              <Eraser className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRow(rowIndex)}
+                              className="inline-flex h-5 w-5 items-center justify-center rounded text-soft-blush transition-colors hover:bg-soft-blush/10"
+                              aria-label={`${rowIndex + 1}행 삭제`}
+                              title="행 삭제"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+
+                      <div className="w-full">
+                        <table className="w-full table-fixed border-separate border-spacing-0">
+                        <thead className="sticky top-0 z-20">
+                          <tr className="bg-gray-100">
+                            {ORDER_DELIVERY_LINE_COLUMNS.map((column) => (
+                              <th
+                                key={column.key}
+                                className={`border-b border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-500 ${
+                                  column.key === "quantity" || column.key === "order_amount"
+                                    ? "text-center"
+                                    : "text-left"
+                                }`}
+                                style={{ width: column.width }}
+                              >
+                                {column.label}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {draft.lines.map((line, rowIndex) => (
+                            <tr
+                              key={`${line.id ?? "new"}-${rowIndex}`}
+                              className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/40"}
+                            >
+                              {ORDER_DELIVERY_LINE_COLUMNS.map((column) => {
+                                const value =
+                                  column.type === "number"
+                                    ? column.key === "order_amount"
+                                      ? formatNumberWithCommas(line.order_amount)
+                                      : typeof line[column.key] === "number"
+                                        ? String(line[column.key])
+                                        : ""
+                                    : String(line[column.key] ?? "")
+
+                                return (
+                                  <td key={column.key} className="border-b border-r border-gray-200 p-0 align-middle">
+                                    <div className="relative">
+                                      <Input
+                                        type={
+                                          column.type === "number" && column.key !== "order_amount"
+                                            ? "number"
+                                            : "text"
+                                        }
+                                      min={column.type === "number" && column.key !== "order_amount" ? 0 : undefined}
+                                      inputMode={column.type === "number" ? "numeric" : undefined}
+                                      value={value}
+                                      onFocus={handleFieldFocus}
+                                      onChange={(event) => handleLineChange(rowIndex, column.key, event.target.value)}
+                                      onBlur={() => {
+                                        handleLineBlur(rowIndex, column.key)
+                                        handleFieldBlur()
+                                      }}
+                                        onPaste={(event) => {
+                                          event.preventDefault()
+                                          handleLinePaste(
+                                            rowIndex,
+                                            column.key,
+                                            event.clipboardData.getData("text/plain")
+                                          )
+                                        }}
+                                        placeholder={column.placeholder}
+                                        className={`h-8 rounded-none border-0 bg-transparent px-1.5 text-[11px] placeholder:text-[10px] placeholder:font-normal placeholder:text-gray-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-aqua/50 ${
+                                          column.type === "number"
+                                            ? column.key === "quantity"
+                                              ? "text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                              : "text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                            : ""
+                                        } ${
+                                          column.type === "date"
+                                            ? value
+                                              ? "pr-7 text-gray-700"
+                                              : "pr-7 text-gray-300"
+                                            : "text-gray-700"
+                                        }`}
+                                      />
+                                      {column.type === "date" && (
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <button
+                                              type="button"
+                                              aria-label={`${column.label} 달력 열기`}
+                                              className="absolute right-1 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-500"
+                                              onMouseDown={(event) => event.preventDefault()}
+                                            >
+                                              <Calendar className="h-3.5 w-3.5" />
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent align="end" className="w-auto p-0">
+                                            <CalendarPicker
+                                              mode="single"
+                                              selected={parseIsoDateToDate(value)}
+                                              onSelect={(date) => handleDateSelect(rowIndex, column.key, date)}
+                                              initialFocus
+                                            />
+                                          </PopoverContent>
+                                        </Popover>
+                                      )}
+                                    </div>
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                   </div>
                 </section>
@@ -651,7 +1230,9 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsEditorOpen(false)}
+                    onClick={() => {
+                      void handleEditorOpenChange(false)
+                    }}
                     className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
                   >
                     닫기
@@ -664,7 +1245,7 @@ export default function OrderDeliveryTab({ requestId }: OrderDeliveryTabProps) {
                     disabled={!draft.id || isSaving}
                     className="rounded-md bg-sky-aqua px-3 py-1.5 text-xs text-white hover:bg-sky-aqua/90 disabled:opacity-40"
                   >
-                    {isSaving ? "저장 중..." : "저장"}
+                    {isSaving ? "저장 중..." : "즉시 저장"}
                   </button>
                 </div>
               </DialogFooter>

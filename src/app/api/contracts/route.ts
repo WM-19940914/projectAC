@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
+type SupabaseAdminClient = ReturnType<typeof createAdminClient>;
+
+const CONTRACT_SETTLEMENT_META_TABLE = 'contract_settlement_meta';
+
 function sanitizeContractMeta(input: unknown) {
     if (!input || typeof input !== 'object') return null;
     const src = input as Record<string, unknown>;
@@ -121,6 +125,86 @@ function getErrorText(error: unknown) {
         : String((error as { message?: unknown })?.message ?? '').toLowerCase();
 
     return message;
+}
+
+function isMissingContractMetaTableError(error: unknown) {
+    const code = (error as { code?: string })?.code;
+    const message = getErrorText(error);
+    return (
+        code === '42P01' ||
+        code === 'PGRST204' ||
+        message.includes(`could not find the '${CONTRACT_SETTLEMENT_META_TABLE}'`) ||
+        message.includes(`relation "${CONTRACT_SETTLEMENT_META_TABLE}" does not exist`)
+    );
+}
+
+async function loadContractMetaFromTable(
+    supabase: SupabaseAdminClient,
+    contractId: string,
+    fallbackMemo?: unknown
+) {
+    const fallbackMeta = parseContractMemo(fallbackMemo).meta;
+    const { data, error } = await supabase
+        .from(CONTRACT_SETTLEMENT_META_TABLE)
+        .select('stage_ratios, middle_installments, stage_scheduled_dates, settlement_status_map')
+        .eq('contract_id', contractId)
+        .maybeSingle();
+
+    if (error) {
+        if (isMissingContractMetaTableError(error)) return fallbackMeta;
+        throw error;
+    }
+
+    if (!data) {
+        if (fallbackMeta) {
+            await saveContractMetaToTable(supabase, contractId, fallbackMeta);
+        }
+        return fallbackMeta;
+    }
+    return sanitizeContractMeta(data as Record<string, unknown>) ?? fallbackMeta;
+}
+
+async function saveContractMetaToTable(
+    supabase: SupabaseAdminClient,
+    contractId: string,
+    meta: Record<string, unknown> | null
+) {
+    if (!meta) return;
+    const payload = {
+        contract_id: contractId,
+        stage_ratios: meta.stage_ratios ?? {},
+        middle_installments: Number.isFinite(Number(meta.middle_installments))
+            ? Math.max(1, Math.min(5, Math.round(Number(meta.middle_installments))))
+            : 1,
+        stage_scheduled_dates: meta.stage_scheduled_dates ?? {},
+        settlement_status_map: meta.settlement_status_map ?? {},
+        updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+        .from(CONTRACT_SETTLEMENT_META_TABLE)
+        .upsert(payload, { onConflict: 'contract_id' });
+
+    if (error && !isMissingContractMetaTableError(error)) {
+        throw error;
+    }
+}
+
+async function normalizeContractOutputWithTableMeta(
+    supabase: SupabaseAdminClient,
+    data: Record<string, unknown>
+) {
+    const normalized = normalizeContractOutput(data);
+    const contractId = typeof normalized.id === 'string' ? normalized.id : '';
+    if (!contractId) return normalized;
+
+    const tableMeta = await loadContractMetaFromTable(supabase, contractId, data.memo);
+    if (tableMeta) {
+        normalized.contract_meta = tableMeta;
+    } else if ('contract_meta' in normalized) {
+        delete normalized.contract_meta;
+    }
+    return normalized;
 }
 
 function shouldRetryWithCompatiblePayload(error: unknown) {
@@ -261,7 +345,8 @@ export async function GET(req: Request) {
             );
         }
 
-        return NextResponse.json({ success: true, data: normalizeContractOutput(data as Record<string, unknown>) });
+        const normalized = await normalizeContractOutputWithTableMeta(supabase, data as Record<string, unknown>);
+        return NextResponse.json({ success: true, data: normalized });
     } catch (error) {
         console.error('계약 조회 오류:', error);
         return NextResponse.json(
@@ -308,8 +393,18 @@ export async function POST(req: Request) {
         const contract = insertedData;
         if (!contract) throw new Error('데이터가 생성되었으나 반환되지 않았습니다.');
 
+        const normalized = normalizeContractOutput(contract as Record<string, unknown>);
+        const contractId = typeof normalized.id === 'string' ? normalized.id : '';
+        const contractMeta = sanitizeContractMeta(normalized.contract_meta);
+        if (contractId) {
+            await saveContractMetaToTable(supabase, contractId, contractMeta);
+        }
+        const normalizedWithTableMeta = contractId
+            ? await normalizeContractOutputWithTableMeta(supabase, contract as Record<string, unknown>)
+            : normalized;
+
         revalidatePath('/contracts');
-        return NextResponse.json({ success: true, data: normalizeContractOutput(contract as Record<string, unknown>) });
+        return NextResponse.json({ success: true, data: normalizedWithTableMeta });
     } catch (error) {
         console.error('계약 생성 오류:', error);
         return NextResponse.json(
@@ -379,8 +474,18 @@ export async function PATCH(req: Request) {
 
         if (error) throw error;
 
+        const normalized = contract ? normalizeContractOutput(contract as Record<string, unknown>) : null;
+        const contractId = typeof normalized?.id === 'string' ? normalized.id : '';
+        const contractMeta = sanitizeContractMeta(normalized?.contract_meta);
+        if (contractId) {
+            await saveContractMetaToTable(supabase, contractId, contractMeta);
+        }
+        const normalizedWithTableMeta = (contract && contractId)
+            ? await normalizeContractOutputWithTableMeta(supabase, contract as Record<string, unknown>)
+            : normalized;
+
         revalidatePath('/contracts');
-        return NextResponse.json({ success: true, data: contract ? normalizeContractOutput(contract as Record<string, unknown>) : null });
+        return NextResponse.json({ success: true, data: normalizedWithTableMeta });
     } catch (error) {
         console.error('계약 수정 오류:', error);
         return NextResponse.json(
@@ -413,7 +518,7 @@ export async function DELETE(req: Request) {
         if (unlinkError) throw unlinkError;
 
         // 관련 테이블 데이터 정리(테이블이 없는 환경은 건너뜀)
-        const relatedTables = ['settlements', 'expenses', 'transactions'];
+        const relatedTables = [CONTRACT_SETTLEMENT_META_TABLE, 'settlements', 'expenses', 'transactions'];
         for (const table of relatedTables) {
             const { error } = await supabase
                 .from(table)

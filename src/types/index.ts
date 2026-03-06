@@ -228,11 +228,11 @@ export interface OrderDeliveryLine {
   order_number?: string | null;
   model_name?: string | null;
   quantity?: number | null;
+  order_amount?: number | null;
   delivery_request_date?: string | null;
   delivery_expected_date?: string | null;
   delivery_confirmed_date?: string | null;
   delivery_place?: string | null;
-  delivery_address?: string | null;
   row_order: number;
   created_at: string;
   updated_at: string;
@@ -241,6 +241,7 @@ export interface OrderDeliveryLine {
 export interface OrderDelivery {
   id: string;
   request_id: string;
+  site_name?: string | null;
   opti_name?: string | null;
   opti_number?: string | null;
   contract_number?: string | null;
