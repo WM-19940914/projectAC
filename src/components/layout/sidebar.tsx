@@ -47,11 +47,11 @@ const dashboardItem: MenuItem = {
 
 const accordionGroups: AccordionGroup[] = [
   {
-    category: "영업",
+    category: "프로젝트",
     icon: Briefcase,
     defaultHref: "/requests",
     items: [
-      { label: "의뢰", href: "/requests", icon: CheckSquare },
+      { label: "현장관리", href: "/requests", icon: CheckSquare },
       { label: "고객", href: "/clients", icon: Users },
       { label: "견적서", href: "/quotes", icon: FileText },
     ],
