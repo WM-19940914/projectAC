@@ -22,7 +22,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import { Separator } from "@/components/ui/separator"
-import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CheckCircle2, Circle, ClipboardList, EyeOff, FileText, Hash, Mail, Pencil, Phone, Plus, Search, Trash2, Truck, Unlink, User, X, XCircle } from "lucide-react"
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CheckCircle2, Circle, ClipboardList, EyeOff, FileText, Hash, Mail, Pencil, Phone, Plus, Receipt, Search, Trash2, Truck, Unlink, User, X, XCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -31,6 +31,7 @@ import { REQUEST_STATUSES } from "@/lib/constants"
 import SalesTabNav from "@/components/layout/sales-tab-nav"
 import QuoteEditorSheet from "../quotes/quote-editor-sheet"
 import OrderDeliveryTab from "./order-delivery-tab"
+import ExpenseTab from "./expense-tab"
 import type { QuotationWithItems } from "@/types"
 
 // ----- 타입 -----
@@ -853,6 +854,7 @@ interface QuotationListItem {
   quotation_date: string
   total_amount: number
   grand_total: number
+  items?: Array<{ purchase_amount?: number; incentive_rate?: number }>
 }
 
 type SettlementStage = "선금" | "중도금" | "잔금"
@@ -1172,6 +1174,7 @@ function ContractFlowTab({
   onLinkContract,
   onSavedContract,
   onSummaryChange,
+  requestedContractTab,
 }: {
   requestId: string
   requestTitle: string
@@ -1181,8 +1184,10 @@ function ContractFlowTab({
   onLinkContract: (contractId: string | null) => Promise<void>
   onSavedContract?: (contractId: string) => void
   onSummaryChange?: (summary: ContractSummary) => void
+  requestedContractTab?: "계약서" | "정산 현황"
 }) {
-  const [isLoading, setIsLoading] = useState(false)
+  // 계약이 있으면 로딩 완료 전까지 진행률이 0%로 잘못 표시되는 것을 방지
+  const [isLoading, setIsLoading] = useState(!!requestContractId)
   const [isSaving, setIsSaving] = useState(false)
   const [isUnlinkingContract, setIsUnlinkingContract] = useState(false)
   const [isUnlinkDialogOpen, setIsUnlinkDialogOpen] = useState(false)
@@ -1192,6 +1197,14 @@ function ContractFlowTab({
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false)
   const [isContractFormVisible, setIsContractFormVisible] = useState(!!requestContractId)
   const [activeContractTab, setActiveContractTab] = useState<"계약서" | "정산 현황">("계약서")
+  // 외부 탭 전환 요청 처리
+  const appliedContractTabRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (requestedContractTab && appliedContractTabRef.current !== requestedContractTab) {
+      appliedContractTabRef.current = requestedContractTab
+      setActiveContractTab(requestedContractTab)
+    }
+  }, [requestedContractTab])
   const [modalStages, setModalStages] = useState<SettlementStage[]>(["잔금"])
   const [modalRatios, setModalRatios] = useState<Record<SettlementStage, number>>({ ...EMPTY_STAGE_RATIOS, 잔금: 100 })
   const [modalScheduledDates, setModalScheduledDates] = useState<Record<SettlementStage, string>>({ ...EMPTY_STAGE_SCHEDULED_DATES })
@@ -1206,6 +1219,8 @@ function ContractFlowTab({
   const failedSnapshotRef = useRef<string | null>(null)
   const lastSummarySignatureRef = useRef<string>("")
   const latestPendingRef = useRef<PendingContractDraftSnapshot | null>(null)
+  // 초기화 완료 여부 추적 - false 상태에서 언마운트 시 기본값으로 pending draft 덮어쓰기 방지
+  const isInitializedRef = useRef(false)
   const createDefaultDraft = useCallback((): ContractDraft => ({
     id: null,
     title: `${requestTitle} 계약`,
@@ -1381,6 +1396,7 @@ function ContractFlowTab({
         initialSnapshotRef.current = initialSnapshot
         lastSavedSnapshotRef.current = initialSnapshot
         failedSnapshotRef.current = null
+        isInitializedRef.current = true
         setSaveMessage("")
         return
       }
@@ -1491,6 +1507,7 @@ function ContractFlowTab({
         initialSnapshotRef.current = initialSnapshot
         lastSavedSnapshotRef.current = initialSnapshot
         failedSnapshotRef.current = null
+        isInitializedRef.current = true
       } catch {
         if (cancelled) return
         setDraft(defaultDraft)
@@ -1510,11 +1527,14 @@ function ContractFlowTab({
         initialSnapshotRef.current = initialSnapshot
         lastSavedSnapshotRef.current = initialSnapshot
         failedSnapshotRef.current = null
+        isInitializedRef.current = true
       } finally {
         if (!cancelled) setIsLoading(false)
       }
     }
 
+    // 새로운 init 시작 시 초기화 완료 플래그 리셋
+    isInitializedRef.current = false
     loadContract()
     return () => { cancelled = true }
   }, [requestContractId, requestCustomer?.id, requestId, requestTitle, createDefaultDraft, loadRatioFromLocal, loadPendingDraftFromLocal, clearPendingDraftFromLocal])
@@ -1567,6 +1587,8 @@ function ContractFlowTab({
 
   useEffect(() => {
     if (!onSummaryChange) return
+    // 데이터 로딩 중에는 기본값(0%)으로 덮어쓰지 않음
+    if (isLoading) return
 
     const paidAmount = settlementStatusRows.reduce((sum, row) => {
       return sum + row.actualAmount
@@ -1587,7 +1609,7 @@ function ContractFlowTab({
       unpaidAmount,
       progressPercent,
     })
-  }, [onSummaryChange, requestContractId, draft.id, settlementStatusRows, totalWithVat])
+  }, [onSummaryChange, requestContractId, draft.id, settlementStatusRows, totalWithVat, isLoading])
   const stageSummary = selectedStages.length > 0
     ? selectedStages.map((stage) => (
       stage === "중도금"
@@ -1624,7 +1646,8 @@ function ContractFlowTab({
 
   useEffect(() => {
     return () => {
-      if (latestPendingRef.current) {
+      // 초기화 완료된 상태에서만 저장 - 초기화 중 언마운트 시 기본값으로 덮어쓰기 방지
+      if (latestPendingRef.current && isInitializedRef.current) {
         savePendingDraftToLocal(latestPendingRef.current)
       }
     }
@@ -1632,6 +1655,8 @@ function ContractFlowTab({
 
   useEffect(() => {
     if (isLoading) return
+    // 초기화 완료 전에는 pending draft도 저장하지 않음
+    if (!isInitializedRef.current) return
     if (!initialSnapshotRef.current) return
 
     if (saveSnapshot === lastSavedSnapshotRef.current) {
@@ -1816,9 +1841,12 @@ function ContractFlowTab({
     setSettlementStatusMap((prev) => {
       const current = normalizeSettlementStatusInput(prev[normalizedRowKey])
       const nextEntries = current.payment_entries.filter((entry) => entry.id !== entryId)
+      // 엔트리가 모두 삭제되면 actual_amount/received_date도 리셋 (레거시 복원 방지)
       const normalized = normalizeSettlementStatusInput({
         ...current,
         payment_entries: nextEntries,
+        actual_amount: nextEntries.length > 0 ? current.actual_amount : 0,
+        received_date: nextEntries.length > 0 ? current.received_date : "",
       })
       return {
         ...prev,
@@ -1839,10 +1867,7 @@ function ContractFlowTab({
     const nextAmount = Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0
     const hasAmountChanged = nextAmount !== supplyAmount
     setDraft((prev) => (prev.contract_amount === nextAmount ? prev : { ...prev, contract_amount: nextAmount }))
-    if (hasAmountChanged) {
-      // Reset settlement status when total contract amount changes.
-      setSettlementStatusMap({})
-    }
+    // 계약금액 변경 시 입금내역은 유지 (이미 입력된 정산 데이터 보존)
     setIsAmountModalOpen(false)
   }
 
@@ -1916,6 +1941,8 @@ function ContractFlowTab({
 
   const handleSave = useCallback(async (mode: "manual" | "auto" = "manual") => {
     if (!canSave || isLoading || isSaving) return
+    // 초기화 완료 전 자동저장 차단 — HMR/탭 전환 시 기본값으로 덮어쓰기 방지
+    if (mode === "auto" && !isInitializedRef.current) return
     const isUpdate = !!draft.id
     if (mode === "auto" && !isUpdate) return
     if (mode === "auto" && failedSnapshotRef.current === saveSnapshot) return
@@ -2091,6 +2118,8 @@ function ContractFlowTab({
   useEffect(() => {
     if (!isPersistedContract) return
     if (!canSave || isLoading) return
+    // 초기화 완료 전 자동저장 스케줄링 차단
+    if (!isInitializedRef.current) return
     if (!initialSnapshotRef.current) return
     if (saveSnapshot === lastSavedSnapshotRef.current) return
     if (failedSnapshotRef.current === saveSnapshot) return
@@ -2283,7 +2312,7 @@ function ContractFlowTab({
                 </Popover>
                 <span className="text-[10px] text-gray-400">원</span>
               </div>
-              <p className="text-[9px] text-gray-400">VAT별도</p>
+              <p className="text-[9px] font-medium text-red-500">VAT 별도 금액</p>
             </div>
           </div>
         </div>
@@ -2321,17 +2350,15 @@ function ContractFlowTab({
           <p className="text-xs text-gray-400">설정 버튼에서 정산 형태를 선택하세요.</p>
         ) : (
           <div className="overflow-hidden rounded-lg border border-gray-100">
-            <div className="grid grid-cols-[120px_124px_1fr_1fr] gap-3 bg-gray-50 px-3 py-2">
+            <div className="grid grid-cols-[100px_108px_1fr] gap-2 bg-gray-50 px-3 py-2">
               <p className="text-[11px] text-gray-500">구분</p>
               <p className="text-[11px] text-gray-500">입금예정일</p>
-              <p className="text-[11px] text-right text-gray-500">VAT별도</p>
               <p className="text-[11px] text-right text-gray-500">VAT포함</p>
             </div>
             {settlementRowsWithScheduledDate.map((row) => (
-              <div key={row.key} className="grid grid-cols-[120px_124px_1fr_1fr] gap-3 border-t border-gray-100 bg-white px-3 py-2.5">
+              <div key={row.key} className="grid grid-cols-[100px_108px_1fr] gap-2 border-t border-gray-100 bg-white px-3 py-2.5">
                 <p className="text-sm font-medium text-gray-700">{row.label}</p>
                 <p className="text-sm text-gray-600">{row.scheduledDate || "-"}</p>
-                <p className="text-sm text-right tabular-nums text-gray-700">{formatCurrency(row.supply)}</p>
                 <p className="text-sm text-right tabular-nums font-semibold text-sky-aqua">{formatCurrency(row.total)}</p>
               </div>
             ))}
@@ -2557,13 +2584,43 @@ function ContractFlowTab({
                   </div>
                 </div>
 
+                {/* 정산금액 / 정산완료일 — 입금내역에서 자동 계산 (읽기전용 요약) */}
+                <div className="flex items-center justify-between gap-2 px-0.5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-400">정산금액</span>
+                      <span className={cn(
+                        "text-[11px] font-bold tabular-nums",
+                        row.actualAmount > 0 ? "text-gray-800" : "text-gray-300"
+                      )}>
+                        {row.actualAmount > 0 ? formatCurrency(row.actualAmount) : "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-gray-400">완료일</span>
+                      <span className={cn(
+                        "text-[10px]",
+                        row.receivedDate ? "text-gray-600" : "text-gray-300"
+                      )}>
+                        {row.receivedDate || "—"}
+                      </span>
+                    </div>
+                  </div>
+                  {row.shortfallAmount > 0 && (
+                    <span className="text-[10px] font-medium text-soft-blush">
+                      미정산 {formatCurrency(row.shortfallAmount)}
+                    </span>
+                  )}
+                </div>
+
+                {/* 입금내역 — 메인 입력 영역 */}
                 <div className="space-y-1.5 rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-medium text-gray-500">입금내역</p>
                     <button
                       type="button"
                       onClick={() => addSettlementPaymentEntry(row.key)}
-                      className="inline-flex items-center gap-1 px-1 py-0.5 text-[10px] text-gray-500 hover:text-sky-aqua"
+                      className="inline-flex items-center gap-0.5 rounded-md border border-sky-aqua/30 bg-sky-aqua/5 px-2 py-0.5 text-[10px] font-semibold text-sky-aqua hover:bg-sky-aqua/15 transition-colors"
                     >
                       <Plus className="h-3 w-3" />
                       추가
@@ -2571,7 +2628,14 @@ function ContractFlowTab({
                   </div>
 
                   {row.paymentEntries.length === 0 ? (
-                    <p className="text-[10px] text-gray-400">입금내역을 추가하면 정산금액이 자동 계산됩니다.</p>
+                    <button
+                      type="button"
+                      onClick={() => addSettlementPaymentEntry(row.key)}
+                      className="w-full rounded-md border border-dashed border-gray-200 bg-white py-3 text-center text-[10px] text-gray-400 hover:border-sky-aqua/40 hover:text-sky-aqua transition-colors"
+                    >
+                      <Plus className="inline h-3 w-3 mr-0.5 -mt-0.5" />
+                      입금내역을 추가하면 정산금액이 자동 계산됩니다
+                    </button>
                   ) : (
                     <div className="space-y-1.5">
                       {row.paymentEntries.map((entry, index) => (
@@ -2588,9 +2652,17 @@ function ContractFlowTab({
                                 amount: Number.isFinite(nextAmount) ? Math.max(0, Math.round(nextAmount)) : 0,
                               })
                             }}
-                            placeholder="0"
+                            placeholder="금액 입력"
                             className="h-7 min-w-0 flex-1 border-0 border-b border-gray-200 bg-transparent px-0 text-left text-[10px] font-semibold tabular-nums text-gray-700 outline-none focus:border-sky-aqua"
                           />
+                          {/* 정산금 자동입력 버튼: 해당 단계 VAT포함 계획금액을 한번에 채움 */}
+                          <button
+                            type="button"
+                            onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { amount: row.plannedAmount })}
+                            className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold text-sky-aqua ring-1 ring-sky-aqua/40 hover:bg-sky-aqua/10"
+                          >
+                            입완
+                          </button>
                           <input
                             type="date"
                             value={entry.paid_at}
@@ -2610,35 +2682,6 @@ function ContractFlowTab({
                     </div>
                   )}
                 </div>
-
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-gray-400">정산금액</p>
-                    <Input
-                      type="text"
-                      value={row.actualAmount > 0 ? row.actualAmount.toLocaleString("ko-KR") : ""}
-                      readOnly
-                      placeholder="0"
-                      className="h-8 border-gray-200 bg-gray-50 px-2 text-right text-[11px] font-semibold tabular-nums text-gray-700"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-gray-400">정산 완료일</p>
-                    <Input
-                      type="date"
-                      value={row.receivedDate}
-                      readOnly
-                      className="h-8 border-gray-200 bg-gray-50 px-2 text-[11px] text-gray-600"
-                    />
-                  </div>
-                </div>
-
-                {row.shortfallAmount > 0 && (
-                  <p className="text-right text-[10px] font-medium text-soft-blush">
-                    미정산 {formatCurrency(row.shortfallAmount)}
-                  </p>
-                )}
 
                 <div className="flex justify-end">
                   <label className="inline-flex cursor-pointer items-center gap-1.5 text-[10px] text-gray-500">
@@ -2673,6 +2716,9 @@ function SalesFlowPanel({
   onLinkContract,
   onSavedContract,
   onSummaryChange,
+  contractSummary,
+  requestedFlow,
+  requestedContractTab,
 }: {
   quotations: QuotationListItem[]
   onAddQuote: () => void
@@ -2686,22 +2732,42 @@ function SalesFlowPanel({
   onLinkContract: (contractId: string | null) => Promise<void>
   onSavedContract?: (contractId: string) => void
   onSummaryChange?: (summary: ContractSummary) => void
+  contractSummary?: ContractSummary | null
+  contractSummary?: ContractSummary | null
+  requestedFlow?: "견적" | "계약" | "주문·배송" | "지출"
+  requestedContractTab?: "계약서" | "정산 현황"
 }) {
-  const [activeFlow, setActiveFlow] = useState<"견적" | "계약" | "주문·배송" | "매입·매출">("견적")
+  const [activeFlow, setActiveFlow] = useState<"견적" | "계약" | "주문·배송" | "지출">("견적")
+  // 외부에서 탭 전환 요청 시 처리 (중복 적용 방지용 ref)
+  const appliedRequestedFlowRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (requestedFlow && appliedRequestedFlowRef.current !== requestedFlow) {
+      appliedRequestedFlowRef.current = requestedFlow
+      setActiveFlow(requestedFlow)
+    }
+  }, [requestedFlow])
 
-  const flowTabs: Array<{ key: "견적" | "계약" | "주문·배송" | "매입·매출" }> = [
+  const flowTabs: Array<{ key: "견적" | "계약" | "주문·배송" | "지출" }> = [
     { key: "견적" },
     { key: "계약" },
     { key: "주문·배송" },
-    { key: "매입·매출" },
+    { key: "지출" },
   ]
   const flowIcons = {
     "견적": FileText,
     "계약": Briefcase,
     "주문·배송": Truck,
-    "매입·매출": ArrowUpDown,
+    "지출": Receipt,
   } as const
   const confirmedQuote = confirmedQuoteId ? quotations.find((q) => q.id === confirmedQuoteId) ?? null : null
+  // 확정 견적서 장려금 합계 계산
+  const confirmedIncentiveTotal = confirmedQuote?.items
+    ? confirmedQuote.items.reduce((sum, item) => {
+        const purchaseAmount = Number(item.purchase_amount ?? 0)
+        const incentiveRate = Number(item.incentive_rate ?? 0)
+        return sum + Math.round(purchaseAmount * incentiveRate / 100)
+      }, 0)
+    : 0
 
   return (
     <div>
@@ -2736,7 +2802,8 @@ function SalesFlowPanel({
         />
       )}
 
-      {activeFlow === "계약" && (
+      {/* 계약 탭 — 언마운트 방지: display:none으로 숨김 (탭 전환 시 상태 유지, auto-save 충돌 방지) */}
+      <div style={{ display: activeFlow === "계약" ? "block" : "none" }}>
         <ContractFlowTab
           requestId={requestId}
           requestTitle={requestTitle}
@@ -2746,17 +2813,21 @@ function SalesFlowPanel({
           onLinkContract={onLinkContract}
           onSavedContract={onSavedContract}
           onSummaryChange={onSummaryChange}
+          requestedContractTab={requestedContractTab}
         />
-      )}
+      </div>
 
       {activeFlow === "주문·배송" && (
-        <OrderDeliveryTab requestId={requestId} />
+        <OrderDeliveryTab requestId={requestId} confirmedQuoteId={confirmedQuoteId ?? null} onEditQuote={onEditQuote} />
       )}
 
-      {activeFlow !== "견적" && activeFlow !== "계약" && activeFlow !== "주문·배송" && (
-        <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
-          <p className="text-sm font-medium text-gray-500">{activeFlow} 흐름은 다음 단계에서 연결됩니다.</p>
-        </div>
+      {activeFlow === "지출" && (
+        <ExpenseTab
+          requestId={requestId}
+          totalSettlement={contractSummary ? Math.round(contractSummary.paidAmount / 1.1) : 0}
+          totalContractAmount={contractSummary ? Math.round(contractSummary.totalWithVat / 1.1) : 0}
+          incentiveTotal={confirmedIncentiveTotal}
+        />
       )}
     </div>
   )
@@ -2831,8 +2902,8 @@ function CustomerPanel({
 
   return (
     <div>
-      <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900 mb-2">
-        <Box className="h-3.5 w-3.5 text-gray-500" />
+      <p className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 mb-2">
+        <Box className="h-3 w-3" />
         고객 정보
       </p>
 
@@ -3089,6 +3160,9 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [selectedItem, setSelectedItem] = useState<RequestItem | null>(null)
   // 자동저장 상태 메시지
   const [saveMessage, setSaveMessage] = useState("")
+  // 우측 패널 탭 전환 요청 (좌측 카드 클릭 시)
+  const [requestedFlow, setRequestedFlow] = useState<"견적" | "계약" | "주문·배송" | "지출" | undefined>(undefined)
+  const [requestedContractTab, setRequestedContractTab] = useState<"계약서" | "정산 현황" | undefined>(undefined)
 
   // 고객 목록 로컬 state (즉석 생성 시 낙관적 업데이트용)
   const [localCustomers, setLocalCustomers] = useState(customers)
@@ -4068,7 +4142,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                 {/* 본문: 좌우 분리 */}
                 <div className="flex-1 flex overflow-hidden">
                   {/* ===== 왼쪽 영역: 의뢰 상세 정보 ===== */}
-                  <div className="w-1/2 shrink-0 overflow-y-auto px-6 py-6 border-r [&_.text-\\[10px\\]]:text-xs [&_.text-\\[9px\\]]:text-[10px] [&_.text-xs]:text-sm [&_.no-scale_.text-\\[10px\\]]:text-[10px] [&_.no-scale_.text-\\[9px\\]]:text-[9px] [&_.no-scale_.text-xs]:text-xs">
+                  <div className="w-1/2 shrink-0 overflow-y-auto px-5 py-6 border-r [&_.text-\\[10px\\]]:text-xs [&_.text-\\[9px\\]]:text-[10px] [&_.text-xs]:text-sm [&_.no-scale_.text-\\[10px\\]]:text-[10px] [&_.no-scale_.text-\\[9px\\]]:text-[9px] [&_.no-scale_.text-xs]:text-xs">
                     {/* 상태 배지(클릭 변경) + 생성일 */}
                     <div className="flex items-center gap-2.5 mb-4">
                       <InlineSelect
@@ -4107,8 +4181,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                     {/* 상세 정보 */}
                     <div className="space-y-5">
                       <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-sky-aqua/5 transition-colors">
-                        <span className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
-                          <Box className="h-3.5 w-3.5 text-gray-500" />
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
+                          <Box className="h-3 w-3" />
                           문의 일시
                         </span>
                         <InlineDate
@@ -4187,13 +4261,15 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                       <div className="no-scale flex items-center justify-between rounded-md px-2 -mx-2 py-1">
                         <div className="w-full space-y-2">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
-                              <Box className="h-3.5 w-3.5 text-gray-500" />
+                            <p className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
+                              <Box className="h-3 w-3" />
                               확정 견적서
                             </p>
-                            {!confirmedQuoteId && (
+                            {!confirmedQuoteId ? (
                               <span className="text-[10px] text-gray-400">견적서를 확정 지어주세요</span>
-                            )}
+                            ) : confirmedTotalAmount !== null && contractSummary && Math.round(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount ? (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-500"><AlertCircle className="h-3 w-3" />확정 견적금액과 계약금액이 다릅니다</span>
+                            ) : null}
                           </div>
                           <button
                             type="button"
@@ -4243,27 +4319,69 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                             </div>
                           </button>
                           {contractSummary && (
-                            <div className="mt-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-                              <div className="flex items-center justify-between">
-                                <p className="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">
-                                  <Box className="h-3.5 w-3.5 text-gray-500" />
+                            <div className="mt-2 space-y-3">
+                              {/* 계약 정보 */}
+                              <div>
+                                <div className="mb-1.5 flex items-center justify-between gap-2">
+                                  <p className="flex items-center gap-1 text-xs font-medium text-gray-500">
+                                    <Briefcase className="h-3 w-3" />
+                                    계약 정보
+                                  </p>
+                                  {confirmedTotalAmount !== null && Math.round(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-500"><AlertCircle className="h-3 w-3" />확정 견적금액과 계약금액이 다릅니다</span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => { setRequestedFlow("계약"); setRequestedContractTab("계약서") }}
+                                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
+                                >
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="rounded-lg bg-gray-50 px-2.5 py-2">
+                                      <p className="text-[9px] text-gray-400">VAT별도</p>
+                                      <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-gray-700">
+                                        {formatCurrency(Math.round(contractSummary.totalWithVat / 1.1))}
+                                      </p>
+                                    </div>
+                                    <div className="rounded-lg bg-sky-aqua/5 px-2.5 py-2">
+                                      <p className="text-[9px] text-gray-400">VAT포함</p>
+                                      <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-sky-aqua">
+                                        {formatCurrency(contractSummary.totalWithVat)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </button>
+                              </div>
+
+                              {/* 정산 진행률 */}
+                              <div>
+                                <p className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-500">
+                                  <Box className="h-3 w-3" />
                                   정산 진행률
                                 </p>
-                                <p className="text-sm font-semibold text-sky-aqua tabular-nums">{contractSummary.progressPercent}%</p>
+                                <button
+                                  type="button"
+                                  onClick={() => { setRequestedFlow("계약"); setRequestedContractTab("정산 현황") }}
+                                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold tabular-nums text-sky-aqua">{contractSummary.progressPercent}%</span>
+                                    <span className="text-[10px] text-gray-400 tabular-nums">
+                                      입금 {formatCurrency(contractSummary.paidAmount)}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                                    <div
+                                      className="h-full rounded-full bg-gradient-to-r from-sky-aqua to-tropical-teal transition-all duration-500"
+                                      style={{ width: `${contractSummary.progressPercent}%` }}
+                                    />
+                                  </div>
+                                  <div className="mt-2 flex items-center justify-between text-[10px] tabular-nums">
+                                    <span className="text-muted-teal">입금 완료</span>
+                                    <span className="text-soft-blush">미수 {formatCurrency(contractSummary.unpaidAmount)}</span>
+                                  </div>
+                                </button>
                               </div>
-                              <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
-                                <div
-                                  className="h-full rounded-full bg-gradient-to-r from-sky-aqua to-tropical-teal transition-all duration-500"
-                                  style={{ width: `${contractSummary.progressPercent}%` }}
-                                />
-                              </div>
-                              <div className="mt-2 flex items-center justify-between text-xs tabular-nums">
-                                <span className="text-muted-teal">입금 {formatCurrency(contractSummary.paidAmount)}</span>
-                                <span className="text-soft-blush">미수 {formatCurrency(contractSummary.unpaidAmount)}</span>
-                              </div>
-                              <p className="mt-1 text-[10px] text-gray-400 tabular-nums">
-                                총 계약금(VAT포함) {formatCurrency(contractSummary.totalWithVat)}
-                              </p>
                             </div>
                           )}
                         </div>
@@ -4305,6 +4423,9 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                           return summary
                         })
                       }}
+                      contractSummary={contractSummary}
+                      requestedFlow={requestedFlow}
+                      requestedContractTab={requestedContractTab}
                     />
                   </div>
                 </div>

@@ -12,7 +12,7 @@ import {
 import { Calendar as CalendarPicker } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar, Eraser, Plus, Trash2, Truck } from "lucide-react"
+import { Calendar, ClipboardList, Eraser, Plus, Trash2, Truck } from "lucide-react"
 import type { OrderDelivery, OrderDeliveryLine } from "@/types"
 
 export type OrderDeliveryItem = OrderDelivery
@@ -410,7 +410,7 @@ function toDraft(item: OrderDeliveryItem): OrderDeliveryDraft {
     opti_name: toInputValue(item.opti_name),
     opti_number: toInputValue(item.opti_number),
     contract_number: toInputValue(item.contract_number),
-    lines: ensureMinimumRows(normalizedLines),
+    lines: normalizedLines,
   }
 }
 
@@ -431,9 +431,11 @@ function getDraftSnapshot(draft: OrderDeliveryDraft): string {
 interface OrderDeliveryTabProps {
   requestId: string
   defaultSiteName?: string
+  confirmedQuoteId?: string | null
+  onEditQuote?: (id: string) => void
 }
 
-export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: OrderDeliveryTabProps) {
+export default function OrderDeliveryTab({ requestId, defaultSiteName = "", confirmedQuoteId = null, onEditQuote }: OrderDeliveryTabProps) {
   const [items, setItems] = useState<OrderDeliveryItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -443,9 +445,15 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: Or
   const [draft, setDraft] = useState<OrderDeliveryDraft | null>(null)
   const [resolvedSiteName, setResolvedSiteName] = useState("")
   const [isFieldEditing, setIsFieldEditing] = useState(false)
+  const [saveMessage, setSaveMessage] = useState("")
+  // 삭제 확인 Dialog 상태
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [pendingDeleteCardId, setPendingDeleteCardId] = useState<string | null>(null)
+  const deleteFromEditorRef = useRef(false)
   const lastSavedSnapshotRef = useRef("")
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const effectiveSiteName = defaultSiteName.trim() || resolvedSiteName.trim()
   const sortedItems = useMemo(
@@ -525,6 +533,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: Or
     const nextEditorDraft = {
       ...nextDraft,
       site_name: nextDraft.site_name || effectiveSiteName,
+      // 카드를 처음 열 때만 최소 5행 보장 (빈행 정리 후 저장된 상태는 유지)
     }
     lastSavedSnapshotRef.current = getDraftSnapshot(nextEditorDraft)
     setDraft(nextEditorDraft)
@@ -555,6 +564,8 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: Or
       const nextEditorDraft = {
         ...nextDraft,
         site_name: nextDraft.site_name || effectiveSiteName,
+        // 최초 생성 시에만 5행 보장
+        lines: ensureMinimumRows(nextDraft.lines),
       }
       lastSavedSnapshotRef.current = getDraftSnapshot(nextEditorDraft)
       setDraft(nextEditorDraft)
@@ -600,9 +611,16 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: Or
       }
       lastSavedSnapshotRef.current = getDraftSnapshot(nextEditorDraft)
       setDraft(nextEditorDraft)
+      // 자동저장 완료 시간 표시
+      const now = new Date()
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
+      if (saveMessageTimerRef.current) clearTimeout(saveMessageTimerRef.current)
+      setSaveMessage(`저장됨 ${timeStr}`)
+      saveMessageTimerRef.current = setTimeout(() => setSaveMessage(""), 4000)
       return true
     } catch (error) {
       const message = error instanceof Error ? error.message : "저장 중 오류가 발생했습니다."
+      setSaveMessage("저장 실패")
       alert(message)
       return false
     } finally {
@@ -657,34 +675,45 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: Or
     }
   }, [draft, isEditorOpen, isSaving, isFieldEditing, performSave])
 
-  const handleDeleteById = async (cardId: string, fromEditor = false) => {
+  // 삭제 확인 Dialog 열기
+  const openDeleteConfirm = (cardId: string, fromEditor = false) => {
     if (!cardId || isDeleting) return
-    if (!confirm("\uCE74\uB4DC\uC640 \uC5F0\uACB0\uB41C \uC8FC\uBB38/\uBC30\uC1A1 \uB370\uC774\uD130\uB97C \uBAA8\uB450 \uC0AD\uC81C\uD569\uB2C8\uB2E4. \uC9C4\uD589\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?")) return
+    setPendingDeleteCardId(cardId)
+    deleteFromEditorRef.current = fromEditor
+    setIsDeleteConfirmOpen(true)
+  }
+
+  // 실제 삭제 실행 (Dialog 확인 후 호출)
+  const confirmDelete = async () => {
+    const cardId = pendingDeleteCardId
+    if (!cardId) return
+    setIsDeleteConfirmOpen(false)
+    setPendingDeleteCardId(null)
 
     setIsDeleting(true)
     try {
       const res = await fetch(`/api/order-deliveries?id=${cardId}`, { method: "DELETE" })
       const result = await res.json()
       if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to delete card.")
+        throw new Error(result.error || "삭제에 실패했습니다.")
       }
 
       setItems((prev) => prev.filter((item) => item.id !== cardId))
-      if (fromEditor || draft?.id === cardId) {
+      if (deleteFromEditorRef.current || draft?.id === cardId) {
         setIsEditorOpen(false)
         setDraft(null)
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to delete card."
+      const message = error instanceof Error ? error.message : "삭제에 실패했습니다."
       alert(message)
     } finally {
       setIsDeleting(false)
     }
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!draft?.id || isDeleting) return
-    void handleDeleteById(draft.id, true)
+    openDeleteConfirm(draft.id, true)
   }
 
   const handleHeaderChange = (key: HeaderField, value: string) => {
@@ -967,9 +996,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: Or
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    void handleDeleteById(item.id)
-                  }}
+                  onClick={() => openDeleteConfirm(item.id)}
                   disabled={isDeleting}
                   aria-label="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
                   title="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
@@ -1072,6 +1099,17 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: Or
                         빈 행 정리
                       </button>
                     </div>
+                    {/* 확정 견적서 보기 */}
+                    {confirmedQuoteId && onEditQuote && (
+                      <button
+                        type="button"
+                        onClick={() => onEditQuote(confirmedQuoteId)}
+                        className="inline-flex items-center gap-1 rounded-md border border-sky-aqua/30 bg-sky-aqua/5 px-2.5 py-1.5 text-xs font-semibold text-sky-aqua transition-colors hover:bg-sky-aqua/15"
+                      >
+                        <ClipboardList className="h-3.5 w-3.5" />
+                        확정 견적서 보기
+                      </button>
+                    )}
                   </div>
 
                   <div className="min-h-0 flex-1 overflow-y-auto">
@@ -1208,7 +1246,37 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: Or
                               })}
                             </tr>
                           ))}
+                          {/* 행 추가 버튼 행 - 합계 위에 배치 */}
+                          <tr>
+                            <td colSpan={10} className="p-0">
+                              <button
+                                type="button"
+                                onClick={() => handleAddRows(1)}
+                                className="flex w-full items-center justify-center gap-1 bg-gray-50 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-sky-aqua/10 hover:text-sky-aqua"
+                              >
+                                <Plus className="h-3 w-3" />
+                                행 추가
+                              </button>
+                            </td>
+                          </tr>
                         </tbody>
+                        {/* 주문금액 합계 행 */}
+                        <tfoot className="sticky bottom-0 z-10">
+                          <tr className="bg-gray-100 border-t-2 border-gray-300">
+                            <td colSpan={5} className="border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-600">
+                              합계
+                            </td>
+                            <td className="border-r border-gray-200 px-1.5 py-1.5 text-right text-[11px] font-bold tabular-nums text-sky-aqua">
+                              {formatNumberWithCommas(
+                                draft.lines.reduce((sum, line) => {
+                                  const v = typeof line.order_amount === "number" ? line.order_amount : 0
+                                  return sum + v
+                                }, 0)
+                              )}
+                            </td>
+                            <td colSpan={4} className="px-1.5 py-1.5" />
+                          </tr>
+                        </tfoot>
                       </table>
                     </div>
                   </div>
@@ -1219,38 +1287,69 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "" }: Or
               <DialogFooter className="border-t border-gray-200 bg-white px-5 py-3 sm:justify-between">
                 <button
                   type="button"
-                  onClick={() => {
-                    void handleDelete()
-                  }}
+                  onClick={handleDelete}
                   disabled={!draft.id || isDeleting}
                   className="rounded-md border border-soft-blush/50 px-3 py-1.5 text-xs text-soft-blush hover:bg-soft-blush/10 disabled:opacity-40"
                 >
                   {isDeleting ? "삭제 중..." : "카드 삭제"}
                 </button>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                  {/* 자동저장 상태 메시지 */}
+                  {saveMessage && (
+                    <p className={`text-[10px] ${saveMessage.includes("실패") ? "text-soft-blush" : "text-gray-400"}`}>
+                      {isSaving ? "저장 중..." : saveMessage}
+                    </p>
+                  )}
+                  {isSaving && !saveMessage && (
+                    <p className="text-[10px] text-gray-400">저장 중...</p>
+                  )}
                   <button
                     type="button"
-                    onClick={() => {
-                      void handleEditorOpenChange(false)
-                    }}
+                    onClick={() => { void handleEditorOpenChange(false) }}
                     className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
                   >
                     닫기
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      void handleSave()
-                    }}
+                    onClick={() => { void handleSave() }}
                     disabled={!draft.id || isSaving}
                     className="rounded-md bg-sky-aqua px-3 py-1.5 text-xs text-white hover:bg-sky-aqua/90 disabled:opacity-40"
                   >
-                    {isSaving ? "저장 중..." : "즉시 저장"}
+                    즉시 저장
                   </button>
                 </div>
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 카드 삭제 확인 Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[320px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm">주문 카드 삭제</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              카드와 연결된 주문/배송 데이터를 모두 삭제합니다. 이 작업은 되돌릴 수 없습니다.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="px-3 py-1.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => { void confirmDelete() }}
+              className="px-3 py-1.5 text-xs rounded-md bg-soft-blush text-white hover:bg-soft-blush/90"
+            >
+              삭제
+            </button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
