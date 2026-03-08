@@ -996,7 +996,18 @@ function normalizeSettlementTypes(raw: unknown): SettlementStage[] {
     return raw.filter((v): v is SettlementStage => SETTLEMENT_STAGE_ORDER.includes(v as SettlementStage))
   }
   if (typeof raw === "string" && raw.trim()) {
-    const normalized = raw.replace(/[{}]/g, "")
+    const trimmed = raw.trim()
+    // JSON 배열 문자열인 경우 (예: '["선금","잔금"]')
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          return parsed.map(String).map(s => s.trim()).filter((v): v is SettlementStage => SETTLEMENT_STAGE_ORDER.includes(v as SettlementStage))
+        }
+      } catch { /* JSON 파싱 실패 시 쉼표 구분으로 폴백 */ }
+    }
+    // 쉼표 구분 문자열 (예: "선금,잔금")
+    const normalized = trimmed.replace(/[{}]/g, "")
     return normalized
       .split(",")
       .map((v) => v.trim())
@@ -2616,7 +2627,7 @@ function ContractFlowTab({
                 {/* 입금내역 — 메인 입력 영역 */}
                 <div className="space-y-1.5 rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-medium text-gray-500">입금내역</p>
+                    <p className="text-[10px] font-medium text-gray-500">입금내역 <span className="text-gray-400 font-normal">(VAT포함)</span></p>
                     <button
                       type="button"
                       onClick={() => addSettlementPaymentEntry(row.key)}
@@ -3843,10 +3854,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                     <span className={item.customer?.deleted_at ? "text-soft-blush" : ""}>
                                       {item.customer ? (item.customer.deleted_at ? "삭제된 고객" : item.customer.company_name) : "없음"}
                                     </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                    <FileText className="h-3 w-3 shrink-0" />
-                                    <span>없음</span>
                                   </div>
                                 </div>
                               </div>

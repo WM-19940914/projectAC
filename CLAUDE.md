@@ -1,127 +1,109 @@
-# M - 건설/공사 영업·계약·정산 관리 시스템
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 프로젝트 개요
-- **프로젝트명:** M
-- **업종:** 건설/공사 (시공, 원청, 영업/수주 전반)
-- **사용자:** 소규모 팀 (2~5명)
-- **목적:** 건설 영업부터 계약, 정산까지 전체 흐름을 한곳에서 관리
+
+**M** — 건설/공사 영업·계약·정산 관리 시스템. 소규모 팀(2~5명)이 의뢰 접수부터 계약, 정산까지 전체 흐름을 관리하는 Next.js 14 앱.
+
+## 개발 명령어
+
+```bash
+npm run dev          # 개발 서버 (predev로 UTF-8 체크 자동 실행)
+npm run build        # 프로덕션 빌드
+npm run lint         # ESLint 실행
+npm run check:utf8   # UTF-8 인코딩 검사
+npm run import:customers   # 고객 데이터 임포트 (Excel/CSV)
+npm run import:prices      # 가격표 데이터 임포트
+```
 
 ## 기술 스택
-- **프레임워크:** Next.js 14 (App Router)
-- **언어:** TypeScript
-- **DB/백엔드:** Supabase (PostgreSQL + Auth + Storage)
-- **스타일링:** Tailwind CSS + shadcn/ui
-- **상태관리:** TanStack React Query
-- **폼:** React Hook Form + Zod (유효성 검사)
-- **차트:** Recharts
-- **PDF:** jsPDF + jspdf-autotable
-- **엑셀:** xlsx
 
-## 핵심 메뉴 구조
+- **Next.js 14** (App Router) + TypeScript
+- **Supabase** (PostgreSQL + Auth + Storage) — RLS 활용
+- **Tailwind CSS** + **shadcn/ui** (Radix UI 기반)
+- **TanStack React Query** (staleTime 5분, retry 1)
+- **React Hook Form** + **Zod** (폼 + 유효성 검사)
+- **@hello-pangea/dnd** (칸반 드래그앤드롭) — `reactStrictMode: false`로 설정됨
+- **jsPDF/jspdf-autotable** (PDF), **xlsx** (엑셀), **Recharts** (차트)
+
+## 아키텍처
+
+### 데이터 흐름 패턴 (필수 준수)
+
+클라이언트에서 Supabase 직접 호출하면 RLS에 막힌다. 반드시 아래 패턴을 따른다:
+
+**조회 (READ):** 서버 컴포넌트(`page.tsx`)에서 `createAdminClient()`로 조회. `export const dynamic = "force-dynamic"` 필수.
+
+**변경 (CREATE/UPDATE/DELETE):** API 라우트(`src/app/api/`)에서 `createAdminClient()`로 처리. 변경 후 반드시 `revalidatePath()` 호출. 클라이언트에서는 `fetch("/api/...")`.
+
 ```
-대시보드           → /dashboard
-영업
-  ├─ 의뢰          → /requests
-  ├─ 고객          → /clients
-  └─ 견적서        → /quotes
+서버 컴포넌트(page.tsx) → createAdminClient() → DB 조회 → props로 클라이언트 컴포넌트에 전달
+클라이언트 컴포넌트 → fetch("/api/...") → API Route(createAdminClient) → DB 변경 → revalidatePath()
+```
 
+### Supabase 클라이언트 3종
+- `src/lib/supabase/client.ts` — 브라우저용, RLS 적용
+- `src/lib/supabase/server.ts` — 서버 컴포넌트용, 쿠키 기반
+- `src/lib/supabase/admin.ts` — **서버 전용**, RLS 우회 (service_role_key). 절대 클라이언트에 노출 금지
 
-## 업무 흐름
+### 인증
+- `src/providers/auth-provider.tsx` — AuthContext (User + Profile)
+- 역할: `admin` | `sales` | `viewer`
+- `src/providers/query-provider.tsx` — TanStack React Query 설정
+
+### 라우트 구조
+- `src/app/(auth)/` — 로그인/회원가입 (centered layout)
+- `src/app/(dashboard)/` — 메인 앱 (sidebar + header layout)
+  - `/dashboard`, `/requests`(칸반), `/clients`, `/quotes`(에디터), `/contracts`, `/settlements`, `/expenses`, `/price-list`, `/contract-templates`, `/contract-documents`, `/settings`
+- `src/app/api/` — CRUD 엔드포인트 (quotes, customers, requests, contracts, expenses, order-deliveries, price-list, settings)
+
+### API 라우트 패턴
+모든 API가 동일한 구조: GET/POST/PATCH/DELETE → `createAdminClient()` → whitelist 필드 검증 → DB 작업 → `revalidatePath()` → `jsonWithUTF8()` 응답 (`src/lib/utf8-response.ts`)
+
+### 업무 흐름
+```
 의뢰 접수 → 고객 등록 → 견적서 작성 → 계약 체결 → 정산/지출 관리
-
-## 폴더 구조
-```
-src/
-├── app/                    # 페이지 (App Router)
-│   ├── (auth)/             # 로그인/회원가입
-│   ├── (dashboard)/        # 대시보드 레이아웃
-│   ├── api/                # API 라우트 (admin 권한 CRUD)
-│   │   ├── requests/       # 의뢰 삭제 API
-│   │   └── customers/      # 고객 추가/수정/삭제 API
-│   └── layout.tsx          # 루트 레이아웃
-├── components/
-│   ├── ui/                 # shadcn/ui 공통 컴포넌트
-│   └── layout/             # 사이드바, 헤더 등
-├── lib/
-│   ├── supabase/           # Supabase 클라이언트 (client/server/admin)
-│   ├── constants.ts        # 상수 (상태값, 메뉴 등)
-│   ├── utils.ts            # 유틸리티 함수
-│   ├── validators.ts       # Zod 스키마
-│   └── format.ts           # 포맷팅 함수
-├── types/                  # TypeScript 타입 정의
-├── hooks/                  # 커스텀 훅
-└── providers/              # Context Provider (Auth, Query)
-scripts/                    # 데이터 임포트 스크립트
-supabase/migrations/        # DB 마이그레이션 SQL
 ```
 
-## 폰트 시스템 (필수 준수)
-| 용도 | 폰트 | Tailwind 클래스 | weight | 사용 예시 |
-|------|------|-----------------|--------|-----------|
-| 제목 (Heading) | Plus Jakarta Sans | `font-heading` | 600~800 | 페이지 제목, 섹션 헤더, 모달 타이틀 |
-| 본문 (Body) | Pretendard | `font-sans` (기본) | 400~500 | 일반 텍스트, 목록, 설명 |
-| 강조 (Emphasis) | Pretendard | `font-sans font-semibold` | 600 | 상태 배지, 중요 수치, 라벨 |
+## 디자인 시스템 (필수 준수)
 
-- 제목에는 반드시 `font-heading` 클래스 사용
-- 본문은 기본 폰트(Pretendard)가 적용되므로 별도 클래스 불필요
-- 이 외의 폰트는 사용하지 않는다
-
-## 디자인 컬러 팔레트 (필수 준수)
-아래 5가지 색상만 사용한다. 이 외의 색상은 절대 사용하지 않는다.
-| 이름 | HEX | Tailwind 커스텀 | 용도 예시 |
-|------|------|--------------------|-----------|
-| Sky Aqua | `#42CAFD` | `sky-aqua` | 메인 포인트, 버튼, 링크, 활성 상태 |
+### 컬러 팔레트 — 이 5색만 사용. Tailwind 기본 색상(blue, red, green 등) 사용 금지.
+| 이름 | HEX | Tailwind 클래스 | 용도 |
+|------|------|-----------------|------|
+| Sky Aqua | `#42CAFD` | `sky-aqua` | 메인 포인트, 버튼, 링크 |
 | Tropical Teal | `#66B3BA` | `tropical-teal` | 보조 포인트, 호버, 아이콘 |
-| Muted Teal | `#8EB19D` | `muted-teal` | 성공/완료 상태, 배지, 태그 |
-| Vanilla Custard | `#F6EFA6` | `vanilla-custard` | 경고, 알림, 하이라이트 배경 |
-| Soft Blush | `#F0D2D1` | `soft-blush` | 에러, 삭제, 위험 상태 |
+| Muted Teal | `#8EB19D` | `muted-teal` | 성공/완료 상태, 배지 |
+| Vanilla Custard | `#F6EFA6` | `vanilla-custard` | 경고, 알림, 하이라이트 |
+| Soft Blush | `#F0D2D1` | `soft-blush` | 에러, 삭제, 위험 |
 
-- 배경/텍스트는 **흰색(#FFFFFF)**, **검정/회색 계열**만 허용
-- 위 5색 외의 파랑(blue-600 등), 빨강, 초록 등 Tailwind 기본 색상 사용 금지
+배경/텍스트는 흰색(#FFFFFF), 검정/회색 계열만 허용.
+
+### 폰트
+- **제목:** Plus Jakarta Sans → `font-heading` (weight 600~800)
+- **본문:** Pretendard → `font-sans` 기본 적용 (weight 400~500)
+- **강조:** Pretendard → `font-sans font-semibold` (weight 600)
+- 이 외의 폰트 사용 금지
 
 ## 개발 규칙
+
 - 코드에 **한글 주석** 작성 (과하다 싶을 정도로 상세하게)
-- 컴포넌트는 기능별로 분리
-- Supabase RLS(Row Level Security) 활용
 - shadcn/ui 컴포넌트 우선 사용
 - 새 페이지는 `src/app/(dashboard)/` 아래에 생성
-- 색상은 반드시 **디자인 컬러 팔레트** 5색만 사용
 - 잘 작동하는 코드를 임의로 대규모 리팩토링하지 않는다
 - 크게 바꿔야 할 때는 반드시 사전에 물어보고 승인을 받는다
+- `revalidatePath` 없으면 Next.js가 캐시된 데이터를 보여줌 — 변경 API에서 절대 빠뜨리지 않는다
 
-## DB 연동 패턴 (필수 준수)
-클라이언트 컴포넌트에서 Supabase 직접 호출하면 **RLS 정책에 막힐 수 있다.**
-반드시 아래 패턴을 따른다:
+## 주요 참조 파일
 
-### 데이터 조회 (READ)
-- **서버 컴포넌트** (`page.tsx`)에서 `createAdminClient()`로 조회
-- `export const dynamic = "force-dynamic"` 필수 (캐시 방지)
+- `src/types/index.ts` — 도메인 타입 정의 (Customer, Request, Contract, Quotation 등)
+- `src/lib/constants.ts` — 상태값 enum, 사이드바 메뉴, 카테고리 목록
+- `src/lib/format.ts` — 통화(₩), 날짜 포맷 유틸리티
+- `src/lib/validators.ts` — Zod 스키마 (login, signup)
+- `tailwind.config.ts` — 커스텀 컬러/폰트 정의
 
-### 데이터 변경 (CREATE / UPDATE / DELETE)
-- **API 라우트** (`src/app/api/`)에서 `createAdminClient()`로 처리
-- 변경 후 반드시 `revalidatePath("해당경로")` 호출 (캐시 갱신)
-- 클라이언트에서는 `fetch("/api/...")` 로 호출
+## 환경 변수
 
-```typescript
-// 예시: src/app/api/customers/route.ts
-import { createAdminClient } from "@/lib/supabase/admin"
-import { revalidatePath } from "next/cache"
-
-export async function DELETE(req) {
-  const { id } = await req.json()
-  const supabase = createAdminClient()
-  await supabase.from("customers").delete().eq("id", id)
-  revalidatePath("/clients")  // ← 이거 빠지면 F5 새로고침 시 삭제된 데이터 다시 나타남
-  return NextResponse.json({ success: true })
-}
-```
-
-### 주의사항
-- `createClient()` (클라이언트용) → RLS 적용됨, 조회만 가능할 수 있음
-- `createAdminClient()` (서버용) → RLS 우회, 서버에서만 사용
-- `revalidatePath` 없으면 Next.js가 캐시된 데이터를 보여줌
-
-## 추가 라이브러리
-- **드래그앤드롭:** `@hello-pangea/dnd` (칸반보드에서 사용)
-- **엑셀 처리:** `xlsx` (데이터 임포트/엑스포트)
-- **환경변수:** `dotenv` (스크립트에서 .env.local 로드)
+- `NEXT_PUBLIC_SUPABASE_URL` — Supabase 프로젝트 URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon key
+- `SUPABASE_SERVICE_ROLE_KEY` — Supabase admin key (서버 전용, 비공개)

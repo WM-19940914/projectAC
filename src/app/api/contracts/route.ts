@@ -79,6 +79,11 @@ function toModernContractInput(
     delete mappedData.amount;
     delete mappedData.status;
 
+    // settlement_type: 프론트에서 배열로 오면 쉼표 구분 문자열로 변환 (DB는 TEXT 필드)
+    if (Array.isArray(mappedData.settlement_type)) {
+        mappedData.settlement_type = mappedData.settlement_type.join(',');
+    }
+
     const incomingMeta = sanitizeContractMeta(mappedData.contract_meta);
     delete mappedData.contract_meta;
 
@@ -114,6 +119,29 @@ function normalizeContractOutput(data: Record<string, unknown>) {
     }
     if (parsedMemo.hadEnvelope) {
         mappedData.memo = parsedMemo.note;
+    }
+
+    // settlement_type: DB TEXT 필드 → 프론트 배열로 복원
+    // 가능한 저장 형태: "선금,잔금" (쉼표 구분) 또는 '["선금","잔금"]' (JSON 문자열)
+    if (typeof mappedData.settlement_type === 'string' && mappedData.settlement_type) {
+        let parts: string[] = [];
+        const raw = mappedData.settlement_type.trim();
+        // JSON 배열 문자열인 경우 (예: '["선금","잔금"]')
+        if (raw.startsWith('[')) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    parts = parsed.map(String).map(s => s.trim()).filter(Boolean);
+                }
+            } catch {
+                // JSON 파싱 실패 시 쉼표 구분으로 폴백
+                parts = raw.split(',').map((s: string) => s.trim()).filter(Boolean);
+            }
+        } else {
+            // 쉼표 구분 문자열 (예: "선금,잔금")
+            parts = raw.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+        mappedData.settlement_type = parts;
     }
 
     return mappedData;

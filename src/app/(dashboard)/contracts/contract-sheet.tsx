@@ -22,6 +22,21 @@ import { ArrowLeft, Building2, Calendar, CheckCircle2, Phone, Plus, Search, User
 import { SETTLEMENT_TYPES } from "@/lib/constants"
 import type { Contract } from "@/types"
 
+// ----- 헬퍼: settlement_type 문자열 → 배열 파싱 -----
+// DB에 "선금,잔금" 또는 '["선금","잔금"]' 형태로 저장될 수 있음
+function parseSettlementType(value: unknown): string[] {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string' || !value) return []
+  const trimmed = value.trim()
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean)
+    } catch { /* 폴백 */ }
+  }
+  return trimmed.split(',').map(s => s.trim()).filter(Boolean)
+}
+
 // ----- 타입 -----
 interface CustomerOption {
   id: string
@@ -779,9 +794,9 @@ export default function ContractSheet({
 
               {/* 정산 형태 */}
               <InlineSettlementType
-                value={Array.isArray(contract.settlement_type) ? contract.settlement_type : contract.settlement_type ? [contract.settlement_type] : []}
+                value={parseSettlementType(contract.settlement_type)}
                 onToggle={(type) => {
-                  const current = Array.isArray(contract.settlement_type) ? contract.settlement_type : contract.settlement_type ? [contract.settlement_type] : []
+                  const current = parseSettlementType(contract.settlement_type)
                   const next = current.includes(type)
                     ? current.filter((t) => t !== type)
                     : [...current, type]

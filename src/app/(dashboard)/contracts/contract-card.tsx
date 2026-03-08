@@ -7,6 +7,20 @@ import { Badge } from "@/components/ui/badge"
 import { formatCurrency, formatShortDate } from "@/lib/format"
 import { Building2, Calendar, Edit3 } from "lucide-react"
 
+// settlement_type 문자열 → 배열 파싱 (DB에 "선금,잔금" 또는 '["선금"]' 형태 가능)
+function parseSettlementType(value: unknown): string[] {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string' || !value) return []
+  const trimmed = value.trim()
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean)
+    } catch { /* 폴백 */ }
+  }
+  return trimmed.split(',').map(s => s.trim()).filter(Boolean)
+}
+
 interface ContractCardProps {
     contract: Contract
     isDragging?: boolean
@@ -20,11 +34,7 @@ function ContractCard({ contract, isDragging, onClick, cardBarClass = "border-l-
         if (!contract.settlement_type) return null
         
         // 문자열인 경우와 배열인 경우 모두 대응 (추후 스키마 변경 대비)
-        const types = Array.isArray(contract.settlement_type) 
-            ? contract.settlement_type 
-            : typeof contract.settlement_type === 'string' 
-                ? [contract.settlement_type] 
-                : []
+        const types = parseSettlementType(contract.settlement_type)
                 
         if (types.length === 0) return null
 
