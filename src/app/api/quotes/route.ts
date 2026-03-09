@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
       0
     )
     const totalAmount = header.total_amount !== undefined ? Number(header.total_amount) : rawTotal
-    const taxAmount = header.tax_amount !== undefined ? Number(header.tax_amount) : Math.round(totalAmount * 0.1)
+    const taxAmount = header.tax_amount !== undefined ? Number(header.tax_amount) : Math.floor(totalAmount * 0.1)
     const grandTotal = header.grand_total !== undefined ? Number(header.grand_total) : totalAmount + taxAmount
 
     // 견적서 헤더 생성
@@ -276,7 +276,7 @@ export async function PATCH(req: NextRequest) {
         0
       )
       const totalAmount = fields.total_amount !== undefined ? Number(fields.total_amount) : rawTotal
-      const taxAmount = fields.tax_amount !== undefined ? Number(fields.tax_amount) : Math.round(totalAmount * 0.1)
+      const taxAmount = fields.tax_amount !== undefined ? Number(fields.tax_amount) : Math.floor(totalAmount * 0.1)
       const grandTotal = fields.grand_total !== undefined ? Number(fields.grand_total) : totalAmount + taxAmount
       updateData.total_amount = totalAmount
       updateData.tax_amount = taxAmount

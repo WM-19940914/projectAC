@@ -84,18 +84,18 @@ export function validateUTF8String(str: unknown): string | null {
 /**
  * 객체의 모든 문자열 필드를 UTF-8 검증
  */
-export function validateObjectUTF8<T extends Record<string, any>>(obj: T): T {
-  const result = { ...obj };
+export function validateObjectUTF8<T extends Record<string, unknown>>(obj: T): T {
+  const result = { ...obj } as Record<string, unknown>;
 
   for (const [key, value] of Object.entries(result)) {
     if (typeof value === 'string') {
       result[key] = validateUTF8String(value) || value;
     } else if (typeof value === 'object' && value !== null) {
-      result[key] = validateObjectUTF8(value);
+      result[key] = validateObjectUTF8(value as Record<string, unknown>);
     }
   }
 
-  return result;
+  return result as T;
 }
 
 /**

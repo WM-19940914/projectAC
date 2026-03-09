@@ -169,7 +169,7 @@ async function populateCardSiteName(
   supabase: ReturnType<typeof createAdminClient>,
   raw: Record<string, unknown>
 ) {
-  const normalized = normalizeCard(raw)
+  const normalized = normalizeCard(raw) as Record<string, unknown> & { lines: { row_order: number }[] }
   const existingSiteName =
     typeof normalized.site_name === "string" ? normalized.site_name.trim() : ""
   const requestId =

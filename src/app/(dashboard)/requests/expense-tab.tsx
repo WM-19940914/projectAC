@@ -36,7 +36,7 @@ const PAYMENT_METHODS = ["DPS결제", "계좌이체", "카드", "현금", "기�
 
 // VAT 포함 금액 계산 (공급가액 × 1.1)
 function calcVatIncluded(amount: number): number {
-  return Math.round(amount * 1.1)
+  return Math.floor(amount * 1.1)
 }
 
 // 오늘 날짜를 YYYY-MM-DD 포맷으로

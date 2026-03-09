@@ -54,7 +54,10 @@ interface RequestItem {
     id: string
     contract_amount: number
     total_paid: number
-    has_upcoming: boolean  // 미래 날짜 입금예정 있는지
+    has_upcoming: boolean  // 미확인 입금내역 있는지
+    all_confirmed: boolean  // 모든 입금내역이 입완 체크되었는지
+    tax_invoice_all_issued: boolean  // 모든 단계 계산서 발행
+    tax_invoice_some_issued: boolean  // 일부 단계만 계산서 발행
   } | null
 }
 
@@ -88,6 +91,9 @@ interface ContractSummary {
   paidAmount: number
   unpaidAmount: number
   progressPercent: number
+  allConfirmed: boolean  // 모든 입금내역이 입완 체크되었는지
+  taxInvoiceAllIssued: boolean  // 모든 단계 계산서 발행
+  taxInvoiceSomeIssued: boolean  // 일부 단계만 계산서 발행
 }
 
 // ----- 컬럼별 색상 (커스텀 팔레트) -----
@@ -894,6 +900,7 @@ interface SettlementStatusInput {
   actual_amount: number
   received_date: string
   tax_invoice_issued: boolean
+  tax_invoice_date: string  // 세금계산서 발행일
   payment_entries: SettlementPaymentEntry[]
   has_upcoming: boolean  // 미래 날짜 입금예정이 있는지
 }
@@ -928,7 +935,7 @@ function normalizeSettlementStatusKey(rawKey: string): string {
 
 function normalizeSettlementStatusInput(raw: unknown): SettlementStatusInput {
   if (!raw || typeof raw !== "object") {
-    return { payment_confirmed: false, actual_amount: 0, received_date: "", tax_invoice_issued: false, payment_entries: [], has_upcoming: false }
+    return { payment_confirmed: false, actual_amount: 0, received_date: "", tax_invoice_issued: false, tax_invoice_date: "", payment_entries: [], has_upcoming: false }
   }
   const obj = raw as Record<string, unknown>
   const amount = Number(obj.actual_amount ?? 0)
@@ -981,6 +988,7 @@ function normalizeSettlementStatusInput(raw: unknown): SettlementStatusInput {
     actual_amount: effectiveAmount,
     received_date: latestPaidAt || fallbackReceivedDate,
     tax_invoice_issued: obj.tax_invoice_issued === true,
+    tax_invoice_date: typeof obj.tax_invoice_date === "string" ? obj.tax_invoice_date : "",
     payment_entries: paymentEntries,
     has_upcoming: unconfirmedEntries.length > 0,  // 미확인 입금내역이 있으면 "입금예정"
   }
@@ -1003,6 +1011,7 @@ function hasMeaningfulSettlementStatus(map: Record<string, SettlementStatusInput
     row.actual_amount > 0 ||
     !!row.received_date ||
     row.tax_invoice_issued ||
+    !!row.tax_invoice_date ||
     row.payment_entries.some((entry) => entry.amount > 0 || !!entry.paid_at || !!entry.note)
   )
 }
@@ -1125,7 +1134,7 @@ function buildSettlementRows(
 ) {
   if (selected.length === 0) return [] as Array<{ key: string; label: string; supply: number; total: number }>
   const safeSupply = Math.max(0, Math.round(supplyAmount || 0))
-  const totalVat = Math.round(safeSupply * 0.1)
+  const totalVat = Math.floor(safeSupply * 0.1)
   let usedSupply = 0
   let usedVat = 0
   const rows: Array<{ key: string; label: string; supply: number; total: number }> = []
@@ -1135,7 +1144,7 @@ function buildSettlementRows(
     const isLast = idx === selected.length - 1
     const stageSupply = isLast ? safeSupply - usedSupply : Math.round((safeSupply * ratio) / 100)
     usedSupply += stageSupply
-    const stageVat = isLast ? totalVat - usedVat : Math.round(stageSupply * 0.1)
+    const stageVat = isLast ? totalVat - usedVat : Math.floor(stageSupply * 0.1)
     usedVat += stageVat
 
     if (stage === "중도금" && middleInstallments > 1) {
@@ -1149,7 +1158,7 @@ function buildSettlementRows(
         usedSplitSupply += splitSupply
         const splitVat = isLastInstallment
           ? stageVat - usedSplitVat
-          : Math.round(splitSupply * 0.1)
+          : Math.floor(splitSupply * 0.1)
         usedSplitVat += splitVat
         const splitRatio = ratio / middleInstallments
         rows.push({
@@ -1496,9 +1505,10 @@ function ContractFlowTab({
         const resolvedStageScheduledDates = canApplyPending && pending
           ? normalizeStageScheduledDates(pending.stageScheduledDates)
           : nextStageScheduledDates
-        const resolvedSettlementStatusMap = canApplyPending && pending
-          ? sanitizeSettlementStatusMap(pending.settlementStatusMap)
-          : nextSettlementStatusFromDb
+        // settlement_status_map은 항상 DB 데이터를 우선 — pending draft가 confirmed 등을 오염시키지 않도록
+        const resolvedSettlementStatusMap = Object.keys(nextSettlementStatusFromDb).length > 0
+          ? nextSettlementStatusFromDb
+          : (canApplyPending && pending ? sanitizeSettlementStatusMap(pending.settlementStatusMap) : {})
 
         if (pending && pendingDraft && !pendingDraftId) {
           // id 없는 stale pending이 기존 계약 DB를 덮지 않도록 정리
@@ -1568,7 +1578,7 @@ function ContractFlowTab({
 
   const selectedStages = SETTLEMENT_STAGE_ORDER.filter((stage) => draft.settlement_type.includes(stage))
   const supplyAmount = Math.max(0, Math.round(Number(draft.contract_amount || 0)))
-  const totalWithVat = supplyAmount + Math.round(supplyAmount * 0.1)
+  const totalWithVat = supplyAmount + Math.floor(supplyAmount * 0.1)
   const settlementRows = buildSettlementRows(supplyAmount, selectedStages, stageRatios, middleInstallments)
   const settlementRowsWithScheduledDate = settlementRows.map((row) => {
     let scheduledDate = ""
@@ -1608,6 +1618,7 @@ function ContractFlowTab({
       scheduledDate,
       receivedDate: status.received_date,
       taxInvoiceIssued: status.tax_invoice_issued,
+      taxInvoiceDate: status.tax_invoice_date,
       overdueDays: !paymentConfirmed ? getOverdueDays(scheduledDate) : 0,
     }
   })
@@ -1625,8 +1636,16 @@ function ContractFlowTab({
     const progressPercent = totalWithVat > 0
       ? Math.min(100, Math.round((clampedPaid / totalWithVat) * 100))
       : 0
+    // 모든 입금내역이 입완 체크되었는지 확인
+    const allEntries = settlementStatusRows.flatMap((row) => row.paymentEntries)
+    const allConfirmed = allEntries.length > 0 && allEntries.every((e) => e.confirmed)
+    // 세금계산서 발행 여부 요약
+    const stageCount = settlementStatusRows.length
+    const issuedCount = settlementStatusRows.filter((row) => row.taxInvoiceIssued).length
+    const taxInvoiceAllIssued = stageCount > 0 && issuedCount === stageCount
+    const taxInvoiceSomeIssued = issuedCount > 0 && issuedCount < stageCount
 
-    const signature = `${totalWithVat}|${clampedPaid}|${unpaidAmount}|${progressPercent}`
+    const signature = `${totalWithVat}|${clampedPaid}|${unpaidAmount}|${progressPercent}|${allConfirmed}|${taxInvoiceAllIssued}|${taxInvoiceSomeIssued}`
     if (lastSummarySignatureRef.current === signature) return
     lastSummarySignatureRef.current = signature
 
@@ -1635,6 +1654,9 @@ function ContractFlowTab({
       paidAmount: clampedPaid,
       unpaidAmount,
       progressPercent,
+      allConfirmed,
+      taxInvoiceAllIssued,
+      taxInvoiceSomeIssued,
     })
   }, [onSummaryChange, requestContractId, draft.id, settlementStatusRows, totalWithVat, isLoading])
   const stageSummary = selectedStages.length > 0
@@ -1763,6 +1785,7 @@ function ContractFlowTab({
           prevValue.actual_amount !== normalized.actual_amount ||
           prevValue.received_date !== normalized.received_date ||
           prevValue.tax_invoice_issued !== normalized.tax_invoice_issued ||
+          prevValue.tax_invoice_date !== normalized.tax_invoice_date ||
           JSON.stringify(prevValue.payment_entries ?? []) !== JSON.stringify(normalized.payment_entries)
         ) {
           changed = true
@@ -1894,7 +1917,6 @@ function ContractFlowTab({
     const digitsOnly = amountInputValue.replace(/[^0-9]/g, "")
     const next = digitsOnly ? Number(digitsOnly) : 0
     const nextAmount = Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0
-    const hasAmountChanged = nextAmount !== supplyAmount
     setDraft((prev) => (prev.contract_amount === nextAmount ? prev : { ...prev, contract_amount: nextAmount }))
     // 계약금액 변경 시 입금내역은 유지 (이미 입력된 정산 데이터 보존)
     setIsAmountModalOpen(false)
@@ -2144,6 +2166,12 @@ function ContractFlowTab({
     requestCustomer?.id,
   ])
 
+  // 최신 handleSave를 ref로 유지 — 언마운트 시 클로저 문제 방지
+  const handleSaveRef = useRef(handleSave)
+  handleSaveRef.current = handleSave
+  const saveSnapshotRef = useRef(saveSnapshot)
+  saveSnapshotRef.current = saveSnapshot
+
   useEffect(() => {
     if (!isPersistedContract) return
     if (!canSave || isLoading) return
@@ -2159,6 +2187,17 @@ function ContractFlowTab({
 
     return () => clearTimeout(timer)
   }, [isPersistedContract, canSave, isLoading, saveSnapshot, handleSave])
+
+  // 컴포넌트 언마운트 시 미저장 변경사항 즉시 저장 (패널 닫힘 등)
+  useEffect(() => {
+    return () => {
+      if (!isInitializedRef.current) return
+      if (!initialSnapshotRef.current) return
+      if (saveSnapshotRef.current === lastSavedSnapshotRef.current) return
+      if (failedSnapshotRef.current === saveSnapshotRef.current) return
+      void handleSaveRef.current("auto")
+    }
+  }, [])
 
   return (
     <div>
@@ -2734,16 +2773,36 @@ function ContractFlowTab({
                   )}
                 </div>
 
-                <div className="flex justify-end">
-                  <label className="inline-flex cursor-pointer items-center gap-1.5 text-[10px] text-gray-500">
+                {/* 세금계산서 발행 여부 + 발행일 */}
+                <div className="flex items-center justify-between gap-2">
+                  <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-[10px] text-gray-500">
                     <input
                       type="checkbox"
                       checked={row.taxInvoiceIssued}
-                      onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_issued: e.target.checked })}
+                      onChange={(e) => {
+                        const issued = e.target.checked
+                        // 발행 체크 시 발행일이 비어있으면 오늘 날짜 자동 입력
+                        const updates: Partial<SettlementStatusInput> = { tax_invoice_issued: issued }
+                        if (issued && !row.taxInvoiceDate) {
+                          updates.tax_invoice_date = new Date().toISOString().split("T")[0]
+                        }
+                        if (!issued) {
+                          updates.tax_invoice_date = ""
+                        }
+                        updateSettlementStatus(row.key, updates)
+                      }}
                       className="h-3.5 w-3.5 rounded border-sky-aqua accent-sky-aqua focus:ring-2 focus:ring-sky-aqua/60"
                     />
-                    {row.taxInvoiceIssued ? "계산서 발행완료" : "계산서 미발행"}
+                    {row.taxInvoiceIssued ? "계산서 발행" : "계산서 미발행"}
                   </label>
+                  {row.taxInvoiceIssued && (
+                    <input
+                      type="date"
+                      value={row.taxInvoiceDate || ""}
+                      onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_date: e.target.value })}
+                      className="h-6 rounded border border-gray-200 bg-white px-1.5 text-[10px] tabular-nums text-gray-600 outline-none focus:border-sky-aqua focus:ring-1 focus:ring-sky-aqua/40"
+                    />
+                  )}
                 </div>
               </div>
             ))}
@@ -2783,7 +2842,6 @@ function SalesFlowPanel({
   onLinkContract: (contractId: string | null) => Promise<void>
   onSavedContract?: (contractId: string) => void
   onSummaryChange?: (summary: ContractSummary) => void
-  contractSummary?: ContractSummary | null
   contractSummary?: ContractSummary | null
   requestedFlow?: "견적" | "계약" | "주문·배송" | "지출"
   requestedContractTab?: "계약서" | "정산 현황"
@@ -2875,8 +2933,8 @@ function SalesFlowPanel({
       {activeFlow === "지출" && (
         <ExpenseTab
           requestId={requestId}
-          totalSettlement={contractSummary ? Math.round(contractSummary.paidAmount / 1.1) : 0}
-          totalContractAmount={contractSummary ? Math.round(contractSummary.totalWithVat / 1.1) : 0}
+          totalSettlement={contractSummary ? Math.floor(contractSummary.paidAmount / 1.1) : 0}
+          totalContractAmount={contractSummary ? Math.floor(contractSummary.totalWithVat / 1.1) : 0}
           incentiveTotal={confirmedIncentiveTotal}
         />
       )}
@@ -3236,6 +3294,26 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [contractSummary, setContractSummary] = useState<ContractSummary | null>(null)
   const contractSummaryFetchSeqRef = useRef(0)
 
+  // onSummaryChange 안정화 — inline 함수로 전달하면 매 렌더링마다 새 참조가 생겨 자식 useEffect 무한 루프 발생
+  const handleSummaryChange = useCallback((summary: ContractSummary) => {
+    setContractSummary((prev) => {
+      if (
+        prev &&
+        prev.totalWithVat === summary.totalWithVat &&
+        prev.paidAmount === summary.paidAmount &&
+        prev.unpaidAmount === summary.unpaidAmount &&
+        prev.progressPercent === summary.progressPercent &&
+        prev.allConfirmed === summary.allConfirmed &&
+        prev.taxInvoiceAllIssued === summary.taxInvoiceAllIssued &&
+        prev.taxInvoiceSomeIssued === summary.taxInvoiceSomeIssued
+      ) {
+        return prev
+      }
+      contractSummaryFetchSeqRef.current += 1
+      return summary
+    })
+  }, [])
+
   // 의뢰 선택 시 견적서 목록 로드
   const loadQuotations = useCallback(async (reqId: string) => {
     try {
@@ -3259,7 +3337,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     }
   }, [selectedItemIdForQuotes, loadQuotations])
 
-  const loadContractSummaryById = useCallback(async (contractId: string | null, requestId?: string | null) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const loadContractSummaryById = useCallback(async (contractId: string | null, _requestId?: string | null) => {
     const fetchSeq = ++contractSummaryFetchSeqRef.current
 
     if (!contractId) {
@@ -3305,68 +3384,12 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         ? sanitizeSettlementStatusMap(contractMeta.settlement_status_map)
         : {}
 
-      let effectiveSelectedStages = baseSelectedStages
-      let effectiveSupplyAmount = baseSupplyAmount
-      let effectiveStageRatios = baseStageRatios
-      let effectiveMiddleInstallments = baseMiddleInstallments
-      let effectiveSettlementStatusMap = baseSettlementStatusMap
-
-      try {
-        const pendingRaw = requestId
-          ? localStorage.getItem(`requests:contractDraftPending:v1:${requestId}`)
-          : null
-        if (pendingRaw) {
-          const pending = JSON.parse(pendingRaw) as Partial<PendingContractDraftSnapshot>
-          const pendingDraft = pending?.draft && typeof pending.draft === "object"
-            ? pending.draft as Partial<ContractDraft>
-            : null
-          const pendingDraftId = pendingDraft && typeof pendingDraft.id === "string" && pendingDraft.id.trim()
-            ? pendingDraft.id
-            : null
-          const canApplyPending = !!pendingDraftId && pendingDraftId === contractId
-
-          if (canApplyPending) {
-            const pendingStages = normalizeSettlementTypes(pendingDraft?.settlement_type)
-            effectiveSelectedStages = pendingStages.length > 0
-              ? pendingStages
-              : effectiveSelectedStages
-
-            const pendingContractAmount = Number(pendingDraft?.contract_amount)
-            if (Number.isFinite(pendingContractAmount)) {
-              effectiveSupplyAmount = Math.max(0, Math.round(pendingContractAmount))
-            }
-
-            effectiveStageRatios = normalizeRatios(pending?.stageRatios, effectiveSelectedStages)
-            effectiveMiddleInstallments = normalizeMiddleInstallments(pending?.middleInstallments)
-            effectiveSettlementStatusMap = sanitizeSettlementStatusMap(pending?.settlementStatusMap)
-          }
-        }
-      } catch {
-        // Ignore pending draft parse errors and fallback to DB values.
-      }
-
-      try {
-        const localContractRaw = contractId
-          ? localStorage.getItem(`requests:settlementStatus:v1:contract:${contractId}`)
-          : null
-        const localRequestRaw = requestId
-          ? localStorage.getItem(`requests:settlementStatus:v1:request:${requestId}`)
-          : null
-        const localContractMap = localContractRaw
-          ? sanitizeSettlementStatusMap(JSON.parse(localContractRaw))
-          : {}
-        const localRequestMap = localRequestRaw
-          ? sanitizeSettlementStatusMap(JSON.parse(localRequestRaw))
-          : {}
-
-        if (hasMeaningfulSettlementStatus(localContractMap)) {
-          effectiveSettlementStatusMap = localContractMap
-        } else if (hasMeaningfulSettlementStatus(localRequestMap)) {
-          effectiveSettlementStatusMap = localRequestMap
-        }
-      } catch {
-        // Ignore localStorage parse errors and fallback to DB values.
-      }
+      // settlement_status_map은 항상 DB 데이터만 사용 — localStorage pending이 confirmed 등을 오염시키지 않도록
+      const effectiveSelectedStages = baseSelectedStages
+      const effectiveSupplyAmount = baseSupplyAmount
+      const effectiveStageRatios = baseStageRatios
+      const effectiveMiddleInstallments = baseMiddleInstallments
+      const effectiveSettlementStatusMap = baseSettlementStatusMap
 
       const settlementRows = buildSettlementRows(
         effectiveSupplyAmount,
@@ -3374,7 +3397,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         effectiveStageRatios,
         effectiveMiddleInstallments
       )
-      const totalWithVat = effectiveSupplyAmount + Math.round(effectiveSupplyAmount * 0.1)
+      const totalWithVat = effectiveSupplyAmount + Math.floor(effectiveSupplyAmount * 0.1)
 
       const paidAmount = settlementRows.reduce((sum, row) => {
         const status = normalizeSettlementStatusInput(effectiveSettlementStatusMap[row.key])
@@ -3382,6 +3405,21 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         if (actualPaid > 0) return sum + actualPaid
         return sum
       }, 0)
+
+      // 모든 입금내역이 입완 체크되었는지 확인
+      const allEntries = settlementRows.flatMap((row) => {
+        const status = normalizeSettlementStatusInput(effectiveSettlementStatusMap[row.key])
+        return status.payment_entries
+      })
+      const allConfirmed = allEntries.length > 0 && allEntries.every((e) => e.confirmed)
+      // 세금계산서 발행 여부 요약
+      const stageCount = settlementRows.length
+      const issuedCount = settlementRows.filter((row) => {
+        const status = normalizeSettlementStatusInput(effectiveSettlementStatusMap[row.key])
+        return status.tax_invoice_issued
+      }).length
+      const taxInvoiceAllIssued = stageCount > 0 && issuedCount === stageCount
+      const taxInvoiceSomeIssued = issuedCount > 0 && issuedCount < stageCount
 
       const clampedPaid = Math.min(Math.max(0, paidAmount), totalWithVat)
       const unpaidAmount = Math.max(0, totalWithVat - clampedPaid)
@@ -3395,6 +3433,9 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         paidAmount: clampedPaid,
         unpaidAmount,
         progressPercent,
+        allConfirmed,
+        taxInvoiceAllIssued,
+        taxInvoiceSomeIssued,
       })
     } catch {
       if (fetchSeq !== contractSummaryFetchSeqRef.current) return
@@ -3407,6 +3448,36 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   useEffect(() => {
     void loadContractSummaryById(selectedContractId, selectedItemId)
   }, [selectedContractId, selectedItemId, loadContractSummaryById])
+
+  // contractSummary 변경 시 칸반 카드의 item.contract도 실시간 동기화
+  // selectedItem을 ref로 참조 — dependency에 넣으면 setColumns → 리렌더 → selectedItem 새 참조 → 무한 루프
+  const selectedItemRef = useRef(selectedItem)
+  selectedItemRef.current = selectedItem
+  useEffect(() => {
+    const current = selectedItemRef.current
+    if (!current || !current.contract || !contractSummary) return
+    const contractId = current.contract.id
+    setColumns((prev) =>
+      prev.map((col) => ({
+        ...col,
+        items: col.items.map((item) =>
+          item.contract?.id === contractId
+            ? {
+              ...item,
+              contract: {
+                ...item.contract!,
+                total_paid: contractSummary.paidAmount,
+                has_upcoming: contractSummary.unpaidAmount > 0 && !contractSummary.allConfirmed,
+                all_confirmed: contractSummary.allConfirmed,
+                tax_invoice_all_issued: contractSummary.taxInvoiceAllIssued,
+                tax_invoice_some_issued: contractSummary.taxInvoiceSomeIssued,
+              },
+            }
+            : item
+        ),
+      }))
+    )
+  }, [contractSummary])
 
   // 견적서 편집 열기 (상세 데이터 fetch)
   const handleEditQuote = useCallback(async (quoteId: string) => {
@@ -3469,8 +3540,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     if (selectedItem) {
       loadQuotations(selectedItem.id)
     }
-    router.refresh()
-  }, [selectedItem, loadQuotations, router])
+  }, [selectedItem, loadQuotations])
 
   // 의뢰 필드 수정 + 자동저장
   const updateRequestField = useCallback(async (field: string, value: string | null) => {
@@ -3526,13 +3596,14 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       } else {
         setSaveMessage("자동 저장됨")
         setTimeout(() => setSaveMessage(""), 1500)
-        router.refresh()
+        // router.refresh() 제거: 이미 클라이언트 state(columns)를 직접 업데이트하므로 불필요
+        // 서버 컴포넌트 재실행 시 loadContract가 다시 트리거되어 로딩 상태에 빠지는 문제 방지
       }
     } catch {
       setSaveMessage("저장 실패")
       setTimeout(() => setSaveMessage(""), 2000)
     }
-  }, [selectedItem, localCustomers, router])
+  }, [selectedItem, localCustomers])
 
   const handleToggleConfirmedQuote = useCallback(async (quote: QuotationListItem) => {
     if (!selectedItem) return
@@ -3626,9 +3697,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       if (!res.ok) {
         // 실패 시 직전 상태로 되돌리기
         setColumns(prevColumns)
-      } else {
-        // 성공 시 서버 데이터 새로고침
-        router.refresh()
       }
     } catch {
       setColumns(prevColumns)
@@ -3664,8 +3732,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       if (!res.ok) {
         alert("삭제 실패: " + (result.error || "알 수 없는 오류"))
         setColumns(prevColumns)
-      } else {
-        router.refresh()
       }
     } catch {
       alert("삭제 중 오류가 발생했습니다")
@@ -3696,8 +3762,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         // 실패 시 직전 상태로 되돌리기
         setColumns(prevColumns)
         setHiddenItems(prevHidden)
-      } else {
-        router.refresh()
       }
     } catch {
       setColumns(prevColumns)
@@ -3728,8 +3792,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       if (!res.ok) {
         setColumns(prevColumns)
         setHiddenItems(prevHidden)
-      } else {
-        router.refresh()
       }
     } catch {
       setColumns(prevColumns)
@@ -3897,13 +3959,41 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                   </div>
                                 </div>
 
-                                {/* 정산 상태 표시 — 계약이 있을 때만 */}
+                                {/* 세금계산서 발행 상태 — 계약이 있을 때만 */}
+                                {item.contract && (
+                                  <div className="mt-2 flex items-center gap-1 text-[10px]">
+                                    {item.contract.tax_invoice_all_issued ? (
+                                      <>
+                                        <Receipt className="h-3 w-3 shrink-0 text-muted-teal" />
+                                        <span className="text-muted-teal font-medium">계산서 발행완료</span>
+                                      </>
+                                    ) : item.contract.tax_invoice_some_issued ? (
+                                      <>
+                                        <Receipt className="h-3 w-3 shrink-0 text-amber-500" />
+                                        <span className="text-amber-500 font-medium">계산서 일부발행</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Receipt className="h-3 w-3 shrink-0 text-gray-300" />
+                                        <span className="text-gray-300">계산서 미발행</span>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* 정산 상태 표시 */}
+                                {!item.contract && (
+                                  <div className="mt-2 flex items-center gap-1 text-[10px] text-gray-300">
+                                    <FileText className="h-3 w-3 shrink-0" />
+                                    <span>계약 미생성</span>
+                                  </div>
+                                )}
                                 {item.contract && (() => {
-                                  const { contract_amount, total_paid, has_upcoming } = item.contract
+                                  const { contract_amount, total_paid, has_upcoming, all_confirmed } = item.contract
                                   // 상세 패널과 동일하게 VAT 포함 금액 기준으로 계산
-                                  const totalWithVat = contract_amount + Math.round(contract_amount * 0.1)
-                                  // 정산완료
-                                  if (total_paid >= totalWithVat && totalWithVat > 0) {
+                                  const totalWithVat = contract_amount + Math.floor(contract_amount * 0.1)
+                                  // 정산완료: 금액 충족 + 모든 입금내역 입완 체크 필요
+                                  if (total_paid >= totalWithVat && totalWithVat > 0 && all_confirmed) {
                                     return (
                                       <div className="mt-2 flex items-center gap-1 text-xs text-muted-teal font-medium">
                                         <CheckCircle2 className="h-3 w-3 shrink-0" />
@@ -3927,7 +4017,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                       <div className="mt-2 space-y-0.5">
                                         <div className="flex items-center justify-between text-[10px] text-gray-500">
                                           <span>정산{has_upcoming ? " (입금예정 있음)" : ""}</span>
-                                          <span>{percent}%</span>
+                                          <span>{formatCurrency(total_paid)} / {formatCurrency(totalWithVat)}</span>
                                         </div>
                                         <div className="h-1.5 w-full rounded-full bg-gray-100">
                                           <div
@@ -4346,7 +4436,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                             } else {
                               setSaveMessage("자동 저장됨")
                               setTimeout(() => setSaveMessage(""), 1500)
-                              router.refresh()
                             }
                           } catch {
                             setSaveMessage("저장 실패")
@@ -4364,7 +4453,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                             </p>
                             {!confirmedQuoteId ? (
                               <span className="text-[10px] text-gray-400">견적서를 확정 지어주세요</span>
-                            ) : confirmedTotalAmount !== null && contractSummary && Math.round(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount ? (
+                            ) : confirmedTotalAmount !== null && contractSummary && Math.floor(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount ? (
                               <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-500"><AlertCircle className="h-3 w-3" />확정 견적금액과 계약금액이 다릅니다</span>
                             ) : null}
                           </div>
@@ -4424,7 +4513,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                     <Briefcase className="h-3 w-3" />
                                     계약 정보
                                   </p>
-                                  {confirmedTotalAmount !== null && Math.round(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount && (
+                                  {confirmedTotalAmount !== null && Math.floor(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount && (
                                     <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-500"><AlertCircle className="h-3 w-3" />확정 견적금액과 계약금액이 다릅니다</span>
                                   )}
                                 </div>
@@ -4437,7 +4526,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                     <div className="rounded-lg bg-gray-50 px-2.5 py-2">
                                       <p className="text-[9px] text-gray-400">VAT별도</p>
                                       <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-gray-700">
-                                        {formatCurrency(Math.round(contractSummary.totalWithVat / 1.1))}
+                                        {formatCurrency(Math.floor(contractSummary.totalWithVat / 1.1))}
                                       </p>
                                     </div>
                                     <div className="rounded-lg bg-sky-aqua/5 px-2.5 py-2">
@@ -4462,9 +4551,9 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                   className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
                                 >
                                   <div className="flex items-center justify-between">
-                                    <span className="text-xs font-semibold tabular-nums text-sky-aqua">{contractSummary.progressPercent}%</span>
+                                    <span className="text-xs font-semibold tabular-nums text-sky-aqua">{formatCurrency(contractSummary.paidAmount)}</span>
                                     <span className="text-[10px] text-gray-400 tabular-nums">
-                                      입금 {formatCurrency(contractSummary.paidAmount)}
+                                      / {formatCurrency(contractSummary.totalWithVat)}
                                     </span>
                                   </div>
                                   <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100">
@@ -4475,7 +4564,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                   </div>
                                   <div className="mt-2 flex items-center justify-between text-[10px] tabular-nums">
                                     <span className="text-muted-teal">입금 완료</span>
-                                    <span className="text-soft-blush">미수 {formatCurrency(contractSummary.unpaidAmount)}</span>
+                                    <span className="text-soft-blush">잔여 {formatCurrency(contractSummary.unpaidAmount)}</span>
                                   </div>
                                 </button>
                               </div>
@@ -4504,22 +4593,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                       onSavedContract={(contractId) => {
                         void loadContractSummaryById(contractId, selectedItem.id)
                       }}
-                      onSummaryChange={(summary) => {
-                        setContractSummary((prev) => {
-                          if (
-                            prev &&
-                            prev.totalWithVat === summary.totalWithVat &&
-                            prev.paidAmount === summary.paidAmount &&
-                            prev.unpaidAmount === summary.unpaidAmount &&
-                            prev.progressPercent === summary.progressPercent
-                          ) {
-                            return prev
-                          }
-                          // Invalidate in-flight GET results so they cannot overwrite latest UI summary.
-                          contractSummaryFetchSeqRef.current += 1
-                          return summary
-                        })
-                      }}
+                      onSummaryChange={handleSummaryChange}
                       contractSummary={contractSummary}
                       requestedFlow={requestedFlow}
                       requestedContractTab={requestedContractTab}
