@@ -49,6 +49,13 @@ interface RequestItem {
     company_name: string
     deleted_at: string | null
   } | null
+  // 정산 상태 표시용 계약 정보
+  contract: {
+    id: string
+    contract_amount: number
+    total_paid: number
+    has_upcoming: boolean  // 미래 날짜 입금예정 있는지
+  } | null
 }
 
 interface KanbanColumn {
@@ -888,6 +895,7 @@ interface SettlementStatusInput {
   received_date: string
   tax_invoice_issued: boolean
   payment_entries: SettlementPaymentEntry[]
+  has_upcoming: boolean  // 미래 날짜 입금예정이 있는지
 }
 
 interface SettlementPaymentEntry {
@@ -895,6 +903,7 @@ interface SettlementPaymentEntry {
   amount: number
   paid_at: string
   note: string
+  confirmed: boolean  // 입금 확인 여부 — true일 때만 정산 금액에 합산
 }
 
 function normalizeSettlementStatusKey(rawKey: string): string {
@@ -919,7 +928,7 @@ function normalizeSettlementStatusKey(rawKey: string): string {
 
 function normalizeSettlementStatusInput(raw: unknown): SettlementStatusInput {
   if (!raw || typeof raw !== "object") {
-    return { payment_confirmed: false, actual_amount: 0, received_date: "", tax_invoice_issued: false, payment_entries: [] }
+    return { payment_confirmed: false, actual_amount: 0, received_date: "", tax_invoice_issued: false, payment_entries: [], has_upcoming: false }
   }
   const obj = raw as Record<string, unknown>
   const amount = Number(obj.actual_amount ?? 0)
@@ -939,6 +948,7 @@ function normalizeSettlementStatusInput(raw: unknown): SettlementStatusInput {
         amount: normalizedAmount,
         paid_at: typeof parsed.paid_at === "string" ? parsed.paid_at : "",
         note: typeof parsed.note === "string" ? parsed.note : "",
+        confirmed: parsed.confirmed === true,
       })
       return acc
     }, [])
@@ -951,15 +961,20 @@ function normalizeSettlementStatusInput(raw: unknown): SettlementStatusInput {
       amount: fallbackAmount,
       paid_at: fallbackReceivedDate,
       note: "",
+      confirmed: true,  // 기존 데이터는 입금 확인된 것으로 간주
     })
   }
 
-  const totalFromEntries = paymentEntries.reduce((sum, entry) => sum + entry.amount, 0)
-  const latestPaidAt = paymentEntries.reduce((latest, entry) => {
+  // confirmed 체크된 입금내역만 정산 금액에 합산
+  const confirmedEntries = paymentEntries.filter((e) => e.confirmed)
+  const unconfirmedEntries = paymentEntries.filter((e) => !e.confirmed)
+
+  const totalFromConfirmed = confirmedEntries.reduce((sum, entry) => sum + entry.amount, 0)
+  const latestPaidAt = confirmedEntries.reduce((latest, entry) => {
     if (!entry.paid_at) return latest
     return entry.paid_at > latest ? entry.paid_at : latest
   }, "")
-  const effectiveAmount = paymentEntries.length > 0 ? totalFromEntries : fallbackAmount
+  const effectiveAmount = paymentEntries.length > 0 ? totalFromConfirmed : fallbackAmount
 
   return {
     payment_confirmed: obj.payment_confirmed === true || effectiveAmount > 0,
@@ -967,6 +982,7 @@ function normalizeSettlementStatusInput(raw: unknown): SettlementStatusInput {
     received_date: latestPaidAt || fallbackReceivedDate,
     tax_invoice_issued: obj.tax_invoice_issued === true,
     payment_entries: paymentEntries,
+    has_upcoming: unconfirmedEntries.length > 0,  // 미확인 입금내역이 있으면 "입금예정"
   }
 }
 
@@ -1574,8 +1590,8 @@ function ContractFlowTab({
     const paymentStatusLabel = paymentConfirmed
       ? "정산완료"
       : actualAmount > 0
-        ? "부분정산"
-        : "미정산"
+        ? (status.has_upcoming ? "부분정산 (입금예정)" : "부분정산")
+        : (status.has_upcoming ? "입금예정" : "미정산")
     let scheduledDate = ""
     if (row.key === "선금") scheduledDate = stageScheduledDates.선금
     else if (row.key === "잔금") scheduledDate = stageScheduledDates.잔금
@@ -1790,6 +1806,7 @@ function ContractFlowTab({
       amount: 0,
       paid_at: getTodayDateString(),
       note: "",
+      confirmed: false,
     }
     setSettlementStatusMap((prev) => {
       const current = normalizeSettlementStatusInput(prev[normalizedRowKey])
@@ -1833,6 +1850,7 @@ function ContractFlowTab({
             note: typeof (patch.note ?? entry.note) === "string"
               ? String(patch.note ?? entry.note)
               : "",
+            confirmed: patch.confirmed ?? entry.confirmed ?? false,
           }
           : entry
       )
@@ -2578,7 +2596,9 @@ function ContractFlowTab({
                         ? "border-sky-aqua/40 bg-sky-aqua/10 text-sky-aqua"
                         : row.actualAmount > 0
                           ? "border-amber-300 bg-amber-50 text-amber-700"
-                          : "border-gray-200 bg-gray-50 text-gray-500"
+                          : row.paymentStatusLabel === "입금예정"
+                            ? "border-vanilla-custard bg-vanilla-custard/20 text-amber-600"
+                            : "border-gray-200 bg-gray-50 text-gray-500"
                     )}>
                       {row.paymentStatusLabel}
                     </span>
@@ -2651,6 +2671,25 @@ function ContractFlowTab({
                     <div className="space-y-1.5">
                       {row.paymentEntries.map((entry, index) => (
                         <div key={entry.id} className="flex items-center gap-2">
+                          {/* 입금 확인: "입완" 라벨 + 체크박스 */}
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <span className="text-[9px] font-bold text-gray-500">입완</span>
+                            <button
+                              type="button"
+                              onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { confirmed: !entry.confirmed })}
+                              className={cn(
+                                "h-4 w-4 rounded border flex items-center justify-center transition-colors",
+                                entry.confirmed
+                                  ? "border-sky-aqua bg-sky-aqua"
+                                  : "border-gray-300 bg-white hover:border-gray-400"
+                              )}
+                              title={entry.confirmed ? "입금 확인됨 (클릭하면 취소)" : "입금 미확인 (클릭하면 확인)"}
+                            >
+                              {entry.confirmed && (
+                                <CheckCircle2 className="h-3 w-3 text-white" />
+                              )}
+                            </button>
+                          </div>
                           <input
                             type="text"
                             inputMode="numeric"
@@ -2666,13 +2705,14 @@ function ContractFlowTab({
                             placeholder="금액 입력"
                             className="h-7 min-w-0 flex-1 border-0 border-b border-gray-200 bg-transparent px-0 text-left text-[10px] font-semibold tabular-nums text-gray-700 outline-none focus:border-sky-aqua"
                           />
-                          {/* 정산금 자동입력 버튼: 해당 단계 VAT포함 계획금액을 한번에 채움 */}
+                          {/* 계획금액 자동입력 버튼: 누르면 해당 단계 VAT포함 금액이 채워짐 */}
                           <button
                             type="button"
                             onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { amount: row.plannedAmount })}
-                            className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold text-sky-aqua ring-1 ring-sky-aqua/40 hover:bg-sky-aqua/10"
+                            className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-sky-aqua ring-1 ring-sky-aqua/40 hover:bg-sky-aqua/10"
+                            title="클릭하면 이 금액이 자동 입력됩니다"
                           >
-                            입완
+                            자동입력
                           </button>
                           <input
                             type="date"
@@ -3856,6 +3896,56 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                     </span>
                                   </div>
                                 </div>
+
+                                {/* 정산 상태 표시 — 계약이 있을 때만 */}
+                                {item.contract && (() => {
+                                  const { contract_amount, total_paid, has_upcoming } = item.contract
+                                  // 상세 패널과 동일하게 VAT 포함 금액 기준으로 계산
+                                  const totalWithVat = contract_amount + Math.round(contract_amount * 0.1)
+                                  // 정산완료
+                                  if (total_paid >= totalWithVat && totalWithVat > 0) {
+                                    return (
+                                      <div className="mt-2 flex items-center gap-1 text-xs text-muted-teal font-medium">
+                                        <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                        <span>정산완료</span>
+                                      </div>
+                                    )
+                                  }
+                                  // 입금예정 (미래 날짜 입금내역이 있고, 아직 실제 입금은 없거나 부분만 된 경우)
+                                  if (has_upcoming && total_paid === 0) {
+                                    return (
+                                      <div className="mt-2 flex items-center gap-1 text-xs text-soft-blush font-medium">
+                                        <Banknote className="h-3 w-3 shrink-0" />
+                                        <span>입금예정</span>
+                                      </div>
+                                    )
+                                  }
+                                  // 부분정산
+                                  if (total_paid > 0) {
+                                    const percent = Math.min(100, Math.round((total_paid / totalWithVat) * 100))
+                                    return (
+                                      <div className="mt-2 space-y-0.5">
+                                        <div className="flex items-center justify-between text-[10px] text-gray-500">
+                                          <span>정산{has_upcoming ? " (입금예정 있음)" : ""}</span>
+                                          <span>{percent}%</span>
+                                        </div>
+                                        <div className="h-1.5 w-full rounded-full bg-gray-100">
+                                          <div
+                                            className="h-full rounded-full bg-vanilla-custard"
+                                            style={{ width: `${Math.min(percent, 100)}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    )
+                                  }
+                                  // 미정산
+                                  return (
+                                    <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
+                                      <Banknote className="h-3 w-3 shrink-0" />
+                                      <span>미정산</span>
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             )}
                           </Draggable>
