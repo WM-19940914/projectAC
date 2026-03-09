@@ -17,6 +17,10 @@ npm run import:customers   # 고객 데이터 임포트 (Excel/CSV)
 npm run import:prices      # 가격표 데이터 임포트
 ```
 
+- **테스트 프레임워크 없음** — 현재 단위/E2E 테스트 미설정. `npm run build`로 타입 에러 확인.
+- `npm install` 시 `prepare` 스크립트가 git hooks를 자동 설정함 (`scripts/setup-githooks.mjs`)
+- pre-commit hook이 스테이징된 파일의 UTF-8 인코딩을 검사함
+
 ## 기술 스택
 
 - **Next.js 14** (App Router) + TypeScript
@@ -26,6 +30,7 @@ npm run import:prices      # 가격표 데이터 임포트
 - **React Hook Form** + **Zod** (폼 + 유효성 검사)
 - **@hello-pangea/dnd** (칸반 드래그앤드롭) — `reactStrictMode: false`로 설정됨
 - **jsPDF/jspdf-autotable** (PDF), **xlsx** (엑셀), **Recharts** (차트)
+- Import alias: `@/*` → `./src/*`
 
 ## 아키텍처
 
@@ -59,12 +64,14 @@ npm run import:prices      # 가격표 데이터 임포트
 - `src/app/api/` — CRUD 엔드포인트 (quotes, customers, requests, contracts, expenses, order-deliveries, price-list, settings)
 
 ### API 라우트 패턴
-모든 API가 동일한 구조: GET/POST/PATCH/DELETE → `createAdminClient()` → whitelist 필드 검증 → DB 작업 → `revalidatePath()` → `jsonWithUTF8()` 응답 (`src/lib/utf8-response.ts`)
+모든 API가 동일한 구조: GET/POST/PATCH/DELETE → `createAdminClient()` → whitelist 필드 검증 → DB 작업 → `revalidatePath()` → `jsonWithUTF8()` 응답 (`src/lib/utf8-response.ts`). 새 API 라우트 작성 시 `jsonWithUTF8()`을 사용해야 한글 깨짐 방지.
 
 ### 업무 흐름
 ```
 의뢰 접수 → 고객 등록 → 견적서 작성 → 계약 체결 → 정산/지출 관리
 ```
+
+의뢰 상태 칸반: `견적 문의` → `영업중` → `계약 성공` / `수주 실패` / `숨김` (`src/lib/constants.ts`의 `REQUEST_STATUSES`)
 
 ## 디자인 시스템 (필수 준수)
 
@@ -100,6 +107,7 @@ npm run import:prices      # 가격표 데이터 임포트
 - `src/lib/constants.ts` — 상태값 enum, 사이드바 메뉴, 카테고리 목록
 - `src/lib/format.ts` — 통화(₩), 날짜 포맷 유틸리티
 - `src/lib/validators.ts` — Zod 스키마 (login, signup)
+- `src/lib/utf8-response.ts` — API 응답 UTF-8 강제 헬퍼 (`jsonWithUTF8`)
 - `tailwind.config.ts` — 커스텀 컬러/폰트 정의
 
 ## 환경 변수

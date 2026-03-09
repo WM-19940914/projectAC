@@ -6,69 +6,64 @@ export async function GET() {
   const supabase = createAdminClient()
   const results: Record<string, string> = {}
 
-  // quotations.supplier_manager_email 확인
+  // ===== 기존 payment_entries에 confirmed: true 추가 =====
   try {
-    const { error } = await supabase.from("quotations").select("supplier_manager_email").limit(1)
-    if (error && error.message.includes("does not exist")) {
-      results["quotations.supplier_manager_email"] = "컬럼 없음 - 대시보드에서 실행 필요"
-    } else {
-      results["quotations.supplier_manager_email"] = "컬럼 존재"
-    }
-  } catch (e) {
-    results["quotations.supplier_manager_email"] = `에러: ${e}`
-  }
+    const { data: metas, error: fetchErr } = await supabase
+      .from("contract_settlement_meta")
+      .select("contract_id, settlement_status_map")
+      .not("settlement_status_map", "is", null)
 
-  // business_settings.manager_email 확인
-  try {
-    const { error } = await supabase.from("business_settings").select("manager_email").limit(1)
-    if (error && error.message.includes("does not exist")) {
-      results["business_settings.manager_email"] = "컬럼 없음 - 대시보드에서 실행 필요"
+    if (fetchErr) {
+      results["payment_confirmed_migration"] = `조회 실패: ${fetchErr.message}`
     } else {
-      results["business_settings.manager_email"] = "컬럼 존재"
-    }
-  } catch (e) {
-    results["business_settings.manager_email"] = `에러: ${e}`
-  }
+      let updated = 0
+      let skipped = 0
 
-  // quotations.type 확인 (간이/상세 구분)
-  try {
-    const { error } = await supabase.from("quotations").select("type").limit(1)
-    if (error && error.message.includes("does not exist")) {
-      results["quotations.type"] = "컬럼 없음 - 대시보드에서 실행 필요"
-    } else {
-      results["quotations.type"] = "컬럼 존재"
-    }
-  } catch (e) {
-    results["quotations.type"] = `에러: ${e}`
-  }
+      for (const meta of metas || []) {
+        const map = meta.settlement_status_map as Record<string, Record<string, unknown>>
+        if (!map) { skipped++; continue }
 
-  // 납기/결제 컬럼 자동 추가 시도
-  try {
-    // delivery_date 컬럼 확인 및 추가
-    const { error: ddErr } = await supabase.from("quotations").select("delivery_date").limit(1)
-    if (ddErr && ddErr.message.includes("does not exist")) {
-      const { error: addErr } = await supabase.rpc("exec_sql", {
-        query: "ALTER TABLE quotations ADD COLUMN delivery_date TEXT, ADD COLUMN delivery_place TEXT, ADD COLUMN payment_condition TEXT;"
-      })
-      if (addErr) {
-        results["delivery_fields"] = `RPC 실패 - Supabase SQL Editor에서 수동 실행 필요`
-      } else {
-        results["delivery_fields"] = "컬럼 추가 완료"
+        let needsUpdate = false
+        const newMap = { ...map }
+
+        // 각 단계(선금/중도금/잔금)의 payment_entries를 순회
+        for (const [stageKey, stageVal] of Object.entries(newMap)) {
+          const entries = (stageVal as Record<string, unknown>).payment_entries
+          if (!Array.isArray(entries)) continue
+
+          const updatedEntries = entries.map((entry: Record<string, unknown>) => {
+            // confirmed 필드가 없는 기존 데이터 → true로 설정
+            if (entry.confirmed === undefined || entry.confirmed === null) {
+              needsUpdate = true
+              return { ...entry, confirmed: true }
+            }
+            return entry
+          })
+
+          newMap[stageKey] = { ...stageVal, payment_entries: updatedEntries }
+        }
+
+        if (needsUpdate) {
+          const { error: updateErr } = await supabase
+            .from("contract_settlement_meta")
+            .update({ settlement_status_map: newMap })
+            .eq("contract_id", meta.contract_id)
+
+          if (updateErr) {
+            results[`update_${meta.contract_id}`] = `실패: ${updateErr.message}`
+          } else {
+            updated++
+          }
+        } else {
+          skipped++
+        }
       }
-    } else {
-      results["delivery_fields"] = "컬럼 존재"
+
+      results["payment_confirmed_migration"] = `완료! 업데이트: ${updated}건, 스킵: ${skipped}건`
     }
   } catch (e) {
-    results["delivery_fields"] = `에러: ${e}`
+    results["payment_confirmed_migration"] = `에러: ${e}`
   }
 
-  const sql = `-- 아래 SQL을 Supabase 대시보드 SQL Editor에서 실행하세요
-ALTER TABLE quotations ADD COLUMN IF NOT EXISTS supplier_manager_email TEXT DEFAULT NULL;
-ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS manager_email TEXT DEFAULT '';
-ALTER TABLE quotations ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT '간이';
-ALTER TABLE quotations ADD COLUMN IF NOT EXISTS delivery_date TEXT;
-ALTER TABLE quotations ADD COLUMN IF NOT EXISTS delivery_place TEXT;
-ALTER TABLE quotations ADD COLUMN IF NOT EXISTS payment_condition TEXT;`
-
-  return NextResponse.json({ results, sql, dashboard: "https://supabase.com/dashboard/project/vacqhmvwkqcfpzkzadmp/sql/new" })
+  return NextResponse.json({ results })
 }

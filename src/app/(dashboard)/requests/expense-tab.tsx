@@ -570,20 +570,20 @@ function GaugeChart({ ratio }: { ratio: number }) {
 
   return (
     <svg viewBox="0 0 180 100" className="w-full h-full">
-      {/* 배경 arc (회색) */}
+      {/* 배경 arc (sky-aqua = 남은 금액) */}
       <path
         d={pathD}
         fill="none"
-        stroke="#e5e7eb"
+        stroke="#42CAFD"
         strokeWidth={strokeW}
         strokeLinecap="round"
       />
-      {/* 채워진 arc (sky-aqua) */}
+      {/* 채워진 arc (회색 = 지출 금액) */}
       {clamped > 0 && (
         <path
           d={pathD}
           fill="none"
-          stroke="#42CAFD"
+          stroke="#e5e7eb"
           strokeWidth={strokeW}
           strokeLinecap="round"
           strokeDasharray={`${filledLen} ${arcLen}`}
