@@ -5,13 +5,19 @@ import { RequestKanbanBoard } from "./kanban-board"
 // 캐시 비활성화 → 항상 최신 데이터 불러오기
 export const dynamic = "force-dynamic"
 
+// 정산 메타 raw 타입
+type SettlementMeta = {
+  settlement_status_map: Record<string, unknown> | null
+  stage_ratios: Record<string, number> | null
+  middle_installments: number
+}
+
 // Supabase 결과를 RequestItem 형태로 변환하는 헬퍼
 function toRequestItem(
   r: Record<string, unknown>,
-  settlementMap: Map<string, { contract_amount: number; total_paid: number; has_upcoming: boolean; all_confirmed: boolean; tax_invoice_all_issued: boolean; tax_invoice_some_issued: boolean }>
+  settlementMap: Map<string, { contract_amount: number; total_paid: number; has_upcoming: boolean; all_confirmed: boolean; tax_invoice_all_issued: boolean; tax_invoice_some_issued: boolean; settlement_meta: SettlementMeta | null }>
 ) {
   const contractId = (r.contract_id as string | null) ?? null
-  // 정산 매핑에서 해당 계약 정보 꺼내기
   const settlement = contractId ? settlementMap.get(contractId) ?? null : null
 
   return {
@@ -26,16 +32,16 @@ function toRequestItem(
     customer: Array.isArray(r.customer)
       ? (r.customer[0] as { id: string; company_name: string; deleted_at: string | null } | undefined) ?? null
       : (r.customer as { id: string; company_name: string; deleted_at: string | null } | null),
-    // 정산 상태 표시용 계약 정보
     contract: settlement
-      ? { id: contractId!, contract_amount: settlement.contract_amount, total_paid: settlement.total_paid, has_upcoming: settlement.has_upcoming, all_confirmed: settlement.all_confirmed, tax_invoice_all_issued: settlement.tax_invoice_all_issued, tax_invoice_some_issued: settlement.tax_invoice_some_issued }
+      ? { id: contractId!, contract_amount: settlement.contract_amount, total_paid: settlement.total_paid, has_upcoming: settlement.has_upcoming, all_confirmed: settlement.all_confirmed, tax_invoice_all_issued: settlement.tax_invoice_all_issued, tax_invoice_some_issued: settlement.tax_invoice_some_issued, settlement_meta: settlement.settlement_meta }
       : null,
   }
 }
 
-// settlement_status_map JSONB에서 입금 합계 + 미확인 입금 여부 계산
-// confirmed 체크된 입금내역만 정산 금액에 합산
-function calcSettlement(statusMap: Record<string, { payment_entries?: { amount: number; confirmed?: boolean }[]; tax_invoice_issued?: boolean }> | null): { total_paid: number; has_upcoming: boolean; all_confirmed: boolean; tax_invoice_all_issued: boolean; tax_invoice_some_issued: boolean } {
+// settlement_status_map에서 입금 합계 + 세금계산서 요약 계산 (stage_summaries는 kanban-board에서 통일 계산)
+function calcSettlement(
+  statusMap: Record<string, { payment_entries?: { amount: number; confirmed?: boolean }[]; tax_invoice_issued?: boolean; actual_amount?: number }> | null,
+): { total_paid: number; has_upcoming: boolean; all_confirmed: boolean; tax_invoice_all_issued: boolean; tax_invoice_some_issued: boolean } {
   if (!statusMap) return { total_paid: 0, has_upcoming: false, all_confirmed: false, tax_invoice_all_issued: false, tax_invoice_some_issued: false }
   let totalPaid = 0
   let hasUpcoming = false
@@ -47,18 +53,28 @@ function calcSettlement(statusMap: Record<string, { payment_entries?: { amount: 
     if (!stage || typeof stage !== 'object') continue
     stageCount++
     if (stage.tax_invoice_issued === true) issuedCount++
+    // payment_entries 정규화
+    let entries: { amount: number; confirmed: boolean }[] = []
     if (stage.payment_entries && Array.isArray(stage.payment_entries)) {
-      for (const entry of stage.payment_entries) {
-        hasEntries = true
-        const amount = Number(entry.amount) || 0
-        if (entry.confirmed === true) {
-          totalPaid += amount
-        } else {
-          allConfirmed = false
-          if (amount > 0) {
-            hasUpcoming = true
-          }
-        }
+      entries = stage.payment_entries.map((e: Record<string, unknown>) => ({
+        amount: Math.max(0, Math.round(Number(e.amount) || 0)),
+        confirmed: e.confirmed === true,
+      }))
+    }
+    // 레거시: payment_entries 없고 actual_amount만 있는 경우
+    if (entries.length === 0) {
+      const legacyAmount = Math.max(0, Math.round(Number(stage.actual_amount) || 0))
+      if (legacyAmount > 0) {
+        entries = [{ amount: legacyAmount, confirmed: true }]
+      }
+    }
+    for (const entry of entries) {
+      hasEntries = true
+      if (entry.confirmed) {
+        totalPaid += entry.amount
+      } else {
+        allConfirmed = false
+        if (entry.amount > 0) hasUpcoming = true
       }
     }
   }
@@ -118,30 +134,38 @@ export default async function RequestsPage() {
     .filter((id): id is string => id != null)
 
   // 계약 금액 + 정산 메타 데이터를 한 번에 조회
-  const settlementMap = new Map<string, { contract_amount: number; total_paid: number; has_upcoming: boolean; all_confirmed: boolean; tax_invoice_all_issued: boolean; tax_invoice_some_issued: boolean }>()
+  const settlementMap = new Map<string, { contract_amount: number; total_paid: number; has_upcoming: boolean; all_confirmed: boolean; tax_invoice_all_issued: boolean; tax_invoice_some_issued: boolean; settlement_meta: SettlementMeta | null }>()
 
   if (contractIds.length > 0) {
     // 2단계: 계약 + 정산 메타를 병렬 조회
     const [contractsResult, metasResult] = await Promise.all([
-      supabase.from("contracts").select("id, contract_amount").in("id", contractIds),
-      supabase.from("contract_settlement_meta").select("contract_id, settlement_status_map").in("contract_id", contractIds),
+      supabase.from("contracts").select("id, contract_amount, settlement_type").in("id", contractIds),
+      supabase.from("contract_settlement_meta").select("contract_id, settlement_status_map, stage_ratios, middle_installments").in("contract_id", contractIds),
     ])
 
     const contracts = contractsResult.data
     const metas = metasResult.data
 
-    // contract_id별 입금 합계 + 입금예정 여부 계산
+    // contract_id별 메타 맵
+    const metaMap = new Map<string, { settlement_status_map: unknown; stage_ratios: unknown; middle_installments: number }>()
+    for (const meta of metas || []) {
+      metaMap.set(meta.contract_id, meta)
+    }
+
+    // contract_id별 입금 합계 계산 + raw 메타 전달
     const paidMap = new Map<string, { total_paid: number; has_upcoming: boolean; all_confirmed: boolean; tax_invoice_all_issued: boolean; tax_invoice_some_issued: boolean }>()
     for (const meta of metas || []) {
       paidMap.set(
         meta.contract_id,
-        calcSettlement(meta.settlement_status_map as Record<string, { payment_entries?: { date: string; amount: number }[] }> | null)
+        calcSettlement(
+          meta.settlement_status_map as Record<string, { payment_entries?: { amount: number; confirmed?: boolean }[]; tax_invoice_issued?: boolean; actual_amount?: number }> | null
+        )
       )
     }
 
-    // 최종 매핑: contract_amount + total_paid + has_upcoming
     for (const c of contracts || []) {
       const paid = paidMap.get(c.id)
+      const meta = metaMap.get(c.id)
       settlementMap.set(c.id, {
         contract_amount: Number(c.contract_amount) || 0,
         total_paid: paid?.total_paid || 0,
@@ -149,6 +173,11 @@ export default async function RequestsPage() {
         all_confirmed: paid?.all_confirmed || false,
         tax_invoice_all_issued: paid?.tax_invoice_all_issued || false,
         tax_invoice_some_issued: paid?.tax_invoice_some_issued || false,
+        settlement_meta: meta ? {
+          settlement_status_map: (meta.settlement_status_map as Record<string, unknown>) || null,
+          stage_ratios: (meta.stage_ratios as Record<string, number>) || null,
+          middle_installments: Number(meta.middle_installments) || 1,
+        } : null,
       })
     }
   }

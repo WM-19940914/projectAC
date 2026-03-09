@@ -58,6 +58,12 @@ interface RequestItem {
     all_confirmed: boolean  // 모든 입금내역이 입완 체크되었는지
     tax_invoice_all_issued: boolean  // 모든 단계 계산서 발행
     tax_invoice_some_issued: boolean  // 일부 단계만 계산서 발행
+    stage_summaries: { name: string; status: "paid" | "partial" | "unpaid" }[]  // 단계별 입금완료 요약
+    settlement_meta?: {  // raw 메타 데이터 (초기 stage_summaries 계산용)
+      settlement_status_map: Record<string, unknown> | null
+      stage_ratios: Record<string, number> | null
+      middle_installments: number
+    } | null
   } | null
 }
 
@@ -94,6 +100,7 @@ interface ContractSummary {
   allConfirmed: boolean  // 모든 입금내역이 입완 체크되었는지
   taxInvoiceAllIssued: boolean  // 모든 단계 계산서 발행
   taxInvoiceSomeIssued: boolean  // 일부 단계만 계산서 발행
+  stageSummaries: { name: string; paid: boolean }[]  // 단계별 입금완료 요약
 }
 
 // ----- 컬럼별 색상 (커스텀 팔레트) -----
@@ -1182,6 +1189,39 @@ function buildSettlementRows(
   return rows
 }
 
+// 카드용: raw 메타 데이터로부터 stage_summaries 계산 (buildSettlementRows + normalizeSettlementStatusInput 통일)
+function computeStageSummaries(
+  contractAmount: number,
+  meta: { settlement_status_map: Record<string, unknown> | null; stage_ratios: Record<string, number> | null; middle_installments: number } | null | undefined
+): { name: string; status: "paid" | "partial" | "unpaid" }[] {
+  if (!meta?.settlement_status_map) return []
+  const statusMap = meta.settlement_status_map
+  // settlement_status_map의 키에서 정산 단계 추출
+  const stageKeys = Object.keys(statusMap)
+  const selectedStages = SETTLEMENT_STAGE_ORDER.filter((s) => {
+    if (s === "중도금") return stageKeys.some((k) => k === "중도금" || k.startsWith("middle-"))
+    return stageKeys.includes(s)
+  })
+  if (selectedStages.length === 0) return []
+  const ratios = {} as Record<SettlementStage, number>
+  for (const s of selectedStages) {
+    ratios[s] = Number(meta.stage_ratios?.[s] ?? 0) || (100 / selectedStages.length)
+  }
+  const middleInstallments = meta.middle_installments || 1
+  const rows = buildSettlementRows(contractAmount, selectedStages, ratios, middleInstallments)
+  return rows.map((row) => {
+    const status = normalizeSettlementStatusInput(statusMap[row.key])
+    const entries = status.payment_entries
+    const rowPaid = entries.reduce((sum, e) => sum + (e.confirmed ? e.amount : 0), 0)
+    const plannedAmount = Math.max(0, Math.round(Number(row.total || 0)))
+    const stageStatus: "paid" | "partial" | "unpaid" =
+      rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
+      : rowPaid > 0 ? "partial"
+      : "unpaid"
+    return { name: row.label, status: stageStatus }
+  })
+}
+
 function getTodayDateString() {
   const now = new Date()
   const year = now.getFullYear()
@@ -1644,8 +1684,20 @@ function ContractFlowTab({
     const issuedCount = settlementStatusRows.filter((row) => row.taxInvoiceIssued).length
     const taxInvoiceAllIssued = stageCount > 0 && issuedCount === stageCount
     const taxInvoiceSomeIssued = issuedCount > 0 && issuedCount < stageCount
+    // 단계별 입금완료 요약
+    const stageSummariesForCard = settlementStatusRows.map((row) => {
+      const rowEntries = row.paymentEntries
+      const rowPaid = row.paymentEntries.reduce((sum, e) => sum + (e.confirmed ? e.amount : 0), 0)
+      const plannedAmount = row.plannedAmount
+      const stageStatus: "paid" | "partial" | "unpaid" =
+        rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
+        : rowPaid > 0 ? "partial"
+        : "unpaid"
+      return { name: row.label, status: stageStatus }
+    })
+    const stagesKey = stageSummariesForCard.map((s) => `${s.name}:${s.paid}`).join(",")
 
-    const signature = `${totalWithVat}|${clampedPaid}|${unpaidAmount}|${progressPercent}|${allConfirmed}|${taxInvoiceAllIssued}|${taxInvoiceSomeIssued}`
+    const signature = `${totalWithVat}|${clampedPaid}|${unpaidAmount}|${progressPercent}|${allConfirmed}|${taxInvoiceAllIssued}|${taxInvoiceSomeIssued}|${stagesKey}`
     if (lastSummarySignatureRef.current === signature) return
     lastSummarySignatureRef.current = signature
 
@@ -1657,6 +1709,7 @@ function ContractFlowTab({
       allConfirmed,
       taxInvoiceAllIssued,
       taxInvoiceSomeIssued,
+      stageSummaries: stageSummariesForCard,
     })
   }, [onSummaryChange, requestContractId, draft.id, settlementStatusRows, totalWithVat, isLoading])
   const stageSummary = selectedStages.length > 0
@@ -3305,7 +3358,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         prev.progressPercent === summary.progressPercent &&
         prev.allConfirmed === summary.allConfirmed &&
         prev.taxInvoiceAllIssued === summary.taxInvoiceAllIssued &&
-        prev.taxInvoiceSomeIssued === summary.taxInvoiceSomeIssued
+        prev.taxInvoiceSomeIssued === summary.taxInvoiceSomeIssued &&
+        JSON.stringify(prev.stageSummaries) === JSON.stringify(summary.stageSummaries)
       ) {
         return prev
       }
@@ -3420,6 +3474,18 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       }).length
       const taxInvoiceAllIssued = stageCount > 0 && issuedCount === stageCount
       const taxInvoiceSomeIssued = issuedCount > 0 && issuedCount < stageCount
+      // 단계별 입금완료 요약
+      const stageSummariesForCard = settlementRows.map((row) => {
+        const status = normalizeSettlementStatusInput(effectiveSettlementStatusMap[row.key])
+        const entries = status.payment_entries
+        const rowPaid = entries.reduce((sum, e) => sum + (e.confirmed ? e.amount : 0), 0)
+        const plannedAmount = Math.max(0, Math.round(Number(row.total || 0)))
+        const stageStatus: "paid" | "partial" | "unpaid" =
+          rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
+          : rowPaid > 0 ? "partial"
+          : "unpaid"
+        return { name: row.label, status: stageStatus }
+      })
 
       const clampedPaid = Math.min(Math.max(0, paidAmount), totalWithVat)
       const unpaidAmount = Math.max(0, totalWithVat - clampedPaid)
@@ -3436,6 +3502,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         allConfirmed,
         taxInvoiceAllIssued,
         taxInvoiceSomeIssued,
+        stageSummaries: stageSummariesForCard,
       })
     } catch {
       if (fetchSeq !== contractSummaryFetchSeqRef.current) return
@@ -3471,6 +3538,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                 all_confirmed: contractSummary.allConfirmed,
                 tax_invoice_all_issued: contractSummary.taxInvoiceAllIssued,
                 tax_invoice_some_issued: contractSummary.taxInvoiceSomeIssued,
+                stage_summaries: contractSummary.stageSummaries,
               },
             }
             : item
@@ -3961,21 +4029,29 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
                                 {/* 세금계산서 발행 상태 — 계약이 있을 때만 */}
                                 {item.contract && (
-                                  <div className="mt-2 flex items-center gap-1 text-[10px]">
+                                  <div className={cn(
+                                    "mt-2 flex items-center gap-1.5 text-xs rounded-sm px-1.5 py-0.5 -ml-1.5",
+                                    item.contract.tax_invoice_all_issued
+                                      ? "text-gray-500"
+                                      : "text-gray-600 bg-red-50 font-medium"
+                                  )}>
                                     {item.contract.tax_invoice_all_issued ? (
                                       <>
-                                        <Receipt className="h-3 w-3 shrink-0 text-muted-teal" />
-                                        <span className="text-muted-teal font-medium">계산서 발행완료</span>
+                                        <Receipt className="h-3 w-3 shrink-0" />
+                                        <span>계산서 발행완료</span>
+                                        <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-muted-teal" />
                                       </>
                                     ) : item.contract.tax_invoice_some_issued ? (
                                       <>
-                                        <Receipt className="h-3 w-3 shrink-0 text-amber-500" />
-                                        <span className="text-amber-500 font-medium">계산서 일부발행</span>
+                                        <Receipt className="h-3 w-3 shrink-0" />
+                                        <span>계산서 일부발행</span>
+                                        <AlertCircle className="h-2.5 w-2.5 shrink-0 text-red-500" />
                                       </>
                                     ) : (
                                       <>
-                                        <Receipt className="h-3 w-3 shrink-0 text-gray-300" />
-                                        <span className="text-gray-300">계산서 미발행</span>
+                                        <Receipt className="h-3 w-3 shrink-0" />
+                                        <span>계산서 미발행</span>
+                                        <AlertCircle className="h-2.5 w-2.5 shrink-0 text-red-500" />
                                       </>
                                     )}
                                   </div>
@@ -3983,8 +4059,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
                                 {/* 정산 상태 표시 */}
                                 {!item.contract && (
-                                  <div className="mt-2 flex items-center gap-1 text-[10px] text-gray-300">
-                                    <FileText className="h-3 w-3 shrink-0" />
+                                  <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-300">
+                                    <Receipt className="h-3 w-3 shrink-0" />
                                     <span>계약 미생성</span>
                                   </div>
                                 )}
@@ -3995,44 +4071,70 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                   // 정산완료: 금액 충족 + 모든 입금내역 입완 체크 필요
                                   if (total_paid >= totalWithVat && totalWithVat > 0 && all_confirmed) {
                                     return (
-                                      <div className="mt-2 flex items-center gap-1 text-xs text-muted-teal font-medium">
-                                        <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                      <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
+                                        <Banknote className="h-3 w-3 shrink-0" />
                                         <span>정산완료</span>
+                                        <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-muted-teal" />
                                       </div>
                                     )
                                   }
                                   // 입금예정 (미래 날짜 입금내역이 있고, 아직 실제 입금은 없거나 부분만 된 경우)
                                   if (has_upcoming && total_paid === 0) {
                                     return (
-                                      <div className="mt-2 flex items-center gap-1 text-xs text-soft-blush font-medium">
+                                      <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-600 bg-red-50 rounded-sm px-1.5 py-0.5 -ml-1.5 font-medium">
                                         <Banknote className="h-3 w-3 shrink-0" />
                                         <span>입금예정</span>
+                                        <AlertCircle className="h-2.5 w-2.5 shrink-0 text-red-500" />
                                       </div>
                                     )
                                   }
-                                  // 부분정산
+                                  // 부분정산 / 미정산 — 단계별 입금완료 요약 표시
+                                  {
+                                    // stage_summaries가 있으면 사용, 없으면 raw 메타에서 계산 (통일된 로직)
+                                    const stages = (item.contract.stage_summaries && item.contract.stage_summaries.length > 0)
+                                      ? item.contract.stage_summaries
+                                      : computeStageSummaries(contract_amount, item.contract.settlement_meta)
+                                    if (stages.length > 0) {
+                                      return (
+                                        <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-600 bg-red-50 rounded-sm px-1.5 py-0.5 -ml-1.5 font-medium">
+                                          <Banknote className="h-3 w-3 shrink-0" />
+                                          {stages.map((s, i) => (
+                                            <span key={s.name} className="flex items-center gap-0.5">
+                                              {i > 0 && <span className="text-gray-300">·</span>}
+                                              {s.status === "partial" ? `${s.name} (부분입금)` : s.name}
+                                              {s.status === "paid" ? (
+                                                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-muted-teal">
+                                                  <CheckCircle2 className="h-3 w-3 text-white" />
+                                                </span>
+                                              ) : s.status === "partial" ? (
+                                                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-amber-400">
+                                                  <AlertCircle className="h-3 w-3 text-white" />
+                                                </span>
+                                              ) : (
+                                                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-red-400">
+                                                  <X className="h-2.5 w-2.5 text-white" />
+                                                </span>
+                                              )}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )
+                                    }
+                                  }
                                   if (total_paid > 0) {
-                                    const percent = Math.min(100, Math.round((total_paid / totalWithVat) * 100))
                                     return (
-                                      <div className="mt-2 space-y-0.5">
-                                        <div className="flex items-center justify-between text-[10px] text-gray-500">
-                                          <span>정산{has_upcoming ? " (입금예정 있음)" : ""}</span>
-                                          <span>{formatCurrency(total_paid)} / {formatCurrency(totalWithVat)}</span>
-                                        </div>
-                                        <div className="h-1.5 w-full rounded-full bg-gray-100">
-                                          <div
-                                            className="h-full rounded-full bg-vanilla-custard"
-                                            style={{ width: `${Math.min(percent, 100)}%` }}
-                                          />
-                                        </div>
+                                      <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-600 bg-red-50 rounded-sm px-1.5 py-0.5 -ml-1.5 font-medium">
+                                        <Banknote className="h-3 w-3 shrink-0" />
+                                        <span>부분정산</span>
                                       </div>
                                     )
                                   }
                                   // 미정산
                                   return (
-                                    <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
+                                    <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-600 bg-red-50 rounded-sm px-1.5 py-0.5 -ml-1.5 font-medium">
                                       <Banknote className="h-3 w-3 shrink-0" />
                                       <span>미정산</span>
+                                      <AlertCircle className="h-2.5 w-2.5 shrink-0 text-red-500" />
                                     </div>
                                   )
                                 })()}
