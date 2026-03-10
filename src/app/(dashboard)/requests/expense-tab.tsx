@@ -143,7 +143,7 @@ function ExpenseDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[540px] p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-4 border-b border-gray-100">
-          <DialogTitle className="font-heading text-base">
+          <DialogTitle className="font-sans text-base">
             {isEditMode ? "지출내역 수정" : "지출내역 추가"} — {category} 지출
           </DialogTitle>
         </DialogHeader>
@@ -157,14 +157,14 @@ function ExpenseDialog({
               onClick={() => setForm((prev) => ({ ...prev, is_unpaid: !prev.is_unpaid }))}
               className={
                 form.is_unpaid
-                  ? "w-full rounded-lg border border-soft-blush bg-soft-blush/40 px-2.5 py-2.5 text-left transition-all"
-                  : "w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2.5 text-left hover:border-soft-blush/40 transition-all"
+                  ? "w-full rounded-lg border border-red-300 bg-red-100 px-2.5 py-2.5 text-left transition-all"
+                  : "w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2.5 text-left hover:border-red-300 transition-all"
               }
             >
               <div className="flex items-center gap-1.5 mb-1">
                 <span className={
                   form.is_unpaid
-                    ? "inline-block h-1.5 w-1.5 rounded-full bg-soft-blush shrink-0"
+                    ? "inline-block h-1.5 w-1.5 rounded-full bg-red-500 shrink-0"
                     : "inline-block h-1.5 w-1.5 rounded-full bg-gray-300 shrink-0"
                 } />
                 <span className={
@@ -190,14 +190,14 @@ function ExpenseDialog({
               onClick={() => setForm((prev) => ({ ...prev, needs_tax_invoice: !prev.needs_tax_invoice }))}
               className={
                 form.needs_tax_invoice
-                  ? "w-full rounded-lg border border-soft-blush bg-soft-blush/40 px-2.5 py-2.5 text-left transition-all"
-                  : "w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2.5 text-left hover:border-soft-blush/40 transition-all"
+                  ? "w-full rounded-lg border border-red-300 bg-red-100 px-2.5 py-2.5 text-left transition-all"
+                  : "w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2.5 text-left hover:border-red-300 transition-all"
               }
             >
               <div className="flex items-center gap-1.5 mb-1">
                 <span className={
                   form.needs_tax_invoice
-                    ? "inline-block h-1.5 w-1.5 rounded-full bg-soft-blush shrink-0"
+                    ? "inline-block h-1.5 w-1.5 rounded-full bg-red-500 shrink-0"
                     : "inline-block h-1.5 w-1.5 rounded-full bg-gray-300 shrink-0"
                 } />
                 <span className={
@@ -230,7 +230,7 @@ function ExpenseDialog({
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="flex h-9 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 hover:border-sky-aqua/50 focus:outline-none"
+                    className="flex h-9 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 hover:border-slate-400 focus:outline-none"
                   >
                     <span>{form.expense_date || "날짜 선택"}</span>
                     <Calendar className="h-4 w-4 text-gray-400" />
@@ -269,11 +269,11 @@ function ExpenseDialog({
                         setAmountInput(digits ? Number(digits).toLocaleString("ko-KR") : "")
                       }}
                       placeholder="0"
-                      className="h-9 pr-8 text-right tabular-nums text-sm font-semibold text-sky-aqua"
+                      className="h-9 pr-8 text-right tabular-nums text-sm font-semibold text-slate-700"
                     />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-sky-aqua/50">원</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">원</span>
                   </div>
-                  <p className="text-[10px] text-sky-aqua/60 text-right font-medium">VAT 제외</p>
+                  <p className="text-[10px] text-slate-500 text-right font-medium">VAT 제외</p>
                 </div>
 
                 {/* 구분 화살표 */}
@@ -313,8 +313,8 @@ function ExpenseDialog({
                       }
                       className={
                         isSelected
-                          ? "inline-flex h-5 items-center rounded-full border border-sky-aqua bg-sky-aqua/10 px-2 text-[10px] font-semibold text-sky-aqua transition-colors"
-                          : "inline-flex h-5 items-center rounded-full border border-gray-200 bg-white px-2 text-[10px] font-medium text-gray-500 hover:border-sky-aqua/40 hover:text-sky-aqua transition-colors"
+                          ? "inline-flex h-5 items-center rounded-full border border-slate-400 bg-slate-50 px-2 text-[10px] font-semibold text-slate-700 transition-colors"
+                          : "inline-flex h-5 items-center rounded-full border border-gray-200 bg-white px-2 text-[10px] font-medium text-gray-500 hover:border-slate-400 hover:text-slate-700 transition-colors"
                       }
                     >
                       {m}
@@ -347,7 +347,7 @@ function ExpenseDialog({
                     : "설치 작업 내용 등 설치지출 내용을 입력하세요."
                 }
                 rows={3}
-                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-300 resize-none focus:outline-none focus:ring-2 focus:ring-sky-aqua/40"
+                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-300 resize-none focus:outline-none focus:ring-2 focus:ring-slate-300"
               />
             </div>
           </div>
@@ -358,7 +358,7 @@ function ExpenseDialog({
           <button
             type="button"
             onClick={handleSubmit}
-            className="w-full rounded-lg bg-sky-aqua py-2.5 text-sm font-semibold text-white hover:bg-sky-aqua/90 transition-colors"
+            className="w-full rounded-lg bg-slate-700 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
           >
             {isEditMode ? "수정하기" : "추가하기"}
           </button>
@@ -388,21 +388,21 @@ function ExpenseCard({
       tabIndex={0}
       onClick={() => onEdit(item)}
       onKeyDown={(e) => e.key === "Enter" && onEdit(item)}
-      className="rounded-xl border border-gray-200 bg-white px-3.5 pt-3 pb-3 cursor-pointer hover:border-sky-aqua/50 hover:shadow-sm transition-all"
+      className="rounded-lg border border-gray-200 bg-white px-3.5 pt-3 pb-3 cursor-pointer hover:border-slate-400 hover:shadow-sm transition-all"
     >
       {/* 1행: 지출일자 + 배지 + 삭제 버튼 */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           <span className="text-xs font-bold text-gray-800 shrink-0">{item.expense_date}</span>
           {item.is_unpaid && (
-            <span className="inline-flex items-center gap-0.5 rounded-full border border-soft-blush bg-soft-blush/40 px-1.5 py-0.5 text-[9px] font-semibold text-gray-700">
-              <span className="inline-block h-1 w-1 rounded-full bg-soft-blush" />
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-red-300 bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-700">
+              <span className="inline-block h-1 w-1 rounded-full bg-red-500" />
               미지급
             </span>
           )}
           {item.needs_tax_invoice && (
-            <span className="inline-flex items-center gap-0.5 rounded-full border border-soft-blush bg-soft-blush/40 px-1.5 py-0.5 text-[9px] font-semibold text-gray-700">
-              <span className="inline-block h-1 w-1 rounded-full bg-soft-blush" />
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-red-300 bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-700">
+              <span className="inline-block h-1 w-1 rounded-full bg-red-500" />
               세금계산서
             </span>
           )}
@@ -414,7 +414,7 @@ function ExpenseCard({
             e.stopPropagation()
             onDelete(item.id)
           }}
-          className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-300 hover:text-soft-blush hover:bg-soft-blush/10 transition-colors"
+          className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-300 hover:text-red-500 hover:bg-red-500/10 transition-colors"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -435,8 +435,8 @@ function ExpenseCard({
       {/* 3행: 금액 1행 인라인 */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-sky-aqua/60">VAT별도</span>
-          <span className="tabular-nums text-sm font-semibold text-sky-aqua">{formatCurrency(item.amount)}<span className="ml-0.5 text-[10px] font-normal text-sky-aqua/50">원</span></span>
+          <span className="text-[9px] text-slate-500">VAT별도</span>
+          <span className="tabular-nums text-sm font-semibold text-slate-700">{formatCurrency(item.amount)}<span className="ml-0.5 text-[10px] font-normal text-slate-400">원</span></span>
         </div>
         <div className="w-px h-3 bg-gray-200" />
         <div className="flex items-center gap-1">
@@ -496,7 +496,7 @@ function ExpenseSection({
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold text-gray-700">{category} 지출</p>
           {items.length > 0 && (
-            <span className="text-[11px] font-semibold tabular-nums text-sky-aqua">
+            <span className="text-[11px] font-semibold tabular-nums text-slate-700">
               합계 {formatCurrency(total)}원 <span className="text-[9px] font-medium text-gray-400">VAT별도</span>
             </span>
           )}
@@ -504,7 +504,7 @@ function ExpenseSection({
         <button
           type="button"
           onClick={openAdd}
-          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 hover:border-sky-aqua/40 hover:text-sky-aqua transition-colors"
+          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 hover:border-slate-400 hover:text-slate-700 transition-colors"
         >
           <Plus className="h-3 w-3" />
           지출 추가
@@ -574,7 +574,7 @@ function GaugeChart({ ratio }: { ratio: number }) {
       <path
         d={pathD}
         fill="none"
-        stroke="#42CAFD"
+        stroke="#334155"
         strokeWidth={strokeW}
         strokeLinecap="round"
       />
@@ -666,8 +666,8 @@ export default function ExpenseTab({
   if (isLoading) {
     return (
       <div className="space-y-3 animate-pulse">
-        <div className="h-16 rounded-xl bg-gray-100" />
-        <div className="h-16 rounded-xl bg-gray-100" />
+        <div className="h-16 rounded-lg bg-gray-100" />
+        <div className="h-16 rounded-lg bg-gray-100" />
       </div>
     )
   }
@@ -688,7 +688,7 @@ export default function ExpenseTab({
           : 0
 
         return (
-          <div className="rounded-xl border border-gray-200 bg-white px-4 py-4">
+          <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
             <div className="flex items-center justify-between">
               {/* 게이지 차트 — 확대 */}
               <div className="w-[140px] h-[82px] shrink-0">
@@ -712,10 +712,10 @@ export default function ExpenseTab({
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 cursor-default text-right ${netProfit >= 0 ? "bg-sky-aqua/5 border border-sky-aqua/20" : "bg-soft-blush/20 border border-soft-blush/40"}`}>
+                        <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 cursor-default text-right ${netProfit >= 0 ? "bg-slate-50 border border-slate-200" : "bg-red-500/20 border border-red-300"}`}>
                           <Info className="h-2.5 w-2.5 shrink-0 text-gray-400" />
                           <span className="text-[10px] text-gray-500">순이익</span>
-                          <span className={`text-[11px] font-bold tabular-nums ${netProfit >= 0 ? "text-sky-aqua" : "text-soft-blush"}`}>
+                          <span className={`text-[11px] font-bold tabular-nums ${netProfit >= 0 ? "text-slate-700" : "text-red-500"}`}>
                             {formatCurrency(netProfit)}원
                           </span>
                         </div>
@@ -731,9 +731,9 @@ export default function ExpenseTab({
                   </TooltipProvider>
 
                   {/* 이익률 뱃지 */}
-                  <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${profitRate >= 0 ? "bg-sky-aqua/5 border border-sky-aqua/20" : "bg-soft-blush/20 border border-soft-blush/40"}`}>
+                  <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${profitRate >= 0 ? "bg-slate-50 border border-slate-200" : "bg-red-500/20 border border-red-300"}`}>
                     <span className="text-[10px] text-gray-500">이익률</span>
-                    <span className={`text-[11px] font-bold tabular-nums ${profitRate >= 0 ? "text-sky-aqua" : "text-soft-blush"}`}>
+                    <span className={`text-[11px] font-bold tabular-nums ${profitRate >= 0 ? "text-slate-700" : "text-red-500"}`}>
                       {profitRate.toFixed(2)}%
                     </span>
                   </div>
@@ -743,10 +743,10 @@ export default function ExpenseTab({
                     <TooltipProvider delayDuration={200}>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <div className="inline-flex items-center gap-1 rounded-md px-2 py-1 cursor-default bg-sky-aqua/5 border border-sky-aqua/20">
+                          <div className="inline-flex items-center gap-1 rounded-md px-2 py-1 cursor-default bg-slate-50 border border-slate-200">
                             <Info className="h-2.5 w-2.5 shrink-0 text-gray-400" />
                             <span className="text-[10px] text-gray-500">장려금</span>
-                            <span className="text-[11px] font-bold tabular-nums text-sky-aqua">
+                            <span className="text-[11px] font-bold tabular-nums text-slate-700">
                               {formatCurrency(incentiveTotal)}원
                             </span>
                           </div>
@@ -765,10 +765,10 @@ export default function ExpenseTab({
                       <TooltipProvider delayDuration={200}>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 cursor-default ${totalProfit >= 0 ? "bg-sky-aqua/5 border border-sky-aqua/20" : "bg-soft-blush/20 border border-soft-blush/40"}`}>
+                            <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 cursor-default ${totalProfit >= 0 ? "bg-slate-50 border border-slate-200" : "bg-red-500/20 border border-red-300"}`}>
                               <Info className="h-2.5 w-2.5 shrink-0 text-gray-400" />
                               <span className="text-[10px] text-gray-500">총 이익</span>
-                              <span className={`text-[11px] font-bold tabular-nums ${totalProfit >= 0 ? "text-sky-aqua" : "text-soft-blush"}`}>
+                              <span className={`text-[11px] font-bold tabular-nums ${totalProfit >= 0 ? "text-slate-700" : "text-red-500"}`}>
                                 {formatCurrency(totalProfit)}원
                               </span>
                             </div>

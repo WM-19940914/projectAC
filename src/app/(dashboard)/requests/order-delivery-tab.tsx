@@ -334,7 +334,7 @@ function getDeliveryCardSummary(item: OrderDeliveryItem): DeliveryCardSummary {
   if (meaningfulLines.length === 0) {
     return {
       status: "주문 생성",
-      badgeClassName: "border-sky-aqua/25 bg-sky-aqua/8 text-sky-aqua",
+      badgeClassName: "border-slate-300 bg-slate-100 text-slate-700",
       progressBadgeClassName: "bg-red-50 text-red-600",
       completedCount: 0,
       totalCount: 0,
@@ -355,8 +355,8 @@ function getDeliveryCardSummary(item: OrderDeliveryItem): DeliveryCardSummary {
   if (completedCount === meaningfulLines.length) {
     return {
       status: "배송 완료",
-      badgeClassName: "border-sky-aqua/45 bg-sky-aqua/18 text-sky-aqua",
-      progressBadgeClassName: "bg-sky-aqua text-white",
+      badgeClassName: "border-slate-400 bg-slate-100 text-slate-700",
+      progressBadgeClassName: "bg-slate-700 text-white",
       completedCount,
       totalCount: meaningfulLines.length,
     }
@@ -365,7 +365,7 @@ function getDeliveryCardSummary(item: OrderDeliveryItem): DeliveryCardSummary {
   if (completedCount > 0) {
     return {
       status: "부분 배송완료",
-      badgeClassName: "border-sky-aqua/35 bg-sky-aqua/14 text-sky-aqua",
+      badgeClassName: "border-slate-400 bg-slate-100 text-slate-700",
       progressBadgeClassName: "bg-red-50 text-red-600",
       completedCount,
       totalCount: meaningfulLines.length,
@@ -375,7 +375,7 @@ function getDeliveryCardSummary(item: OrderDeliveryItem): DeliveryCardSummary {
   if (hasSchedule) {
     return {
       status: "배송 준비중",
-      badgeClassName: "border-sky-aqua/30 bg-sky-aqua/10 text-sky-aqua",
+      badgeClassName: "border-slate-300 bg-slate-50 text-slate-700",
       progressBadgeClassName: "bg-red-50 text-red-600",
       completedCount: 0,
       totalCount: meaningfulLines.length,
@@ -384,7 +384,7 @@ function getDeliveryCardSummary(item: OrderDeliveryItem): DeliveryCardSummary {
 
   return {
     status: "주문 생성",
-    badgeClassName: "border-sky-aqua/25 bg-sky-aqua/8 text-sky-aqua",
+    badgeClassName: "border-slate-300 bg-slate-100 text-slate-700",
     progressBadgeClassName: "bg-red-50 text-red-600",
     completedCount: 0,
     totalCount: meaningfulLines.length,
@@ -935,7 +935,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
               void handleCreate()
             }}
             disabled={isCreating}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-sky-aqua px-3 text-xs font-semibold text-white hover:bg-sky-aqua/90 disabled:opacity-40"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-slate-700 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
           >
             <Plus className="h-3.5 w-3.5" />
             {isCreating ? "생성 중..." : "+주문 생성"}
@@ -961,12 +961,12 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                 <button
                   type="button"
                   onClick={() => openEditor(item)}
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3 text-left transition-colors hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
+                  className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3 text-left transition-colors hover:border-slate-400 hover:bg-slate-50"
                 >
                   <div className="grid gap-3 pr-9 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
-                    <span className="relative inline-flex h-8 w-10 shrink-0 items-center justify-center self-start rounded-xl border border-sky-aqua/20 bg-sky-aqua/10 text-sky-aqua sm:self-center">
+                    <span className="relative inline-flex h-8 w-10 shrink-0 items-center justify-center self-start rounded-xl border border-slate-200 bg-slate-50 text-slate-700 sm:self-center">
                       <Truck className="h-4.5 w-4.5" />
-                      <span className="absolute -right-1 -top-1 inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-sky-aqua px-1 text-[9px] font-semibold leading-none text-white">
+                      <span className="absolute -right-1 -top-1 inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-slate-700 px-1 text-[9px] font-semibold leading-none text-white">
                         {index + 1}
                       </span>
                     </span>
@@ -1000,7 +1000,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                   disabled={isDeleting}
                   aria-label="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
                   title="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
-                  className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-soft-blush transition-colors hover:bg-soft-blush/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -1014,7 +1014,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
         <DialogContent className="w-[97vw] max-w-[1620px] overflow-hidden p-0">
           {draft && (
             <div className="flex h-[88vh] min-h-0 flex-col bg-white">
-              <DialogHeader className="border-b border-gray-200 bg-gradient-to-r from-white via-sky-aqua/5 to-white px-4 py-3">
+              <DialogHeader className="border-b border-gray-200 bg-gradient-to-r from-white via-slate-50 to-white px-4 py-3">
                 <div>
                   <DialogTitle className="font-sans text-base">주문/배송 관리</DialogTitle>
                   <DialogDescription className="mt-1 text-xs text-gray-500">
@@ -1104,7 +1104,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                       <button
                         type="button"
                         onClick={() => onEditQuote(confirmedQuoteId)}
-                        className="inline-flex items-center gap-1 rounded-md border border-sky-aqua/30 bg-sky-aqua/5 px-2.5 py-1.5 text-xs font-semibold text-sky-aqua transition-colors hover:bg-sky-aqua/15"
+                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
                       >
                         <ClipboardList className="h-3.5 w-3.5" />
                         확정 견적서 보기
@@ -1132,7 +1132,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                             <button
                               type="button"
                               onClick={() => handleDeleteRow(rowIndex)}
-                              className="inline-flex h-5 w-5 items-center justify-center rounded text-soft-blush transition-colors hover:bg-soft-blush/10"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded text-red-500 transition-colors hover:bg-red-50"
                               aria-label={`${rowIndex + 1}행 삭제`}
                               title="행 삭제"
                             >
@@ -1204,7 +1204,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                                           )
                                         }}
                                         placeholder={column.placeholder}
-                                        className={`h-8 rounded-none border-0 bg-transparent px-1.5 text-[11px] placeholder:text-[10px] placeholder:font-normal placeholder:text-gray-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sky-aqua/50 ${
+                                        className={`h-8 rounded-none border-0 bg-transparent px-1.5 text-[11px] placeholder:text-[10px] placeholder:font-normal placeholder:text-gray-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-300 ${
                                           column.type === "number"
                                             ? column.key === "quantity"
                                               ? "text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
@@ -1252,7 +1252,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                               <button
                                 type="button"
                                 onClick={() => handleAddRows(1)}
-                                className="flex w-full items-center justify-center gap-1 bg-gray-50 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-sky-aqua/10 hover:text-sky-aqua"
+                                className="flex w-full items-center justify-center gap-1 bg-gray-50 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-slate-50 hover:text-slate-700"
                               >
                                 <Plus className="h-3 w-3" />
                                 행 추가
@@ -1266,7 +1266,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                             <td colSpan={5} className="border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-600">
                               합계
                             </td>
-                            <td className="border-r border-gray-200 px-1.5 py-1.5 text-right text-[11px] font-bold tabular-nums text-sky-aqua">
+                            <td className="border-r border-gray-200 px-1.5 py-1.5 text-right text-[11px] font-bold tabular-nums text-slate-700">
                               {formatNumberWithCommas(
                                 draft.lines.reduce((sum, line) => {
                                   const v = typeof line.order_amount === "number" ? line.order_amount : 0
@@ -1289,14 +1289,14 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                   type="button"
                   onClick={handleDelete}
                   disabled={!draft.id || isDeleting}
-                  className="rounded-md border border-soft-blush/50 px-3 py-1.5 text-xs text-soft-blush hover:bg-soft-blush/10 disabled:opacity-40"
+                  className="rounded-md border border-red-300 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 disabled:opacity-40"
                 >
                   {isDeleting ? "삭제 중..." : "카드 삭제"}
                 </button>
                 <div className="flex items-center gap-3">
                   {/* 자동저장 상태 메시지 */}
                   {saveMessage && (
-                    <p className={`text-[10px] ${saveMessage.includes("실패") ? "text-soft-blush" : "text-gray-400"}`}>
+                    <p className={`text-[10px] ${saveMessage.includes("실패") ? "text-red-500" : "text-gray-400"}`}>
                       {isSaving ? "저장 중..." : saveMessage}
                     </p>
                   )}
@@ -1314,7 +1314,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                     type="button"
                     onClick={() => { void handleSave() }}
                     disabled={!draft.id || isSaving}
-                    className="rounded-md bg-sky-aqua px-3 py-1.5 text-xs text-white hover:bg-sky-aqua/90 disabled:opacity-40"
+                    className="rounded-md bg-slate-700 px-3 py-1.5 text-xs text-white hover:bg-slate-800 disabled:opacity-40"
                   >
                     즉시 저장
                   </button>
@@ -1345,7 +1345,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
             <button
               type="button"
               onClick={() => { void confirmDelete() }}
-              className="px-3 py-1.5 text-xs rounded-md bg-soft-blush text-white hover:bg-soft-blush/90"
+              className="px-3 py-1.5 text-xs rounded-md bg-red-500 text-white hover:bg-red-600"
             >
               삭제
             </button>

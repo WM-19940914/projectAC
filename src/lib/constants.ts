@@ -4,19 +4,19 @@
 
 // ----- 의뢰 상태 설정 -----
 export const REQUEST_STATUSES = [
-  { value: '견적 문의', label: '견적 문의', color: 'bg-sky-aqua/10 text-sky-aqua', columnColor: 'border-t-sky-aqua' },
-  { value: '영업중', label: '영업중', color: 'bg-tropical-teal/10 text-tropical-teal', columnColor: 'border-t-tropical-teal' },
-  { value: '계약 성공', label: '계약 성공', color: 'bg-muted-teal/10 text-muted-teal', columnColor: 'border-t-muted-teal' },
-  { value: '수주 실패', label: '수주 실패', color: 'bg-soft-blush/30 text-soft-blush', columnColor: 'border-t-soft-blush' },
+  { value: '견적 문의', label: '견적 문의', color: 'bg-slate-100 text-slate-700', columnColor: 'border-t-slate-300' },
+  { value: '영업중', label: '영업중', color: 'bg-slate-100 text-slate-600', columnColor: 'border-t-slate-400' },
+  { value: '계약 성공', label: '계약 성공', color: 'bg-green-100 text-green-700', columnColor: 'border-t-green-400' },
+  { value: '수주 실패', label: '수주 실패', color: 'bg-red-100 text-red-600', columnColor: 'border-t-red-300' },
   { value: '숨김', label: '숨김', color: 'bg-gray-50 text-gray-500', columnColor: 'border-t-gray-300' },
 ] as const;
 
 // ----- 정산 상태 -----
 export const SETTLEMENT_STATUSES = [
-  { value: '정산 예정', label: '정산 예정', color: 'bg-sky-aqua/10 text-sky-aqua', columnColor: 'border-t-sky-aqua' },
-  { value: '정산 지연', label: '정산 지연', color: 'bg-vanilla-custard/30 text-vanilla-custard', columnColor: 'border-t-vanilla-custard' },
-  { value: '정산 완료', label: '정산 완료', color: 'bg-muted-teal/10 text-muted-teal', columnColor: 'border-t-muted-teal' },
-  { value: '정산 중단', label: '정산 중단', color: 'bg-soft-blush/30 text-soft-blush', columnColor: 'border-t-soft-blush' },
+  { value: '정산 예정', label: '정산 예정', color: 'bg-slate-100 text-slate-700', columnColor: 'border-t-slate-300' },
+  { value: '정산 지연', label: '정산 지연', color: 'bg-amber-100 text-amber-700', columnColor: 'border-t-amber-400' },
+  { value: '정산 완료', label: '정산 완료', color: 'bg-green-100 text-green-700', columnColor: 'border-t-green-400' },
+  { value: '정산 중단', label: '정산 중단', color: 'bg-red-100 text-red-600', columnColor: 'border-t-red-300' },
   { value: '숨김', label: '숨김', color: 'bg-gray-50 text-gray-500', columnColor: 'border-t-gray-300' },
 ] as const;
 

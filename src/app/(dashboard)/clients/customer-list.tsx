@@ -138,7 +138,7 @@ function InlineEdit({
       ref={wrapperRef}
       onClick={handleOpen}
       className={cn(
-        "relative flex-1 cursor-pointer rounded hover:bg-sky-aqua/5 transition-colors py-1 px-2 -mx-2",
+        "relative flex-1 cursor-pointer rounded hover:bg-slate-50 transition-colors py-1 px-2 -mx-2",
         align === "right" && "text-right",
         !value && "border-b border-dashed border-gray-300"
       )}
@@ -162,7 +162,7 @@ function InlineEdit({
             onChange={(e) => setTempValue(e.target.value)}
             placeholder={placeholder}
             autoFocus
-            className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua mb-2"
+            className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400 mb-2"
             onKeyDown={(e) => {
               if (e.key === "Enter") handleConfirm()
               if (e.key === "Escape") setIsEditing(false)
@@ -177,7 +177,7 @@ function InlineEdit({
             </button>
             <button
               onClick={handleConfirm}
-              className="px-3 py-1 text-xs bg-sky-aqua text-white rounded hover:bg-sky-aqua/90 transition-colors font-medium"
+              className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors font-medium"
             >
               입력완료
             </button>
@@ -247,7 +247,7 @@ function InlineMemo({
       <div
         onClick={handleOpen}
         className={cn(
-          "cursor-pointer py-1 px-1 -mx-1 rounded hover:bg-sky-aqua/10 transition-colors text-sm min-h-[60px] whitespace-pre-wrap",
+          "cursor-pointer py-1 px-1 -mx-1 rounded hover:bg-slate-100 transition-colors text-sm min-h-[60px] whitespace-pre-wrap",
           value ? "text-gray-900" : "text-gray-400 border-b border-dashed border-gray-300"
         )}
       >
@@ -262,7 +262,7 @@ function InlineMemo({
             placeholder={placeholder}
             autoFocus
             rows={4}
-            className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua resize-none mb-2"
+            className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400 resize-none mb-2"
           />
           <div className="flex justify-end gap-1.5">
             <button
@@ -273,7 +273,7 @@ function InlineMemo({
             </button>
             <button
               onClick={handleConfirm}
-              className="px-3 py-1 text-xs bg-sky-aqua text-white rounded hover:bg-sky-aqua/90 transition-colors font-medium"
+              className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors font-medium"
             >
               입력완료
             </button>
@@ -450,7 +450,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
         </div>
         <button
           onClick={handleAddNew}
-          className="flex items-center gap-1.5 px-4 py-2 text-[15px] font-medium rounded-lg bg-sky-aqua text-white hover:bg-sky-aqua/90 transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2 text-[15px] font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-800 transition-colors"
         >
           <Plus className="h-4 w-4" />
           고객 추가
@@ -466,7 +466,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
             placeholder="회사명, 담당자, 연락처, 소재지로 검색..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-[15px] border rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+            className="w-full pl-10 pr-4 py-2 text-[15px] border rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400"
           />
         </div>
       </div>
@@ -489,12 +489,12 @@ export function CustomerList({ customers: initialCustomers }: Props) {
               <tr
                 key={customer.id}
                 onClick={() => handleSelectCustomer(customer)}
-                className="group hover:bg-sky-aqua/5 cursor-pointer transition-colors"
+                className="group hover:bg-slate-50 cursor-pointer transition-colors"
               >
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-sky-aqua/10 flex items-center justify-center shrink-0">
-                      <Building2 className="h-4 w-4 text-sky-aqua" />
+                    <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                      <Building2 className="h-4 w-4 text-slate-700" />
                     </div>
                     <span className="text-[15px] font-medium text-gray-900">
                       {customer.company_name}
@@ -527,7 +527,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
                       e.stopPropagation()
                       setDeleteTarget(customer)
                     }}
-                    className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-soft-blush hover:bg-soft-blush/80 text-white"
+                    className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-red-500 hover:bg-red-600 text-white"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -556,7 +556,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
               </span>
               을(를) 삭제하시겠습니까?
               <br />
-              <span className="text-soft-blush font-semibold">삭제하면 되돌릴 수 없습니다.</span>
+              <span className="text-red-500 font-semibold">삭제하면 되돌릴 수 없습니다.</span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -569,7 +569,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
             <button
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
-              className="px-4 py-2 text-sm rounded-md bg-soft-blush text-white hover:bg-soft-blush/80 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-md bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
             >
               {isDeleting ? "삭제 중..." : "삭제"}
             </button>
@@ -593,7 +593,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
               {saveMessage && (
                 <span className={cn(
                   "text-sm",
-                  saveMessage.includes("실패") || saveMessage.includes("입력") ? "text-soft-blush" : "text-muted-teal"
+                  saveMessage.includes("실패") || saveMessage.includes("입력") ? "text-red-500" : "text-green-600"
                 )}>
                   {saveMessage}
                 </span>
@@ -603,7 +603,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
                 <button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/90 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-md bg-slate-700 text-white hover:bg-slate-800 transition-colors disabled:opacity-50"
                 >
                   <Save className="h-4 w-4" />
                   {isSaving ? "저장 중..." : "등록"}
@@ -616,7 +616,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
                     setDeleteTarget(selectedCustomer)
                     handleClosePanel()
                   }}
-                  className="px-3 py-1.5 text-sm rounded-md text-soft-blush hover:bg-soft-blush/10 transition-colors"
+                  className="px-3 py-1.5 text-sm rounded-md text-red-500 hover:bg-red-50 transition-colors"
                 >
                   삭제하기
                 </button>
@@ -636,7 +636,7 @@ export function CustomerList({ customers: initialCustomers }: Props) {
             <div className="w-1/2 overflow-y-auto px-6 py-6 border-r">
               {/* 상단 배지 */}
               <div className="flex items-center gap-3 mb-4">
-                <Badge className="text-xs bg-sky-aqua/20 text-sky-aqua">
+                <Badge className="text-xs bg-slate-100 text-slate-700">
                   {isAddMode ? "신규 등록" : "고객"}
                 </Badge>
                 {!isAddMode && selectedCustomer && (

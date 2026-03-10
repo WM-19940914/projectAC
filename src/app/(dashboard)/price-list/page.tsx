@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import PriceList from "./price-list"
 
 export const dynamic = "force-dynamic"
+export const fetchCache = "force-no-store"
 
 export default async function PriceListPage() {
   const supabase = createAdminClient()

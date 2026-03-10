@@ -16,18 +16,13 @@ const config: Config = {
 					'-apple-system',
 					'sans-serif'
 				],
-				heading: [
-					'"Plus Jakarta Sans"',
-					'Pretendard Variable',
-					'sans-serif'
-				]
 			},
 			colors: {
-				'sky-aqua': '#42CAFD',
-				'tropical-teal': '#66B3BA',
-				'muted-teal': '#8EB19D',
-				'vanilla-custard': '#F6EFA6',
-				'soft-blush': '#F0D2D1',
+				'sky-aqua': '#475569',
+				'tropical-teal': '#64748B',
+				'muted-teal': '#22C55E',
+				'vanilla-custard': '#F59E0B',
+				'soft-blush': '#EF4444',
 				background: 'hsl(var(--background))',
 				foreground: 'hsl(var(--foreground))',
 				card: {

@@ -3,6 +3,7 @@ import { ContractKanbanBoard } from "./kanban-board"
 import { Contract } from "@/types"
 
 export const dynamic = "force-dynamic"
+export const fetchCache = "force-no-store"
 
 export default async function ContractsPage() {
   const supabase = createAdminClient()

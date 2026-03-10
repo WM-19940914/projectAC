@@ -143,14 +143,14 @@ export function ContractKanbanBoard({
       <div className="flex flex-col gap-4 p-6 pb-4 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 font-heading">계약 목록</h1>
+            <h1 className="text-2xl font-bold text-gray-900 font-sans">계약 목록</h1>
             <p className="text-sm text-gray-500 mt-1">
               총 <span className="font-semibold text-gray-900">{totalCount}</span>개의 계약이 등록되어 있습니다
             </p>
           </div>
           <button
             onClick={() => setIsCreateOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-sky-aqua text-white rounded-lg hover:bg-sky-aqua/90 transition-colors shadow-sm font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors shadow-sm font-medium"
           >
             <Plus className="h-4 w-4" />
             새 계약 생성

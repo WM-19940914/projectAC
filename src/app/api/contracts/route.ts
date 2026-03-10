@@ -432,6 +432,7 @@ export async function POST(req: Request) {
             : normalized;
 
         revalidatePath('/contracts');
+        revalidatePath('/requests');
         return NextResponse.json({ success: true, data: normalizedWithTableMeta });
     } catch (error) {
         console.error('계약 생성 오류:', error);
@@ -513,6 +514,7 @@ export async function PATCH(req: Request) {
             : normalized;
 
         revalidatePath('/contracts');
+        revalidatePath('/requests');
         return NextResponse.json({ success: true, data: normalizedWithTableMeta });
     } catch (error) {
         console.error('계약 수정 오류:', error);

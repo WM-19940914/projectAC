@@ -24,21 +24,8 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
         </Button>
       </div>
 
-      {/* 중앙: 검색 바 */}
-      <div className="hidden md:flex flex-1 justify-center px-4">
-        <button className="flex h-9 w-full max-w-md items-center gap-2 rounded-md border bg-gray-50 px-3 text-sm text-gray-400 transition-colors hover:bg-gray-100">
-          <Search className="h-4 w-4" />
-          <span>기능 검색하기</span>
-        </button>
-      </div>
-
-      {/* 모바일에서는 검색 아이콘만 표시 */}
-      <div className="flex items-center md:hidden flex-1 justify-center">
-        <Button variant="ghost" size="icon" className="h-9 w-9">
-          <Search className="h-5 w-5 text-gray-500" />
-          <span className="sr-only">검색</span>
-        </Button>
-      </div>
+      {/* 중앙 여백 */}
+      <div className="flex-1" />
 
       {/* 우측: 알림 + 사용자 메뉴 */}
       <div className="flex items-center gap-2">

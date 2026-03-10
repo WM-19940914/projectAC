@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import QuotesList from "./quotes-list"
 
 export const dynamic = "force-dynamic"
+export const fetchCache = "force-no-store"
 
 export default async function QuotesPage() {
   const supabase = createAdminClient()

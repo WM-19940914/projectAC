@@ -90,6 +90,7 @@ interface Props {
   totalCount: number
   customers: CustomerOption[]
   hiddenItems: RequestItem[]
+  failedItems: RequestItem[]  // "수주 실패" 항목 (컬럼 대신 접힌 리스트로 표시)
 }
 
 interface ContractSummary {
@@ -100,7 +101,7 @@ interface ContractSummary {
   allConfirmed: boolean  // 모든 입금내역이 입완 체크되었는지
   taxInvoiceAllIssued: boolean  // 모든 단계 계산서 발행
   taxInvoiceSomeIssued: boolean  // 일부 단계만 계산서 발행
-  stageSummaries: { name: string; paid: boolean }[]  // 단계별 입금완료 요약
+  stageSummaries: { name: string; status: "paid" | "partial" | "unpaid" }[]  // 단계별 입금완료 요약
 }
 
 // ----- 컬럼별 색상 (커스텀 팔레트) -----
@@ -115,37 +116,37 @@ const COLUMN_ICONS: Record<string, React.ComponentType<{ className?: string }>> 
 const COLUMN_STYLES: Record<string, {
   header: string
   border: string
-  bg: string        // 컬럼 배경색 (연한 투명도)
-  badge: string     // 건수 배지 색상
-  cardBar: string   // 카드 테두리 컬러
+  bg: string
+  badge: string
+  cardBar: string
 }> = {
   "견적 문의": {
-    header: "text-sky-aqua",
-    border: "border-t-sky-aqua",
-    bg: "bg-gradient-to-b from-sky-aqua/10 to-transparent",
-    badge: "bg-sky-aqua/20 text-sky-aqua",
-    cardBar: "border-l-sky-aqua",
+    header: "text-slate-700",
+    border: "border-t-slate-300",
+    bg: "bg-slate-50/50",
+    badge: "bg-slate-100 text-slate-600",
+    cardBar: "border-l-slate-300",
   },
   "영업중": {
-    header: "text-tropical-teal",
-    border: "border-t-tropical-teal",
-    bg: "bg-gradient-to-b from-tropical-teal/10 to-transparent",
-    badge: "bg-tropical-teal/20 text-tropical-teal",
-    cardBar: "border-l-tropical-teal",
+    header: "text-indigo-600",
+    border: "border-t-indigo-400",
+    bg: "bg-indigo-50/30",
+    badge: "bg-indigo-100 text-indigo-600",
+    cardBar: "border-l-indigo-400",
   },
   "계약 성공": {
-    header: "text-muted-teal",
-    border: "border-t-muted-teal",
-    bg: "bg-gradient-to-b from-muted-teal/10 to-transparent",
-    badge: "bg-muted-teal/20 text-muted-teal",
-    cardBar: "border-l-muted-teal",
+    header: "text-green-700",
+    border: "border-t-green-400",
+    bg: "bg-green-50/30",
+    badge: "bg-green-100 text-green-700",
+    cardBar: "border-l-green-400",
   },
   "수주 실패": {
-    header: "text-soft-blush",
-    border: "border-t-soft-blush",
-    bg: "bg-gradient-to-b from-soft-blush/10 to-transparent",
-    badge: "bg-soft-blush/20 text-soft-blush",
-    cardBar: "border-l-soft-blush",
+    header: "text-red-600",
+    border: "border-t-red-300",
+    bg: "bg-red-50/30",
+    badge: "bg-red-100 text-red-600",
+    cardBar: "border-l-red-300",
   },
 }
 
@@ -204,7 +205,7 @@ function InlineTitle({
           if (e.key === "Escape") { setTempValue(value); setIsEditing(false) }
         }}
         autoFocus
-        className="font-sans text-2xl font-semibold text-left w-full bg-transparent border-b-2 border-sky-aqua focus:outline-none py-1"
+        className="font-sans text-2xl font-semibold text-left w-full bg-transparent border-b-2 border-slate-400 focus:outline-none py-1"
       />
     )
   }
@@ -212,7 +213,7 @@ function InlineTitle({
   return (
     <h2
       onClick={() => setIsEditing(true)}
-      className="font-sans text-2xl font-semibold text-left cursor-pointer rounded px-1 -mx-1 py-1 hover:bg-sky-aqua/5 transition-colors truncate"
+      className="font-sans text-2xl font-semibold text-left cursor-pointer rounded px-1 -mx-1 py-1 hover:bg-slate-50 transition-colors truncate"
       title={value}
     >
       {value}
@@ -300,7 +301,7 @@ function InlineSelect({
                   {opt.label}
                 </Badge>
               ) : (
-                <span className={opt.value === value ? "text-sky-aqua font-medium" : "text-gray-700"}>
+                <span className={opt.value === value ? "text-slate-700 font-medium" : "text-gray-700"}>
                   {opt.label}
                 </span>
               )}
@@ -384,7 +385,7 @@ function InlineDate({
             value={tempValue}
             onChange={(e) => setTempValue(e.target.value)}
             autoFocus
-            className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua mb-2"
+            className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400 mb-2"
           />
           <div className="flex justify-end gap-1.5">
             <button
@@ -395,7 +396,7 @@ function InlineDate({
             </button>
             <button
               onClick={handleConfirm}
-              className="px-3 py-1 text-xs bg-sky-aqua text-white rounded hover:bg-sky-aqua/90 transition-colors font-medium"
+              className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors font-medium"
             >
               입력완료
             </button>
@@ -466,7 +467,7 @@ function InlineEditField({
       ref={wrapperRef}
       onClick={() => { setTempValue(value); setIsEditing(true) }}
       className={cn(
-        "relative flex-1 cursor-pointer rounded hover:bg-sky-aqua/5 transition-colors py-1 px-2 -mx-2",
+        "relative flex-1 cursor-pointer rounded hover:bg-slate-50 transition-colors py-1 px-2 -mx-2",
         align === "right" && "text-right",
         !value && "border-b border-dashed border-gray-300"
       )}
@@ -483,7 +484,7 @@ function InlineEditField({
             onChange={(e) => setTempValue(e.target.value)}
             placeholder={placeholder}
             autoFocus
-            className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua mb-2"
+            className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400 mb-2"
             onKeyDown={(e) => {
               if (e.key === "Enter") handleConfirm()
               if (e.key === "Escape") setIsEditing(false)
@@ -491,7 +492,7 @@ function InlineEditField({
           />
           <div className="flex justify-end gap-1.5">
             <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded transition-colors">취소</button>
-            <button onClick={handleConfirm} className="px-3 py-1 text-xs bg-sky-aqua text-white rounded hover:bg-sky-aqua/90 transition-colors font-medium">입력완료</button>
+            <button onClick={handleConfirm} className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors font-medium">입력완료</button>
           </div>
         </div>
       )}
@@ -553,7 +554,7 @@ function InlineEditMemo({
       <div
         onClick={() => { setTempValue(value); setIsEditing(true) }}
         className={cn(
-          "cursor-pointer py-1 px-1 -mx-1 rounded hover:bg-sky-aqua/10 transition-colors text-sm min-h-[60px] whitespace-pre-wrap",
+          "cursor-pointer py-1 px-1 -mx-1 rounded hover:bg-slate-50 transition-colors text-sm min-h-[60px] whitespace-pre-wrap",
           value ? "text-gray-900" : "text-gray-400 border-b border-dashed border-gray-300"
         )}
       >
@@ -562,11 +563,11 @@ function InlineEditMemo({
       {isEditing && (
         <div onClick={(e) => e.stopPropagation()} className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 min-w-[300px]">
           <textarea value={tempValue} onChange={(e) => setTempValue(e.target.value)} placeholder={placeholder} autoFocus rows={4}
-            className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua resize-none mb-2"
+            className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400 resize-none mb-2"
           />
           <div className="flex justify-end gap-1.5">
             <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded transition-colors">취소</button>
-            <button onClick={handleConfirm} className="px-3 py-1 text-xs bg-sky-aqua text-white rounded hover:bg-sky-aqua/90 transition-colors font-medium">입력완료</button>
+            <button onClick={handleConfirm} className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors font-medium">입력완료</button>
           </div>
         </div>
       )}
@@ -617,7 +618,7 @@ function CustomerDetailSheet({
 
   return (
     <Sheet open={!!customerId} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-[900px] p-0 flex flex-col [&>button:first-child]:hidden">
+      <SheetContent side="right" className="w-full sm:max-w-[1200px] p-0 flex flex-col [&>button:first-child]:hidden">
         {customer && (
           <>
             {/* 상단 헤더 */}
@@ -627,7 +628,7 @@ function CustomerDetailSheet({
               </button>
               <div className="flex items-center gap-2">
                 {saveMessage && (
-                  <span className={cn("text-sm", saveMessage.includes("실패") ? "text-soft-blush" : "text-muted-teal")}>
+                  <span className={cn("text-sm", saveMessage.includes("실패") ? "text-red-500" : "text-green-600")}>
                     {saveMessage}
                   </span>
                 )}
@@ -643,7 +644,7 @@ function CustomerDetailSheet({
               <div className="w-1/2 overflow-y-auto px-6 py-6 border-r">
                 {/* 배지 */}
                 <div className="flex items-center gap-3 mb-4">
-                  <Badge className="text-xs bg-sky-aqua/20 text-sky-aqua">고객</Badge>
+                  <Badge className="text-xs bg-slate-100 text-slate-700">고객</Badge>
                 </div>
 
                 {/* 회사명 */}
@@ -769,7 +770,7 @@ function QuotationsTab({
           {/* 추가 버튼 */}
           <button
             onClick={onAddQuote}
-            className="w-full flex items-center justify-center gap-1.5 py-3 border-2 border-dashed border-sky-aqua/30 rounded-lg text-sm text-sky-aqua font-medium hover:border-sky-aqua hover:bg-sky-aqua/5 transition-all"
+            className="w-full flex items-center justify-center gap-1.5 py-3 border-2 border-dashed border-slate-400/30 rounded-lg text-sm text-slate-700 font-medium hover:border-slate-400 hover:bg-slate-50 transition-all"
           >
             <Plus className="h-4 w-4" />
             추가하기
@@ -790,12 +791,12 @@ function QuotationsTab({
                   className={cn(
                     "border rounded-xl px-4 py-3.5 transition-all",
                     isConfirmed
-                      ? "border-sky-aqua/70 bg-sky-aqua/10 ring-1 ring-sky-aqua/30"
-                      : "border-gray-200 hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
+                      ? "border-slate-400/70 bg-slate-700/10 ring-1 ring-slate-300/30"
+                      : "border-gray-200 hover:border-slate-400/40 hover:bg-slate-50"
                   )}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-aqua/15 text-sky-aqua text-[10px] font-bold shrink-0">
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold shrink-0">
                       {index + 1}
                     </span>
                     <button
@@ -804,7 +805,7 @@ function QuotationsTab({
                       className={cn(
                         "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors border",
                         isConfirmed
-                          ? "border-sky-aqua text-sky-aqua bg-sky-aqua/10 hover:bg-sky-aqua/20"
+                          ? "border-slate-400 text-slate-700 bg-slate-700/10 hover:bg-slate-700/20"
                           : "border-gray-300 text-gray-500 bg-white hover:bg-gray-50"
                       )}
                     >
@@ -822,7 +823,7 @@ function QuotationsTab({
                     onClick={() => onEditQuote(q.id)}
                     className="w-full text-left group"
                   >
-                    <p className="text-sm font-semibold text-gray-800 group-hover:text-sky-aqua transition-colors leading-snug line-clamp-2 mb-1.5">
+                    <p className="text-sm font-semibold text-gray-800 group-hover:text-slate-700 transition-colors leading-snug line-clamp-2 mb-1.5">
                       {q.title}
                     </p>
                     <div className="flex items-center gap-1 mb-3">
@@ -843,7 +844,7 @@ function QuotationsTab({
                             <span className="text-[9px] text-gray-300">VAT 별도</span>
                           </>
                         )}
-                        <span className={`text-xs font-bold tabular-nums ${q.grand_total > 0 ? "text-sky-aqua" : "text-gray-300"}`}>
+                        <span className={`text-xs font-bold tabular-nums ${q.grand_total > 0 ? "text-slate-700" : "text-gray-300"}`}>
                           {formatCurrency(q.grand_total)}
                         </span>
                         <span className="text-[9px] text-gray-400">VAT 포함</span>
@@ -1250,7 +1251,7 @@ function ContractFlowTab({
   onLinkContract,
   onSavedContract,
   onSummaryChange,
-  requestedContractTab,
+  activeView,
 }: {
   requestId: string
   requestTitle: string
@@ -1260,7 +1261,7 @@ function ContractFlowTab({
   onLinkContract: (contractId: string | null) => Promise<void>
   onSavedContract?: (contractId: string) => void
   onSummaryChange?: (summary: ContractSummary) => void
-  requestedContractTab?: "계약서" | "정산 현황"
+  activeView: "계약서" | "정산 현황"
 }) {
   // 계약이 있으면 로딩 완료 전까지 진행률이 0%로 잘못 표시되는 것을 방지
   const [isLoading, setIsLoading] = useState(!!requestContractId)
@@ -1272,15 +1273,7 @@ function ContractFlowTab({
   const [amountInputValue, setAmountInputValue] = useState("")
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false)
   const [isContractFormVisible, setIsContractFormVisible] = useState(!!requestContractId)
-  const [activeContractTab, setActiveContractTab] = useState<"계약서" | "정산 현황">("계약서")
-  // 외부 탭 전환 요청 처리
-  const appliedContractTabRef = useRef<string | undefined>(undefined)
-  useEffect(() => {
-    if (requestedContractTab && appliedContractTabRef.current !== requestedContractTab) {
-      appliedContractTabRef.current = requestedContractTab
-      setActiveContractTab(requestedContractTab)
-    }
-  }, [requestedContractTab])
+  // activeView는 외부(SalesFlowPanel)에서 제어됨 — 계약서/정산 현황 독립 탭
   const [modalStages, setModalStages] = useState<SettlementStage[]>(["잔금"])
   const [modalRatios, setModalRatios] = useState<Record<SettlementStage, number>>({ ...EMPTY_STAGE_RATIOS, 잔금: 100 })
   const [modalScheduledDates, setModalScheduledDates] = useState<Record<SettlementStage, string>>({ ...EMPTY_STAGE_SCHEDULED_DATES })
@@ -1695,7 +1688,7 @@ function ContractFlowTab({
         : "unpaid"
       return { name: row.label, status: stageStatus }
     })
-    const stagesKey = stageSummariesForCard.map((s) => `${s.name}:${s.paid}`).join(",")
+    const stagesKey = stageSummariesForCard.map((s) => `${s.name}:${s.status}`).join(",")
 
     const signature = `${totalWithVat}|${clampedPaid}|${unpaidAmount}|${progressPercent}|${allConfirmed}|${taxInvoiceAllIssued}|${taxInvoiceSomeIssued}|${stagesKey}`
     if (lastSummarySignatureRef.current === signature) return
@@ -2254,22 +2247,7 @@ function ContractFlowTab({
 
   return (
     <div>
-      <div className="flex items-center gap-3 border-b border-gray-200 mb-3">
-        {(["계약서", "정산 현황"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveContractTab(tab)}
-            className={`pb-2 text-sm transition-colors ${activeContractTab === tab
-              ? "font-bold text-gray-900 border-b-2 border-gray-900"
-              : "font-medium text-gray-300 hover:text-gray-500 border-b-2 border-transparent"
-              }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {activeContractTab === "계약서" && (
+      {activeView === "계약서" && (
         isLoading ? (
           <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
             <p className="text-sm font-medium text-gray-500">계약 정보를 불러오는 중입니다.</p>
@@ -2287,7 +2265,7 @@ function ContractFlowTab({
               type="button"
               onClick={() => { void handleSave("manual") }}
               disabled={!canSave || isUnlinkingContract}
-              className="inline-flex h-8 items-center justify-center rounded-md bg-sky-aqua px-3 text-xs font-semibold text-white hover:bg-sky-aqua/90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-8 items-center justify-center rounded-md bg-slate-700 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isSaving ? "생성 중..." : "계약 생성하기"}
             </button>
@@ -2310,7 +2288,7 @@ function ContractFlowTab({
               disabled={isUnlinkingContract}
               aria-label={isUnlinkingContract ? "연결 해제 중" : "연결 해제"}
               title={isUnlinkingContract ? "연결 해제 중" : "연결 해제"}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-soft-blush/50 bg-white text-soft-blush hover:bg-soft-blush/10 disabled:opacity-40"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-300/50 bg-white text-red-500 hover:bg-red-500/10 disabled:opacity-40"
             >
               <Unlink className="h-3.5 w-3.5" />
             </button>
@@ -2325,7 +2303,7 @@ function ContractFlowTab({
               value={draft.title}
               onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))}
               placeholder="계약 제목을 입력하세요"
-              className="h-7 border-gray-200 bg-white text-sm focus:ring-sky-aqua/40"
+              className="h-7 border-gray-200 bg-white text-sm focus:ring-slate-300"
             />
           </div>
         </div>
@@ -2338,7 +2316,7 @@ function ContractFlowTab({
               type="date"
               value={draft.start_date}
               onChange={(e) => setDraft((prev) => ({ ...prev, start_date: e.target.value }))}
-              className="h-6 border-gray-200 bg-white px-2 font-sans text-[8px] font-normal text-gray-500 focus:ring-sky-aqua/40"
+              className="h-6 border-gray-200 bg-white px-2 font-sans text-[8px] font-normal text-gray-500 focus:ring-slate-300"
             />
           </div>
 
@@ -2349,7 +2327,7 @@ function ContractFlowTab({
               type="date"
               value={draft.end_date}
               onChange={(e) => setDraft((prev) => ({ ...prev, end_date: e.target.value }))}
-              className="h-6 border-gray-200 bg-white px-2 font-sans text-[8px] font-normal text-gray-500 focus:ring-sky-aqua/40"
+              className="h-6 border-gray-200 bg-white px-2 font-sans text-[8px] font-normal text-gray-500 focus:ring-slate-300"
             />
           </div>
         </div>
@@ -2357,7 +2335,7 @@ function ContractFlowTab({
         <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-2">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Label htmlFor="contract-amount" className="text-base font-semibold text-sky-aqua">
+              <Label htmlFor="contract-amount" className="text-base font-semibold text-slate-700">
                 <span className="inline-flex items-center gap-1">
                   <Banknote className="h-4 w-4" />
                   <span> 총 계약금액</span>
@@ -2375,7 +2353,7 @@ function ContractFlowTab({
                       readOnly
                       onClick={openAmountModal}
                       placeholder="0"
-                      className="h-7 w-52 cursor-pointer border-gray-200 bg-white text-sm font-semibold text-right tabular-nums focus:ring-sky-aqua/40"
+                      className="h-7 w-52 cursor-pointer border-gray-200 bg-white text-sm font-semibold text-right tabular-nums focus:ring-slate-300"
                     />
                   </PopoverTrigger>
                   <PopoverContent align="end" side="bottom" sideOffset={6} className="w-52 border-gray-200 p-2.5">
@@ -2409,9 +2387,9 @@ function ContractFlowTab({
                           }
                         }}
                         placeholder="0"
-                        className="h-8 border-gray-200 bg-white text-sm font-semibold text-right tabular-nums focus:ring-sky-aqua/40"
+                        className="h-8 border-gray-200 bg-white text-sm font-semibold text-right tabular-nums focus:ring-slate-300"
                       />
-                      <p className="text-right text-[10px] font-semibold text-soft-blush">VAT별도</p>
+                      <p className="text-right text-[10px] font-semibold text-red-500">VAT별도</p>
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
@@ -2423,7 +2401,7 @@ function ContractFlowTab({
                         <button
                           type="button"
                           onClick={handleApplyAmount}
-                          className="px-2 py-1 text-[10px] rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/90"
+                          className="px-2 py-1 text-[10px] rounded-md bg-slate-700 text-white hover:bg-slate-700/90"
                         >
                           적용
                         </button>
@@ -2447,7 +2425,7 @@ function ContractFlowTab({
             <button
               type="button"
               onClick={openSettlementModal}
-              className="inline-flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 hover:border-sky-aqua/40 hover:text-sky-aqua"
+              className="inline-flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 hover:border-slate-400/40 hover:text-slate-700"
             >
               설정
             </button>
@@ -2461,9 +2439,9 @@ function ContractFlowTab({
             <p className="text-xs text-gray-400">VAT별도</p>
             <p className="mt-1 text-sm font-semibold tabular-nums text-gray-700">{formatCurrency(supplyAmount)}</p>
           </div>
-          <div className="rounded-md bg-sky-aqua/5 px-3 py-2.5">
+          <div className="rounded-md bg-slate-700/5 px-3 py-2.5">
             <p className="text-xs text-gray-400">VAT 포함</p>
-            <p className="mt-1 text-sm font-semibold tabular-nums text-sky-aqua">{formatCurrency(totalWithVat)}</p>
+            <p className="mt-1 text-sm font-semibold tabular-nums text-slate-700">{formatCurrency(totalWithVat)}</p>
           </div>
         </div>
 
@@ -2480,7 +2458,7 @@ function ContractFlowTab({
               <div key={row.key} className="grid grid-cols-[100px_108px_1fr] gap-2 border-t border-gray-100 bg-white px-3 py-2.5">
                 <p className="text-sm font-medium text-gray-700">{row.label}</p>
                 <p className="text-sm text-gray-600">{row.scheduledDate || "-"}</p>
-                <p className="text-sm text-right tabular-nums font-semibold text-sky-aqua">{formatCurrency(row.total)}</p>
+                <p className="text-sm text-right tabular-nums font-semibold text-slate-700">{formatCurrency(row.total)}</p>
               </div>
             ))}
           </div>
@@ -2488,7 +2466,7 @@ function ContractFlowTab({
       </div>
 
       <div className={cn("flex items-center justify-between gap-2 px-0.5", !isContractFormVisible && "hidden")}>
-        <p className={cn("text-[10px]", saveMessage.includes("실패") ? "text-soft-blush" : "text-gray-500")}>
+        <p className={cn("text-[10px]", saveMessage.includes("실패") ? "text-red-500" : "text-gray-500")}>
           {saveMessage || (isPersistedContract ? "입력값은 자동 저장됩니다." : "계약 생성 버튼을 눌러주세요.")}
         </p>
         {isPersistedContract && (
@@ -2496,7 +2474,7 @@ function ContractFlowTab({
             type="button"
             onClick={() => { void handleSave("manual") }}
             disabled={!canSave}
-            className="inline-flex h-8 items-center justify-center rounded-md bg-sky-aqua px-3 text-xs font-semibold text-white hover:bg-sky-aqua/90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-8 items-center justify-center rounded-md bg-slate-700 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isSaving ? "저장 중..." : "즉시 저장"}
           </button>
@@ -2525,7 +2503,7 @@ function ContractFlowTab({
                 setIsUnlinkDialogOpen(false)
                 void handleUnlinkContract()
               }}
-              className="px-3 py-1.5 text-xs rounded-md bg-soft-blush text-white hover:bg-soft-blush/90"
+              className="px-3 py-1.5 text-xs rounded-md bg-red-500 text-white hover:bg-red-500/90"
             >
               확인
             </button>
@@ -2552,7 +2530,7 @@ function ContractFlowTab({
                       type="checkbox"
                       checked={checked}
                       onChange={() => handleToggleModalStage(stage)}
-                      className="h-3.5 w-3.5 rounded border-sky-aqua accent-sky-aqua focus:ring-2 focus:ring-sky-aqua/60"
+                      className="h-3.5 w-3.5 rounded border-slate-400 accent-slate-700 focus:ring-2 focus:ring-slate-300/60"
                     />
                     <span className={cn("text-sm", checked ? "text-gray-700" : "text-gray-400")}>{stage}</span>
                   </div>
@@ -2579,7 +2557,7 @@ function ContractFlowTab({
                         className={cn(
                           "h-7 w-16 rounded-md border px-2 text-right text-xs tabular-nums focus:outline-none",
                           checked
-                            ? "border-gray-300 bg-white focus:ring-2 focus:ring-sky-aqua/50"
+                            ? "border-gray-300 bg-white focus:ring-2 focus:ring-slate-300/50"
                             : "border-gray-200 bg-gray-100 text-gray-300"
                         )}
                       />
@@ -2590,7 +2568,7 @@ function ContractFlowTab({
                           <select
                             value={modalMiddleInstallments}
                             onChange={(e) => setModalMiddleInstallments(normalizeMiddleInstallments(e.target.value))}
-                            className="h-7 rounded-md border border-gray-300 bg-white px-1.5 text-[10px] text-gray-600 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50"
+                            className="h-7 rounded-md border border-gray-300 bg-white px-1.5 text-[10px] text-gray-600 focus:outline-none focus:ring-2 focus:ring-slate-300/50"
                           >
                             {[1, 2, 3, 4, 5].map((count) => (
                               <option key={count} value={count}>{count}회</option>
@@ -2616,7 +2594,7 @@ function ContractFlowTab({
                         className={cn(
                           "h-7 rounded-md border px-2 text-[10px] focus:outline-none",
                           checked
-                            ? "border-gray-300 bg-white text-gray-600 focus:ring-2 focus:ring-sky-aqua/50"
+                            ? "border-gray-300 bg-white text-gray-600 focus:ring-2 focus:ring-slate-300/50"
                             : "border-gray-200 bg-gray-100 text-gray-300"
                         )}
                       />
@@ -2640,7 +2618,7 @@ function ContractFlowTab({
               type="button"
               onClick={handleApplySettlement}
               disabled={modalStages.length === 0 || modalSelectedRatioSum > 100}
-              className="px-3 py-1.5 text-xs rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/90 disabled:opacity-40"
+              className="px-3 py-1.5 text-xs rounded-md bg-slate-700 text-white hover:bg-slate-700/90 disabled:opacity-40"
             >
               적용
             </button>
@@ -2651,7 +2629,7 @@ function ContractFlowTab({
         )
       )}
 
-      {activeContractTab === "정산 현황" && (
+      {activeView === "정산 현황" && (
         isLoading ? (
           <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
             <p className="text-sm font-medium text-gray-500">정산 현황을 불러오는 중입니다.</p>
@@ -2661,7 +2639,7 @@ function ContractFlowTab({
             <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-semibold text-gray-700">총 계약금액</p>
-                <p className="text-sm font-bold tabular-nums text-sky-aqua">
+                <p className="text-sm font-bold tabular-nums text-slate-700">
                   {formatCurrency(totalWithVat)} <span className="text-[10px] font-semibold align-middle">VAT포함</span>
                 </p>
               </div>
@@ -2673,9 +2651,9 @@ function ContractFlowTab({
                 className={cn(
                   "rounded-xl border bg-white px-3 py-2.5 space-y-2 transition-colors",
                   row.overdueDays > 0
-                    ? "border-soft-blush/60 bg-soft-blush/10 ring-1 ring-soft-blush/25"
+                    ? "border-red-300/60 bg-red-500/10 ring-1 ring-red-300/25"
                     : row.paymentConfirmed
-                      ? "border-sky-aqua/60 bg-sky-aqua/10 ring-1 ring-sky-aqua/20"
+                      ? "border-slate-400/60 bg-slate-700/10 ring-1 ring-slate-300/20"
                       : "border-gray-200"
                 )}
               >
@@ -2685,11 +2663,11 @@ function ContractFlowTab({
                     <span className={cn(
                       "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold",
                       row.paymentConfirmed
-                        ? "border-sky-aqua/40 bg-sky-aqua/10 text-sky-aqua"
+                        ? "border-slate-400/40 bg-slate-100 text-slate-700"
                         : row.actualAmount > 0
                           ? "border-amber-300 bg-amber-50 text-amber-700"
                           : row.paymentStatusLabel === "입금예정"
-                            ? "border-vanilla-custard bg-vanilla-custard/20 text-amber-600"
+                            ? "border-amber-400 bg-amber-100/20 text-amber-600"
                             : "border-gray-200 bg-gray-50 text-gray-500"
                     )}>
                       {row.paymentStatusLabel}
@@ -2730,7 +2708,7 @@ function ContractFlowTab({
                     </div>
                   </div>
                   {row.shortfallAmount > 0 && (
-                    <span className="text-[10px] font-medium text-soft-blush">
+                    <span className="text-[10px] font-medium text-red-500">
                       미정산 {formatCurrency(row.shortfallAmount)}
                     </span>
                   )}
@@ -2743,7 +2721,7 @@ function ContractFlowTab({
                     <button
                       type="button"
                       onClick={() => addSettlementPaymentEntry(row.key)}
-                      className="inline-flex items-center gap-0.5 rounded-md border border-sky-aqua/30 bg-sky-aqua/5 px-2 py-0.5 text-[10px] font-semibold text-sky-aqua hover:bg-sky-aqua/15 transition-colors"
+                      className="inline-flex items-center gap-0.5 rounded-md border border-slate-400/30 bg-slate-700/5 px-2 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-700/15 transition-colors"
                     >
                       <Plus className="h-3 w-3" />
                       추가
@@ -2754,7 +2732,7 @@ function ContractFlowTab({
                     <button
                       type="button"
                       onClick={() => addSettlementPaymentEntry(row.key)}
-                      className="w-full rounded-md border border-dashed border-gray-200 bg-white py-3 text-center text-[10px] text-gray-400 hover:border-sky-aqua/40 hover:text-sky-aqua transition-colors"
+                      className="w-full rounded-md border border-dashed border-gray-200 bg-white py-3 text-center text-[10px] text-gray-400 hover:border-slate-400/40 hover:text-slate-700 transition-colors"
                     >
                       <Plus className="inline h-3 w-3 mr-0.5 -mt-0.5" />
                       입금내역을 추가하면 정산금액이 자동 계산됩니다
@@ -2772,7 +2750,7 @@ function ContractFlowTab({
                               className={cn(
                                 "h-4 w-4 rounded border flex items-center justify-center transition-colors",
                                 entry.confirmed
-                                  ? "border-sky-aqua bg-sky-aqua"
+                                  ? "border-slate-400 bg-slate-700"
                                   : "border-gray-300 bg-white hover:border-gray-400"
                               )}
                               title={entry.confirmed ? "입금 확인됨 (클릭하면 취소)" : "입금 미확인 (클릭하면 확인)"}
@@ -2795,13 +2773,13 @@ function ContractFlowTab({
                               })
                             }}
                             placeholder="금액 입력"
-                            className="h-7 min-w-0 flex-1 border-0 border-b border-gray-200 bg-transparent px-0 text-left text-[10px] font-semibold tabular-nums text-gray-700 outline-none focus:border-sky-aqua"
+                            className="h-7 min-w-0 flex-1 border-0 border-b border-gray-200 bg-transparent px-0 text-left text-[10px] font-semibold tabular-nums text-gray-700 outline-none focus:border-slate-400"
                           />
                           {/* 계획금액 자동입력 버튼: 누르면 해당 단계 VAT포함 금액이 채워짐 */}
                           <button
                             type="button"
                             onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { amount: row.plannedAmount })}
-                            className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-sky-aqua ring-1 ring-sky-aqua/40 hover:bg-sky-aqua/10"
+                            className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-slate-700 ring-1 ring-slate-300/40 hover:bg-slate-50"
                             title="클릭하면 이 금액이 자동 입력됩니다"
                           >
                             자동입력
@@ -2810,12 +2788,12 @@ function ContractFlowTab({
                             type="date"
                             value={entry.paid_at}
                             onChange={(e) => updateSettlementPaymentEntry(row.key, entry.id, { paid_at: e.target.value })}
-                            className="h-7 w-[118px] border-0 border-b border-gray-200 bg-transparent px-0 text-right text-[10px] text-gray-600 outline-none focus:border-sky-aqua"
+                            className="h-7 w-[118px] border-0 border-b border-gray-200 bg-transparent px-0 text-right text-[10px] text-gray-600 outline-none focus:border-slate-400"
                           />
                           <button
                             type="button"
                             onClick={() => removeSettlementPaymentEntry(row.key, entry.id)}
-                            className="inline-flex h-6 w-6 items-center justify-center text-gray-400 hover:text-soft-blush"
+                            className="inline-flex h-6 w-6 items-center justify-center text-gray-400 hover:text-red-500"
                             aria-label={`입금내역 ${index + 1} 삭제`}
                           >
                             <X className="h-3 w-3" />
@@ -2844,7 +2822,7 @@ function ContractFlowTab({
                         }
                         updateSettlementStatus(row.key, updates)
                       }}
-                      className="h-3.5 w-3.5 rounded border-sky-aqua accent-sky-aqua focus:ring-2 focus:ring-sky-aqua/60"
+                      className="h-3.5 w-3.5 rounded border-slate-400 accent-slate-700 focus:ring-2 focus:ring-slate-300/60"
                     />
                     {row.taxInvoiceIssued ? "계산서 발행" : "계산서 미발행"}
                   </label>
@@ -2853,7 +2831,7 @@ function ContractFlowTab({
                       type="date"
                       value={row.taxInvoiceDate || ""}
                       onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_date: e.target.value })}
-                      className="h-6 rounded border border-gray-200 bg-white px-1.5 text-[10px] tabular-nums text-gray-600 outline-none focus:border-sky-aqua focus:ring-1 focus:ring-sky-aqua/40"
+                      className="h-6 rounded border border-gray-200 bg-white px-1.5 text-[10px] tabular-nums text-gray-600 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-300"
                     />
                   )}
                 </div>
@@ -2881,7 +2859,8 @@ function SalesFlowPanel({
   onSummaryChange,
   contractSummary,
   requestedFlow,
-  requestedContractTab,
+  // --- 개요 탭용 props ---
+  overviewContent,
 }: {
   quotations: QuotationListItem[]
   onAddQuote: () => void
@@ -2896,10 +2875,12 @@ function SalesFlowPanel({
   onSavedContract?: (contractId: string) => void
   onSummaryChange?: (summary: ContractSummary) => void
   contractSummary?: ContractSummary | null
-  requestedFlow?: "견적" | "계약" | "주문·배송" | "지출"
-  requestedContractTab?: "계약서" | "정산 현황"
+  requestedFlow?: "개요" | "견적" | "계약" | "정산" | "주문·배송" | "지출"
+  overviewContent?: React.ReactNode
 }) {
-  const [activeFlow, setActiveFlow] = useState<"견적" | "계약" | "주문·배송" | "지출">("견적")
+  // 6개 탭: 개요 / 견적 / 계약 / 정산 / 주문·배송 / 지출
+  type FlowTab = "개요" | "견적" | "계약" | "정산" | "주문·배송" | "지출"
+  const [activeFlow, setActiveFlow] = useState<FlowTab>("개요")
   // 외부에서 탭 전환 요청 시 처리 (중복 적용 방지용 ref)
   const appliedRequestedFlowRef = useRef<string | undefined>(undefined)
   useEffect(() => {
@@ -2909,18 +2890,22 @@ function SalesFlowPanel({
     }
   }, [requestedFlow])
 
-  const flowTabs: Array<{ key: "견적" | "계약" | "주문·배송" | "지출" }> = [
+  const flowTabs: Array<{ key: FlowTab }> = [
+    { key: "개요" },
     { key: "견적" },
     { key: "계약" },
+    { key: "정산" },
     { key: "주문·배송" },
     { key: "지출" },
   ]
-  const flowIcons = {
+  const flowIcons: Record<FlowTab, React.ComponentType<{ className?: string }>> = {
+    "개요": ClipboardList,
     "견적": FileText,
     "계약": Briefcase,
+    "정산": Banknote,
     "주문·배송": Truck,
     "지출": Receipt,
-  } as const
+  }
   const confirmedQuote = confirmedQuoteId ? quotations.find((q) => q.id === confirmedQuoteId) ?? null : null
   // 확정 견적서 장려금 합계 계산
   const confirmedIncentiveTotal = confirmedQuote?.items
@@ -2931,9 +2916,13 @@ function SalesFlowPanel({
       }, 0)
     : 0
 
+  // 계약/정산 탭 어느 쪽이 활성이든 ContractFlowTab에 전달할 activeView 결정
+  const contractActiveView: "계약서" | "정산 현황" = activeFlow === "정산" ? "정산 현황" : "계약서"
+
   return (
     <div>
-      <div className="flex items-center gap-5 border-b border-gray-200 mb-4 overflow-x-auto">
+      {/* 6탭 네비게이션 — pill 스타일 */}
+      <div className="flex items-center gap-1 rounded-lg bg-slate-100/80 p-1 mb-5 overflow-x-auto">
         {flowTabs.map((tab) => {
           const Icon = flowIcons[tab.key]
           return (
@@ -2941,18 +2930,21 @@ function SalesFlowPanel({
               key={tab.key}
               onClick={() => setActiveFlow(tab.key)}
               className={cn(
-                "inline-flex items-center gap-1.5 pb-2 text-sm whitespace-nowrap transition-colors border-b-2",
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-all",
                 activeFlow === tab.key
-                  ? "font-bold text-sky-aqua border-sky-aqua"
-                  : "font-medium text-gray-400 border-transparent hover:text-gray-600"
+                  ? "bg-white shadow-sm font-semibold text-sky-aqua"
+                  : "font-medium text-slate-500 hover:text-slate-700 hover:bg-white/50"
               )}
             >
-              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <Icon className="h-4 w-4 shrink-0" />
               <span>{tab.key}</span>
             </button>
           )
         })}
       </div>
+
+      {/* 개요 탭 — 고객·견적·계약·정산 요약을 한눈에 */}
+      {activeFlow === "개요" && overviewContent}
 
       {activeFlow === "견적" && (
         <QuotationsTab
@@ -2964,8 +2956,8 @@ function SalesFlowPanel({
         />
       )}
 
-      {/* 계약 탭 — 언마운트 방지: display:none으로 숨김 (탭 전환 시 상태 유지, auto-save 충돌 방지) */}
-      <div style={{ display: activeFlow === "계약" ? "block" : "none" }}>
+      {/* 계약/정산 탭 — 언마운트 방지: display:none으로 숨김 (탭 전환 시 상태 유지, auto-save 충돌 방지) */}
+      <div style={{ display: (activeFlow === "계약" || activeFlow === "정산") ? "block" : "none" }}>
         <ContractFlowTab
           requestId={requestId}
           requestTitle={requestTitle}
@@ -2975,7 +2967,7 @@ function SalesFlowPanel({
           onLinkContract={onLinkContract}
           onSavedContract={onSavedContract}
           onSummaryChange={onSummaryChange}
-          requestedContractTab={requestedContractTab}
+          activeView={contractActiveView}
         />
       </div>
 
@@ -3064,19 +3056,19 @@ function CustomerPanel({
 
   return (
     <div>
-      <p className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 mb-2">
-        <Box className="h-3 w-3" />
+      <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 mb-2">
+        <Box className="h-4 w-4" />
         고객 정보
       </p>
 
       {!customer && (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-4">
+        <div className="rounded-xl border border-dashed border-sky-aqua/30 bg-white p-4">
           <p className="text-xs font-medium text-gray-600 mb-1">고객 연결 필요</p>
-          <p className="text-[10px] text-gray-400 mb-3">의뢰에 고객을 연결해주세요.</p>
+          <p className="text-[11px] text-gray-400 mb-3">의뢰에 고객을 연결해주세요.</p>
           <div className="flex justify-end">
             <button
               onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-aqua/10 text-sky-aqua text-xs font-semibold hover:bg-sky-aqua/20 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-aqua text-white text-xs font-semibold hover:bg-sky-aqua/80 transition-colors"
             >
               <Search className="h-3.5 w-3.5" />
               고객 연결
@@ -3086,9 +3078,9 @@ function CustomerPanel({
       )}
 
       {customer?.deleted_at && (
-        <div className="rounded-xl border border-soft-blush/30 bg-soft-blush/5 p-4">
-          <p className="text-xs font-semibold text-soft-blush mb-1">삭제된 고객이 연결되어 있습니다</p>
-          <p className="text-[10px] text-soft-blush/80 mb-3">다른 고객으로 변경하거나 연결을 해제하세요.</p>
+        <div className="rounded-xl border border-red-300/30 bg-red-500/5 p-4">
+          <p className="text-xs font-semibold text-red-500 mb-1">삭제된 고객이 연결되어 있습니다</p>
+          <p className="text-[10px] text-red-500/80 mb-3">다른 고객으로 변경하거나 연결을 해제하세요.</p>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsModalOpen(true)}
@@ -3111,7 +3103,7 @@ function CustomerPanel({
       )}
 
       {customer && !customer.deleted_at && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+        <div className="rounded-xl border border-gray-200 border-l-4 border-l-sky-aqua bg-white p-4 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <button onClick={onOpenDetail} className="min-w-0 text-left hover:opacity-80 transition-opacity">
               <p className="text-sm font-semibold text-gray-900 truncate">{customer.company_name}</p>
@@ -3146,14 +3138,14 @@ function CustomerPanel({
 
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg bg-gray-50 px-2.5 py-2">
-              <p className="text-[9px] text-gray-400">담당자</p>
-              <p className={cn("text-[10px] mt-0.5 truncate", customerDetail?.contact_name ? "text-gray-700" : "text-gray-300")}>
+              <p className="text-[11px] text-gray-400">담당자</p>
+              <p className={cn("text-sm mt-0.5 truncate", customerDetail?.contact_name ? "text-gray-700" : "text-gray-300")}>
                 {customerDetail?.contact_name || "미등록"}
               </p>
             </div>
             <div className="rounded-lg bg-gray-50 px-2.5 py-2">
-              <p className="text-[9px] text-gray-400">연락처</p>
-              <p className={cn("text-[10px] mt-0.5 truncate", customerDetail?.phone ? "text-gray-700" : "text-gray-300")}>
+              <p className="text-[11px] text-gray-400">연락처</p>
+              <p className={cn("text-sm mt-0.5 truncate", customerDetail?.phone ? "text-gray-700" : "text-gray-300")}>
                 {customerDetail?.phone ? formatPhone(customerDetail.phone) : "미등록"}
               </p>
             </div>
@@ -3183,7 +3175,7 @@ function CustomerPanel({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus
-                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400"
                 />
               </div>
 
@@ -3198,11 +3190,11 @@ function CustomerPanel({
                       onClick={() => handleSelectCustomer(c.id)}
                       className={cn(
                         "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0",
-                        customer && c.id === customer.id && "bg-sky-aqua/5"
+                        customer && c.id === customer.id && "bg-slate-700/5"
                       )}
                     >
-                      <div className="w-7 h-7 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
-                        <Building2 className="h-3.5 w-3.5 text-tropical-teal" />
+                      <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                        <Building2 className="h-3.5 w-3.5 text-slate-500" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{c.company_name}</p>
@@ -3224,7 +3216,7 @@ function CustomerPanel({
                   }
                   setIsCreateMode(true)
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-sky-aqua/50 text-sky-aqua text-sm font-medium hover:border-sky-aqua hover:bg-sky-aqua/5 transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-slate-400/50 text-slate-700 text-sm font-medium hover:border-slate-400 hover:bg-slate-50 transition-all"
               >
                 <Plus className="h-4 w-4" />
                 새 고객 등록
@@ -3237,7 +3229,7 @@ function CustomerPanel({
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
-                  회사명 <span className="text-soft-blush">*</span>
+                  회사명 <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   placeholder="예: (주)한국건설"
@@ -3276,7 +3268,7 @@ function CustomerPanel({
                 <button
                   onClick={handleCreateAndLink}
                   disabled={isCreating || !createForm.company_name.trim()}
-                  className="px-4 py-2 text-sm rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm rounded-md bg-slate-700 text-white hover:bg-slate-700/80 transition-colors disabled:opacity-50"
                 >
                   {isCreating ? "등록 중..." : "등록 후 연결"}
                 </button>
@@ -3289,20 +3281,25 @@ function CustomerPanel({
   )
 }
 
-export function RequestKanbanBoard({ columns: initialColumns, totalCount, customers, hiddenItems: initialHiddenItems }: Props) {
+export function RequestKanbanBoard({ columns: initialColumns, totalCount, customers, hiddenItems: initialHiddenItems, failedItems: initialFailedItems }: Props) {
   const router = useRouter()
 
   // 드래그로 카드 이동 시 화면에 바로 반영하기 위해 state로 관리
   const [columns, setColumns] = useState(initialColumns)
   // 숨긴 카드 목록
   const [hiddenItems, setHiddenItems] = useState(initialHiddenItems)
+  // 수주 실패 카드 목록
+  const [failedItems, setFailedItems] = useState(initialFailedItems)
   // 숨김 패널: 상태별 펼침/접힘
   const [expandedHiddenStatus, setExpandedHiddenStatus] = useState<string | null>(null)
+  // 수주 실패 패널 펼침/접힘
+  const [isFailedExpanded, setIsFailedExpanded] = useState(false)
 
   // 서버에서 새 데이터가 오면 (생성/삭제 후 refresh) 화면도 바로 갱신
   // JSON 비교로 "실제 데이터"가 바뀔 때만 동기화 (드래그 중 리셋 방지)
   const prevDataRef = useRef(JSON.stringify(initialColumns))
   const prevHiddenRef = useRef(JSON.stringify(initialHiddenItems))
+  const prevFailedRef = useRef(JSON.stringify(initialFailedItems))
   useEffect(() => {
     const newData = JSON.stringify(initialColumns)
     if (prevDataRef.current !== newData) {
@@ -3314,7 +3311,12 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       prevHiddenRef.current = newHidden
       setHiddenItems(initialHiddenItems)
     }
-  }, [initialColumns, initialHiddenItems])
+    const newFailed = JSON.stringify(initialFailedItems)
+    if (prevFailedRef.current !== newFailed) {
+      prevFailedRef.current = newFailed
+      setFailedItems(initialFailedItems)
+    }
+  }, [initialColumns, initialHiddenItems, initialFailedItems])
   // 삭제 확인 다이얼로그용 state
   const [deleteTarget, setDeleteTarget] = useState<RequestItem | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -3322,9 +3324,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [selectedItem, setSelectedItem] = useState<RequestItem | null>(null)
   // 자동저장 상태 메시지
   const [saveMessage, setSaveMessage] = useState("")
-  // 우측 패널 탭 전환 요청 (좌측 카드 클릭 시)
-  const [requestedFlow, setRequestedFlow] = useState<"견적" | "계약" | "주문·배송" | "지출" | undefined>(undefined)
-  const [requestedContractTab, setRequestedContractTab] = useState<"계약서" | "정산 현황" | undefined>(undefined)
+  // 탭 전환 요청 (개요 카드 클릭 시 해당 탭으로 이동)
+  const [requestedFlow, setRequestedFlow] = useState<"개요" | "견적" | "계약" | "정산" | "주문·배송" | "지출" | undefined>(undefined)
 
   // 고객 목록 로컬 state (즉석 생성 시 낙관적 업데이트용)
   const [localCustomers, setLocalCustomers] = useState(customers)
@@ -3627,29 +3628,54 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     // 패널이 이미 닫힌 상태면 다시 열지 않음
     setSelectedItem((prev) => prev ? updatedItem : null)
 
-    // 칸반보드 columns도 업데이트
-    setColumns((prev) => {
-      // 상태가 변경되면 카드를 다른 컬럼으로 이동
-      if (field === "status" && value !== selectedItem.status) {
-        return prev.map((col) => {
-          if (col.status === selectedItem.status) {
-            // 기존 컬럼에서 제거
+    // 칸반보드 columns + failedItems 업데이트
+    if (field === "status" && value !== selectedItem.status) {
+      const oldStatus = selectedItem.status
+      const newStatus = value
+
+      // "수주 실패"로 변경 → 컬럼에서 제거, failedItems에 추가
+      if (newStatus === "수주 실패") {
+        setColumns((prev) => prev.map((col) => {
+          if (col.status === oldStatus) {
             const filtered = col.items.filter((i) => i.id !== selectedItem.id)
             return { ...col, items: filtered, count: filtered.length }
           }
-          if (col.status === value) {
-            // 새 컬럼에 추가
+          return col
+        }))
+        setFailedItems((prev) => [updatedItem, ...prev])
+      }
+      // "수주 실패"에서 다른 상태로 변경 → failedItems에서 제거, 해당 컬럼에 추가
+      else if (oldStatus === "수주 실패") {
+        setFailedItems((prev) => prev.filter((i) => i.id !== selectedItem.id))
+        setColumns((prev) => prev.map((col) => {
+          if (col.status === newStatus) {
             return { ...col, items: [updatedItem, ...col.items], count: col.count + 1 }
           }
           return col
-        })
+        }))
       }
+      // 일반 컬럼 간 이동
+      else {
+        setColumns((prev) => prev.map((col) => {
+          if (col.status === oldStatus) {
+            const filtered = col.items.filter((i) => i.id !== selectedItem.id)
+            return { ...col, items: filtered, count: filtered.length }
+          }
+          if (col.status === newStatus) {
+            return { ...col, items: [updatedItem, ...col.items], count: col.count + 1 }
+          }
+          return col
+        }))
+      }
+    } else {
       // 일반 필드 변경: 같은 컬럼에서 업데이트
-      return prev.map((col) => ({
+      setColumns((prev) => prev.map((col) => ({
         ...col,
         items: col.items.map((i) => (i.id === selectedItem.id ? updatedItem : i)),
-      }))
-    })
+      })))
+      // failedItems에서도 업데이트 (수주 실패 상태의 카드 필드 변경 시)
+      setFailedItems((prev) => prev.map((i) => (i.id === selectedItem.id ? updatedItem : i)))
+    }
 
     try {
       const res = await fetch("/api/requests", {
@@ -3781,11 +3807,14 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
     // 화면에서 먼저 제거 (낙관적 업데이트)
     const prevColumns = columns
+    const prevFailed = failedItems
     const newColumns = columns.map((col) => {
       const filtered = col.items.filter((item) => item.id !== targetId)
       return { ...col, items: filtered, count: filtered.length }
     })
     setColumns(newColumns)
+    // failedItems에서도 제거 (수주 실패 상태 카드 삭제 시)
+    setFailedItems((prev) => prev.filter((item) => item.id !== targetId))
     setDeleteTarget(null)
 
     // DB에서 삭제 (admin API 사용 → RLS 우회)
@@ -3800,10 +3829,12 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       if (!res.ok) {
         alert("삭제 실패: " + (result.error || "알 수 없는 오류"))
         setColumns(prevColumns)
+        setFailedItems(prevFailed)
       }
     } catch {
       alert("삭제 중 오류가 발생했습니다")
       setColumns(prevColumns)
+      setFailedItems(prevFailed)
     }
     setIsDeleting(false)
   }
@@ -3813,11 +3844,18 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     // 화면에서 먼저 숨김 (낙관적 업데이트)
     const prevColumns = columns
     const prevHidden = hiddenItems
-    const newColumns = columns.map((col) => {
-      const filtered = col.items.filter((i) => i.id !== item.id)
-      return { ...col, items: filtered, count: filtered.length }
-    })
-    setColumns(newColumns)
+    const prevFailed = failedItems
+
+    // "수주 실패" 카드는 failedItems에서 제거, 나머지는 columns에서 제거
+    if (item.status === "수주 실패") {
+      setFailedItems((prev) => prev.filter((i) => i.id !== item.id))
+    } else {
+      const newColumns = columns.map((col) => {
+        const filtered = col.items.filter((i) => i.id !== item.id)
+        return { ...col, items: filtered, count: filtered.length }
+      })
+      setColumns(newColumns)
+    }
     setHiddenItems((prev) => [item, ...prev])
 
     try {
@@ -3827,13 +3865,14 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         body: JSON.stringify({ id: item.id, hidden: true }),
       })
       if (!res.ok) {
-        // 실패 시 직전 상태로 되돌리기
         setColumns(prevColumns)
         setHiddenItems(prevHidden)
+        setFailedItems(prevFailed)
       }
     } catch {
       setColumns(prevColumns)
       setHiddenItems(prevHidden)
+      setFailedItems(prevFailed)
     }
   }
 
@@ -3842,14 +3881,21 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     // 화면에서 먼저 복원 (낙관적 업데이트)
     const prevColumns = columns
     const prevHidden = hiddenItems
+    const prevFailed = failedItems
     setHiddenItems((prev) => prev.filter((i) => i.id !== item.id))
-    const newColumns = columns.map((col) => {
-      if (col.status === item.status) {
-        return { ...col, items: [item, ...col.items], count: col.count + 1 }
-      }
-      return col
-    })
-    setColumns(newColumns)
+
+    // "수주 실패" 상태 카드는 failedItems로, 나머지는 해당 컬럼으로
+    if (item.status === "수주 실패") {
+      setFailedItems((prev) => [item, ...prev])
+    } else {
+      const newColumns = columns.map((col) => {
+        if (col.status === item.status) {
+          return { ...col, items: [item, ...col.items], count: col.count + 1 }
+        }
+        return col
+      })
+      setColumns(newColumns)
+    }
 
     try {
       const res = await fetch("/api/requests", {
@@ -3860,10 +3906,12 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       if (!res.ok) {
         setColumns(prevColumns)
         setHiddenItems(prevHidden)
+        setFailedItems(prevFailed)
       }
     } catch {
       setColumns(prevColumns)
       setHiddenItems(prevHidden)
+      setFailedItems(prevFailed)
     }
   }
 
@@ -3896,10 +3944,10 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
   return (
     <div className="flex flex-col h-full overflow-auto -m-6 bg-white">
-      {/* 페이지 헤더 + 탭 네비게이션 */}
-      <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white z-10">
-        <SalesTabNav />
-        <p className="text-sm text-gray-500">총 {totalCount}건</p>
+      {/* 페이지 헤더 */}
+      <div className="flex items-center justify-between px-6 py-3 border-b sticky top-0 bg-white z-10">
+        <h1 className="text-[15px] font-semibold text-slate-800">현장관리</h1>
+        <p className="text-sm text-gray-400">총 {totalCount}건</p>
       </div>
 
       {/* 칸반 보드 */}
@@ -3912,11 +3960,11 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
               return (
                 <div
                   key={col.status}
-                  className={cn("flex flex-col flex-1 min-w-0 rounded-2xl border border-gray-100/50", style.bg)}
+                  className={cn("flex flex-col flex-1 min-w-0 rounded-lg border border-slate-200", style.bg)}
                 >
                   {/* 컬럼 헤더 */}
                   <div className="flex items-center justify-between px-4 py-3">
-                    <h2 className={cn("font-extrabold text-lg", style.header)}>
+                    <h2 className={cn("font-semibold text-sm", style.header)}>
                       {col.status}
                     </h2>
                     <div className="flex items-center gap-1.5">
@@ -3969,9 +4017,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                 {...provided.dragHandleProps}
                                 onClick={() => setSelectedItem(item)}
                                 className={cn(
-                                  "group relative bg-white/80 backdrop-blur-md rounded-xl border-l-[6px] border-t border-r border-b border-gray-100 p-5 min-h-[150px] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 cursor-grab",
-                                  style.cardBar,
-                                  snapshot.isDragging && "shadow-2xl ring-2 ring-sky-aqua/20 scale-[1.02]"
+                                  "group relative bg-white rounded-md border border-slate-200 p-3 shadow-none hover:shadow-md hover:-translate-y-0.5 transition-all cursor-grab",
+                                  snapshot.isDragging && "shadow-md ring-1 ring-slate-200 scale-[1.01]"
                                 )}
                               >
                                 {/* 숨김 버튼 (호버 시에만 표시) */}
@@ -3981,7 +4028,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                     handleHide(item)
                                   }}
                                   title="숨기기"
-                                  className="absolute bottom-3 right-12 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-gray-400 hover:bg-gray-500 text-white shadow-md hover:scale-110"
+                                  className="absolute bottom-2 right-10 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
                                 >
                                   <EyeOff className="h-4 w-4" />
                                 </button>
@@ -3992,23 +4039,20 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                     e.stopPropagation()
                                     setDeleteTarget(item)
                                   }}
-                                  className="absolute bottom-3 right-3 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-soft-blush hover:bg-soft-blush/80 text-white shadow-md hover:scale-110"
+                                  className="absolute bottom-2 right-2 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-white border border-slate-200 text-red-500 hover:bg-red-50 hover:text-red-600"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
 
                                 {/* 상태 배지 (우측 상단 모서리) */}
-                                <Badge className={cn("absolute top-2 right-2 text-[9px] px-1 py-0", style.badge)}>
+                                <Badge className={cn("absolute top-2 right-2 text-[10px] px-1.5 py-0.5", style.badge)}>
                                   {col.status}
                                 </Badge>
 
                                 {/* 제목 */}
                                 <div className="mb-2 pr-16">
                                   <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 truncate" title={item.title}>
-                                    {(() => {
-                                      const Icon = COLUMN_ICONS[col.status] || ClipboardList
-                                      return <Icon className="h-3 w-3 text-gray-500 shrink-0" />
-                                    })()}
+                                    <Hash className="h-3.5 w-3.5 text-gray-900 shrink-0" />
                                     <span className="truncate">{item.title}</span>
                                   </p>
                                 </div>
@@ -4021,7 +4065,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                   </div>
                                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                     <Building2 className="h-3 w-3 shrink-0" />
-                                    <span className={item.customer?.deleted_at ? "text-soft-blush" : ""}>
+                                    <span className={item.customer?.deleted_at ? "text-red-500" : ""}>
                                       {item.customer ? (item.customer.deleted_at ? "삭제된 고객" : item.customer.company_name) : "없음"}
                                     </span>
                                   </div>
@@ -4039,7 +4083,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                       <>
                                         <Receipt className="h-3 w-3 shrink-0" />
                                         <span>계산서 발행완료</span>
-                                        <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-muted-teal" />
+                                        <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-green-600" />
                                       </>
                                     ) : item.contract.tax_invoice_some_issued ? (
                                       <>
@@ -4074,7 +4118,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                       <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
                                         <Banknote className="h-3 w-3 shrink-0" />
                                         <span>정산완료</span>
-                                        <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-muted-teal" />
+                                        <CheckCircle2 className="h-2.5 w-2.5 shrink-0 text-green-600" />
                                       </div>
                                     )
                                   }
@@ -4103,7 +4147,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                               {i > 0 && <span className="text-gray-300">·</span>}
                                               {s.status === "partial" ? `${s.name} (부분입금)` : s.name}
                                               {s.status === "paid" ? (
-                                                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-muted-teal">
+                                                <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-green-500">
                                                   <CheckCircle2 className="h-3 w-3 text-white" />
                                                 </span>
                                               ) : s.status === "partial" ? (
@@ -4159,7 +4203,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                     <div className="px-3 pb-3">
                       <button
                         onClick={() => setIsCreateOpen(true)}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border-2 border-dashed border-sky-aqua/50 bg-sky-aqua/10 text-sky-aqua text-sm font-semibold hover:border-sky-aqua hover:bg-sky-aqua/20 transition-all"
+                        className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border-2 border-dashed border-slate-400/50 bg-slate-100 text-slate-700 text-sm font-semibold hover:border-slate-400 hover:bg-slate-700/20 transition-all"
                       >
                         <Plus className="h-4 w-4 stroke-[2.5]" />
                         의뢰 생성
@@ -4169,74 +4213,109 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                 </div>
               )
             })}
-            {/* ===== 숨김 패널 (칸반보드 맨 우측) ===== */}
-            {(() => {
-              // 상태별 숨김 건수 계산
-              const hiddenByStatus = hiddenItems.reduce<Record<string, RequestItem[]>>((acc, item) => {
-                if (!acc[item.status]) acc[item.status] = []
-                acc[item.status].push(item)
-                return acc
-              }, {})
-              const statuses = ["견적 문의", "영업중", "계약 성공", "수주 실패"]
-
-              return (
-                <div className="flex flex-col w-[180px] rounded-lg bg-white shrink-0">
-                  {/* 패널 헤더 */}
-                  <div className="flex items-center gap-2 px-3 py-3 border-b border-gray-200">
-                    <EyeOff className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm font-bold text-gray-700">숨김</span>
+            {/* ===== 우측 패널: 수주 실패 + 숨김 ===== */}
+            <div className="flex flex-col w-[180px] rounded-lg bg-white shrink-0">
+              {/* ── 수주 실패 섹션 ── */}
+              <div className="border-b border-gray-200">
+                <button
+                  onClick={() => setIsFailedExpanded(!isFailedExpanded)}
+                  className="w-full flex items-center justify-between px-3 py-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-4 w-4 text-red-400" />
+                    <span className="text-sm font-bold text-gray-700">수주 실패</span>
                   </div>
+                  <Badge className="bg-red-100 text-red-600 text-[10px] px-1.5 py-0">
+                    {failedItems.length}
+                  </Badge>
+                </button>
 
-                  {/* 상태별 뱃지 + 숫자 (세로 배치) */}
-                  <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-                    {statuses.map((status) => {
-                      const groupStyle = COLUMN_STYLES[status] || COLUMN_STYLES["견적 문의"]
-                      const items = hiddenByStatus[status] || []
-                      const isExpanded = expandedHiddenStatus === status
-
-                      return (
-                        <div key={status}>
-                          {/* 뱃지 + 숫자 (클릭하면 펼침/접힘) */}
-                          <button
-                            onClick={() => setExpandedHiddenStatus(isExpanded ? null : status)}
-                            className="w-full flex items-center justify-between px-2.5 py-2 rounded-md transition-colors hover:bg-gray-100 cursor-pointer"
-                          >
-                            <Badge className={cn("text-[10px] px-1.5 py-0", groupStyle.badge)}>
-                              {status}
-                            </Badge>
-                            <span className="text-sm font-semibold text-gray-700">
-                              {items.length}
-                            </span>
-                          </button>
-
-                          {/* 펼쳐진 현장명 목록 + 체크박스 */}
-                          {isExpanded && items.length > 0 && (
-                            <div className="space-y-1 px-1 py-1.5">
-                              {items.map((item) => (
-                                <label
-                                  key={item.id}
-                                  className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-100 transition-colors"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={false}
-                                    onChange={() => handleUnhide(item)}
-                                    className="h-3.5 w-3.5 rounded border-gray-300 text-gray-500 shrink-0 cursor-pointer"
-                                  />
-                                  <span className="text-xs text-gray-700 truncate" title={item.title}>
-                                    {item.title}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                {/* 수주 실패 항목 목록 (펼침 시) */}
+                {isFailedExpanded && failedItems.length > 0 && (
+                  <div className="space-y-1 px-2 pb-2">
+                    {failedItems.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedItem(item)}
+                        className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-100 transition-colors text-left"
+                      >
+                        <span className="text-xs text-gray-700 truncate" title={item.title}>
+                          {item.title}
+                        </span>
+                      </button>
+                    ))}
                   </div>
-                </div>
-              )
-            })()}
+                )}
+                {isFailedExpanded && failedItems.length === 0 && (
+                  <div className="px-3 pb-3 text-[10px] text-gray-400">없음</div>
+                )}
+              </div>
+
+              {/* ── 숨김 섹션 ── */}
+              {(() => {
+                // 상태별 숨김 건수 계산
+                const hiddenByStatus = hiddenItems.reduce<Record<string, RequestItem[]>>((acc, item) => {
+                  if (!acc[item.status]) acc[item.status] = []
+                  acc[item.status].push(item)
+                  return acc
+                }, {})
+                const statuses = ["견적 문의", "영업중", "계약 성공", "수주 실패"]
+
+                return (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-3 border-b border-gray-200">
+                      <EyeOff className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm font-bold text-gray-700">숨김</span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+                      {statuses.map((status) => {
+                        const groupStyle = COLUMN_STYLES[status] || COLUMN_STYLES["견적 문의"]
+                        const items = hiddenByStatus[status] || []
+                        const isExpanded = expandedHiddenStatus === status
+
+                        return (
+                          <div key={status}>
+                            <button
+                              onClick={() => setExpandedHiddenStatus(isExpanded ? null : status)}
+                              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md transition-colors hover:bg-gray-100 cursor-pointer"
+                            >
+                              <Badge className={cn("text-[10px] px-1.5 py-0", groupStyle.badge)}>
+                                {status}
+                              </Badge>
+                              <span className="text-sm font-semibold text-gray-700">
+                                {items.length}
+                              </span>
+                            </button>
+
+                            {isExpanded && items.length > 0 && (
+                              <div className="space-y-1 px-1 py-1.5">
+                                {items.map((item) => (
+                                  <label
+                                    key={item.id}
+                                    className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-100 transition-colors"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={false}
+                                      onChange={() => handleUnhide(item)}
+                                      className="h-3.5 w-3.5 rounded border-gray-300 text-gray-500 shrink-0 cursor-pointer"
+                                    />
+                                    <span className="text-xs text-gray-700 truncate" title={item.title}>
+                                      {item.title}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
           </div>
         </div>
       </DragDropContext>
@@ -4252,7 +4331,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
               </span>
               을(를) 삭제하시겠습니까?
               <br />
-              <span className="text-soft-blush font-semibold">삭제하면 되돌릴 수 없습니다.</span>
+              <span className="text-red-500 font-semibold">삭제하면 되돌릴 수 없습니다.</span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
@@ -4265,7 +4344,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
             <button
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
-              className="px-4 py-2 text-sm rounded-md bg-soft-blush text-white hover:bg-soft-blush/80 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-md bg-red-500 text-white hover:bg-red-500/80 transition-colors disabled:opacity-50"
             >
               {isDeleting ? "삭제 중..." : "삭제"}
             </button>
@@ -4295,7 +4374,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
             {/* 제목 (필수) */}
             <div className="space-y-2">
               <Label htmlFor="create-title" className="text-sm font-medium">
-                제목 <span className="text-soft-blush">*</span>
+                제목 <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="create-title"
@@ -4308,16 +4387,16 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
             {/* 고객 선택 */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">고객 <span className="text-soft-blush">*</span></Label>
+              <Label className="text-sm font-medium">고객 <span className="text-red-500">*</span></Label>
               <button
                 type="button"
                 onClick={() => setIsCreateCustomerModalOpen(true)}
-                className="w-full flex items-center justify-between px-3 py-2.5 border border-gray-200 rounded-lg hover:border-sky-aqua/50 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2.5 border border-gray-200 rounded-lg hover:border-slate-400/50 transition-colors"
               >
                 {createForm.customer_id ? (
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
-                      <Building2 className="h-3 w-3 text-tropical-teal" />
+                    <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                      <Building2 className="h-3 w-3 text-slate-500" />
                     </div>
                     <span className="text-sm font-medium text-gray-900">
                       {localCustomers.find((c) => c.id === createForm.customer_id)?.company_name || ""}
@@ -4370,7 +4449,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
             <button
               onClick={handleCreate}
               disabled={isCreating || !createForm.title.trim()}
-              className="px-4 py-2 text-sm rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-md bg-slate-700 text-white hover:bg-slate-700/80 transition-colors disabled:opacity-50"
             >
               {isCreating ? "생성 중..." : "생성"}
             </button>
@@ -4378,9 +4457,9 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         </DialogContent>
       </Dialog>
 
-      {/* 의뢰 상세 패널 (오른쪽 슬라이드) */}
+      {/* 의뢰 상세 패널 (오른쪽 슬라이드) — 단일 컬럼이므로 700px로 축소 */}
       <Sheet open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-[900px] p-0 flex flex-col [&>button:first-child]:hidden">
+        <SheetContent side="right" className="w-full sm:max-w-[700px] p-0 flex flex-col [&>button:first-child]:hidden">
           {selectedItem && (() => {
             const confirmedQuoteId = selectedItem.confirmed_quote_id
             const confirmedQuote = confirmedQuoteId
@@ -4392,20 +4471,36 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
             const confirmedGrandTotal = confirmedQuote?.grand_total ?? null
             return (
               <>
-                {/* 상단 헤더 */}
-                <div className="flex items-center justify-between px-6 py-4 border-b">
-                  <button
-                    onClick={() => setSelectedItem(null)}
-                    className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
-                  >
-                    <ArrowLeft className="h-5 w-5 text-gray-600" />
-                  </button>
+                {/* 상단 헤더: ← 닫기 + [상태 배지] + 자동저장 + 삭제 + ✕ */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/60 bg-gradient-to-r from-slate-50/80 to-white">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setSelectedItem(null)}
+                      className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                      <ArrowLeft className="h-5 w-5 text-gray-600" />
+                    </button>
+                    {/* 상태 배지 (클릭으로 변경 가능) */}
+                    <InlineSelect
+                      value={selectedItem.status}
+                      displayValue={selectedItem.status}
+                      placeholder="상태를 선택하세요"
+                      options={REQUEST_STATUSES.filter((s) => s.value !== "숨김").map((s) => ({ value: s.value, label: s.label }))}
+                      onConfirm={(v) => updateRequestField("status", v)}
+                      badgeStyles={{
+                        "견적 문의": COLUMN_STYLES["견적 문의"].badge,
+                        "영업중": COLUMN_STYLES["영업중"].badge,
+                        "계약 성공": COLUMN_STYLES["계약 성공"].badge,
+                        "수주 실패": COLUMN_STYLES["수주 실패"].badge,
+                      }}
+                      align="left"
+                    />
+                  </div>
                   <div className="flex items-center gap-2">
-                    {/* 자동저장 상태 메시지 */}
                     {saveMessage && (
                       <span className={cn(
                         "text-sm",
-                        saveMessage.includes("실패") ? "text-soft-blush" : "text-muted-teal"
+                        saveMessage.includes("실패") ? "text-red-500" : "text-green-600"
                       )}>
                         {saveMessage}
                       </span>
@@ -4415,142 +4510,149 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         setDeleteTarget(selectedItem)
                         setSelectedItem(null)
                       }}
-                      className="px-3 py-1.5 text-sm rounded-md text-soft-blush hover:bg-soft-blush/10 transition-colors"
+                      className="px-3 py-1.5 text-sm rounded-md text-red-500 hover:bg-red-500/10 transition-colors"
                     >
                       삭제하기
                     </button>
                     <button
                       onClick={() => setSelectedItem(null)}
-                      className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
+                      className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
                     >
                       <X className="h-5 w-5 text-gray-600" />
                     </button>
                   </div>
                 </div>
 
-                {/* 본문: 좌우 분리 */}
-                <div className="flex-1 flex overflow-hidden">
-                  {/* ===== 왼쪽 영역: 의뢰 상세 정보 ===== */}
-                  <div className="w-1/2 shrink-0 overflow-y-auto px-5 py-6 border-r [&_.text-\\[10px\\]]:text-xs [&_.text-\\[9px\\]]:text-[10px] [&_.text-xs]:text-sm [&_.no-scale_.text-\\[10px\\]]:text-[10px] [&_.no-scale_.text-\\[9px\\]]:text-[9px] [&_.no-scale_.text-xs]:text-xs">
-                    {/* 상태 배지(클릭 변경) + 생성일 */}
-                    <div className="flex items-center gap-2.5 mb-4">
-                      <InlineSelect
-                        value={selectedItem.status}
-                        displayValue={selectedItem.status}
-                        placeholder="상태를 선택하세요"
-                        options={REQUEST_STATUSES.filter((s) => s.value !== "숨김").map((s) => ({ value: s.value, label: s.label }))}
-                        onConfirm={(v) => updateRequestField("status", v)}
-                        badgeStyles={{
-                          "견적 문의": COLUMN_STYLES["견적 문의"].badge,
-                          "영업중": COLUMN_STYLES["영업중"].badge,
-                          "계약 성공": COLUMN_STYLES["계약 성공"].badge,
-                          "수주 실패": COLUMN_STYLES["수주 실패"].badge,
-                        }}
-                        align="left"
-                      />
-                      <span className="text-[10px] text-gray-400">
-                        {formatDateTime(selectedItem.created_at).replace(/^\d{2}/, '')} 생성
-                      </span>
-                    </div>
+                {/* 제목 + 메타 정보 (날짜 · 고객) */}
+                <div className="px-6 pt-4 pb-3">
+                  <SheetHeader className="mb-2">
+                    <SheetTitle className="sr-only">의뢰 상세</SheetTitle>
+                    <SheetDescription className="sr-only">의뢰 상세 정보</SheetDescription>
+                    <InlineTitle
+                      value={selectedItem.title}
+                      onConfirm={(v) => {
+                        if (v.trim()) updateRequestField("title", v.trim())
+                      }}
+                    />
+                  </SheetHeader>
+                  {/* 메타 정보 한 줄: 날짜 · 고객 · 생성일 — pill 칩 스타일 */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-xs text-slate-600">
+                      <Calendar className="h-3 w-3" />
+                      {selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : "문의일 미지정"}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-xs text-slate-600">
+                      <Building2 className="h-3 w-3" />
+                      {selectedItem.customer?.company_name || "고객 미연결"}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 text-xs text-slate-400">
+                      {formatDateTime(selectedItem.created_at).replace(/^\d{2}/, '')} 생성
+                    </span>
+                  </div>
+                </div>
 
-                    {/* 제목 (인라인 편집) */}
-                    <SheetHeader className="mb-6">
-                      <SheetTitle className="sr-only">의뢰 상세</SheetTitle>
-                      <SheetDescription className="sr-only">의뢰 상세 정보</SheetDescription>
-                      <InlineTitle
-                        value={selectedItem.title}
-                        onConfirm={(v) => {
-                          if (v.trim()) updateRequestField("title", v.trim())
-                        }}
-                      />
-                    </SheetHeader>
-
-                    <Separator className="mb-6" />
-
-                    {/* 상세 정보 */}
-                    <div className="space-y-5">
-                      <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-sky-aqua/5 transition-colors">
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
-                          <Box className="h-3 w-3" />
-                          문의 일시
-                        </span>
-                        <InlineDate
-                          value={selectedItem.inquiry_date || ""}
-                          displayValue={selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : ""}
-                          placeholder="날짜 선택"
-                          onConfirm={(v) => updateRequestField("inquiry_date", v || null)}
-                        />
-                      </div>
-
-                      <CustomerPanel
-                        customer={selectedItem.customer}
-                        customers={localCustomers}
-                        onLink={(id) => updateRequestField("customer_id", id)}
-                        onUnlink={() => updateRequestField("customer_id", null)}
-                        onOpenDetail={() => {
-                          if (selectedItem.customer?.id) setCustomerDetailId(selectedItem.customer.id)
-                        }}
-                        onCreateAndLink={async (form) => {
-                          // 1. 고객 생성
-                          const res = await fetch("/api/customers", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(form),
-                          })
-                          const result = await res.json()
-                          if (!res.ok) throw new Error(result.error)
-                          const nc = result.data
-
-                          // 2. 로컬 고객 목록에 추가
-                          setLocalCustomers((prev) => [...prev, {
-                            id: nc.id,
-                            company_name: nc.company_name,
-                            contact_name: nc.contact_name ?? null,
-                            phone: nc.phone ?? null,
-                            email: nc.email ?? null,
-                            address: nc.address ?? null,
-                            representative: nc.representative ?? null,
-                            business_number: nc.business_number ?? null,
-                            memo: nc.memo ?? null,
-                          }])
-
-                          // 3. 의뢰에 고객 직접 연결 (stale closure 우회)
-                          const updatedItem = {
-                            ...selectedItem,
-                            customer: { id: nc.id, company_name: nc.company_name, deleted_at: null },
-                          }
-                          setSelectedItem((prev) => prev ? updatedItem : null)
-                          setColumns((prev) => prev.map((col) => ({
-                            ...col,
-                            items: col.items.map((i) => i.id === selectedItem.id ? updatedItem : i),
-                          })))
-
-                          setSaveMessage("저장 중...")
-                          try {
-                            const linkRes = await fetch("/api/requests", {
-                              method: "PATCH",
+                {/* 단일 컬럼 본문: 탭 네비 + 탭 내용 */}
+                <div className="flex-1 overflow-y-auto px-6 pt-2 pb-6 scrollbar-hidden">
+                  <SalesFlowPanel
+                    quotations={quotations}
+                    onAddQuote={handleAddQuote}
+                    onEditQuote={handleEditQuote}
+                    confirmedQuoteId={confirmedQuoteId}
+                    onToggleConfirm={handleToggleConfirmedQuote}
+                    requestId={selectedItem.id}
+                    requestTitle={selectedItem.title}
+                    requestCustomer={selectedItem.customer}
+                    requestContractId={selectedItem.contract_id}
+                    onLinkContract={async (contractId) => {
+                      await updateRequestField("contract_id", contractId)
+                    }}
+                    onSavedContract={(contractId) => {
+                      void loadContractSummaryById(contractId, selectedItem.id)
+                    }}
+                    onSummaryChange={handleSummaryChange}
+                    contractSummary={contractSummary}
+                    requestedFlow={requestedFlow}
+                    overviewContent={
+                      /* ===== 개요 탭 내용: 고객 + 견적 + 계약 + 정산 요약 카드 ===== */
+                      <div className="space-y-6">
+                        {/* 고객 정보 */}
+                        <CustomerPanel
+                          customer={selectedItem.customer}
+                          customers={localCustomers}
+                          onLink={(id) => updateRequestField("customer_id", id)}
+                          onUnlink={() => updateRequestField("customer_id", null)}
+                          onOpenDetail={() => {
+                            if (selectedItem.customer?.id) setCustomerDetailId(selectedItem.customer.id)
+                          }}
+                          onCreateAndLink={async (form) => {
+                            const res = await fetch("/api/customers", {
+                              method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ id: selectedItem.id, customer_id: nc.id }),
+                              body: JSON.stringify(form),
                             })
-                            if (!linkRes.ok) {
+                            const result = await res.json()
+                            if (!res.ok) throw new Error(result.error)
+                            const nc = result.data
+                            setLocalCustomers((prev) => [...prev, {
+                              id: nc.id,
+                              company_name: nc.company_name,
+                              contact_name: nc.contact_name ?? null,
+                              phone: nc.phone ?? null,
+                              email: nc.email ?? null,
+                              address: nc.address ?? null,
+                              representative: nc.representative ?? null,
+                              business_number: nc.business_number ?? null,
+                              memo: nc.memo ?? null,
+                            }])
+                            const updatedItem = {
+                              ...selectedItem,
+                              customer: { id: nc.id, company_name: nc.company_name, deleted_at: null },
+                            }
+                            setSelectedItem((prev) => prev ? updatedItem : null)
+                            setColumns((prev) => prev.map((col) => ({
+                              ...col,
+                              items: col.items.map((i) => i.id === selectedItem.id ? updatedItem : i),
+                            })))
+                            setSaveMessage("저장 중...")
+                            try {
+                              const linkRes = await fetch("/api/requests", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: selectedItem.id, customer_id: nc.id }),
+                              })
+                              if (!linkRes.ok) {
+                                setSaveMessage("저장 실패")
+                                setTimeout(() => setSaveMessage(""), 2000)
+                              } else {
+                                setSaveMessage("자동 저장됨")
+                                setTimeout(() => setSaveMessage(""), 1500)
+                              }
+                            } catch {
                               setSaveMessage("저장 실패")
                               setTimeout(() => setSaveMessage(""), 2000)
-                            } else {
-                              setSaveMessage("자동 저장됨")
-                              setTimeout(() => setSaveMessage(""), 1500)
                             }
-                          } catch {
-                            setSaveMessage("저장 실패")
-                            setTimeout(() => setSaveMessage(""), 2000)
-                          }
-                        }}
-                      />
+                          }}
+                        />
 
-                      <div className="no-scale flex items-center justify-between rounded-md px-2 -mx-2 py-1">
-                        <div className="w-full space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="inline-flex items-center gap-1 text-xs font-medium text-gray-500">
-                              <Box className="h-3 w-3" />
+                        {/* 문의 일시 */}
+                        <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-slate-50 transition-colors">
+                          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                            <Calendar className="h-4 w-4" />
+                            문의 일시
+                          </span>
+                          <InlineDate
+                            value={selectedItem.inquiry_date || ""}
+                            displayValue={selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : ""}
+                            placeholder="날짜 선택"
+                            onConfirm={(v) => updateRequestField("inquiry_date", v || null)}
+                          />
+                        </div>
+
+                        {/* 확정 견적서 요약 — 클릭 시 견적 탭 이동 */}
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                            <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                              <FileText className="h-4 w-4" />
                               확정 견적서
                             </p>
                             {!confirmedQuoteId ? (
@@ -4562,43 +4664,42 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                           <button
                             type="button"
                             onClick={() => {
-                              if (confirmedQuoteId) handleEditQuote(confirmedQuoteId)
+                              if (confirmedQuoteId) setRequestedFlow("견적")
                             }}
                             disabled={!confirmedQuoteId}
-                            aria-label={confirmedQuoteId ? "확정 견적서 열기" : "확정 견적서 없음"}
                             className={cn(
-                              "w-full rounded-xl border border-gray-200 bg-white p-4 space-y-3 text-left transition-colors",
+                              "w-full rounded-xl border border-gray-200 border-l-4 border-l-tropical-teal bg-white p-4 text-left transition-all",
                               confirmedQuoteId
-                                ? "cursor-pointer hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
+                                ? "cursor-pointer hover:shadow-md hover:border-slate-400/40"
                                 : "cursor-default"
                             )}
                           >
                             <div className="grid grid-cols-2 gap-2">
-                              <div className="rounded-lg bg-gray-50 px-2.5 py-2">
-                                <p className="text-[9px] text-gray-400">견적서명</p>
-                                <p className={cn("text-[10px] mt-0.5 truncate", confirmedQuote ? "text-gray-700" : "text-gray-300")}>
+                              <div className="rounded-lg bg-gray-50 px-3 py-3">
+                                <p className="text-[11px] text-gray-400">견적서명</p>
+                                <p className={cn("text-sm font-medium mt-0.5 truncate", confirmedQuote ? "text-gray-700" : "text-gray-300")}>
                                   {confirmedQuote ? confirmedQuoteTitle : "미확정"}
                                 </p>
                               </div>
-                              <div className="rounded-lg bg-gray-50 px-2.5 py-2">
-                                <p className="text-[9px] text-gray-400">견적번호</p>
-                                <p className={cn("text-[10px] mt-0.5 truncate", confirmedQuote ? "text-gray-700" : "text-gray-300")}>
+                              <div className="rounded-lg bg-gray-50 px-3 py-3">
+                                <p className="text-[11px] text-gray-400">견적번호</p>
+                                <p className={cn("text-sm font-medium mt-0.5 truncate", confirmedQuote ? "text-gray-700" : "text-gray-300")}>
                                   {confirmedQuote ? confirmedQuotationNumber : "미확정"}
                                 </p>
                               </div>
-                              <div className="rounded-lg bg-gray-50 px-2.5 py-2">
-                                <p className="text-[9px] text-gray-400">VAT별도</p>
+                              <div className="rounded-lg bg-gray-50 px-3 py-3">
+                                <p className="text-[11px] text-gray-400">VAT별도</p>
                                 <p className={cn(
-                                  "text-[10px] mt-0.5 truncate tabular-nums",
+                                  "text-sm font-medium mt-0.5 truncate tabular-nums",
                                   confirmedQuote && confirmedTotalAmount !== null ? "text-gray-700" : "text-gray-300"
                                 )}>
                                   {confirmedQuote && confirmedTotalAmount !== null ? formatCurrency(confirmedTotalAmount) : "미확정"}
                                 </p>
                               </div>
-                              <div className="rounded-lg bg-sky-aqua/5 px-2.5 py-2">
-                                <p className="text-[9px] text-gray-400">VAT합계</p>
+                              <div className="rounded-lg bg-sky-aqua/5 px-3 py-3">
+                                <p className="text-[11px] text-gray-400">VAT합계</p>
                                 <p className={cn(
-                                  "text-[10px] mt-0.5 truncate font-semibold tabular-nums",
+                                  "text-sm mt-0.5 truncate font-bold tabular-nums",
                                   confirmedQuote && confirmedGrandTotal !== null ? "text-sky-aqua" : "text-gray-300"
                                 )}>
                                   {confirmedQuote && confirmedGrandTotal !== null ? formatCurrency(confirmedGrandTotal) : "미확정"}
@@ -4606,101 +4707,91 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                               </div>
                             </div>
                           </button>
-                          {contractSummary && (
-                            <div className="mt-2 space-y-3">
-                              {/* 계약 정보 */}
-                              <div>
-                                <div className="mb-1.5 flex items-center justify-between gap-2">
-                                  <p className="flex items-center gap-1 text-xs font-medium text-gray-500">
-                                    <Briefcase className="h-3 w-3" />
-                                    계약 정보
-                                  </p>
-                                  {confirmedTotalAmount !== null && Math.floor(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount && (
-                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-500"><AlertCircle className="h-3 w-3" />확정 견적금액과 계약금액이 다릅니다</span>
-                                  )}
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => { setRequestedFlow("계약"); setRequestedContractTab("계약서") }}
-                                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
-                                >
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="rounded-lg bg-gray-50 px-2.5 py-2">
-                                      <p className="text-[9px] text-gray-400">VAT별도</p>
-                                      <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-gray-700">
-                                        {formatCurrency(Math.floor(contractSummary.totalWithVat / 1.1))}
-                                      </p>
-                                    </div>
-                                    <div className="rounded-lg bg-sky-aqua/5 px-2.5 py-2">
-                                      <p className="text-[9px] text-gray-400">VAT포함</p>
-                                      <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-sky-aqua">
-                                        {formatCurrency(contractSummary.totalWithVat)}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </button>
-                              </div>
+                        </div>
 
-                              {/* 정산 진행률 */}
-                              <div>
-                                <p className="mb-1.5 flex items-center gap-1 text-xs font-medium text-gray-500">
-                                  <Box className="h-3 w-3" />
-                                  정산 진행률
+                        {/* 계약 정보 요약 — 클릭 시 계약 탭 이동 */}
+                        {contractSummary && (
+                          <>
+                            <div>
+                              <div className="mb-1.5 flex items-center justify-between gap-2">
+                                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                                  <Briefcase className="h-4 w-4" />
+                                  계약 정보
                                 </p>
-                                <button
-                                  type="button"
-                                  onClick={() => { setRequestedFlow("계약"); setRequestedContractTab("정산 현황") }}
-                                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition-colors hover:border-sky-aqua/40 hover:bg-sky-aqua/5"
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-semibold tabular-nums text-sky-aqua">{formatCurrency(contractSummary.paidAmount)}</span>
-                                    <span className="text-[10px] text-gray-400 tabular-nums">
-                                      / {formatCurrency(contractSummary.totalWithVat)}
-                                    </span>
-                                  </div>
-                                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-100">
-                                    <div
-                                      className="h-full rounded-full bg-gradient-to-r from-sky-aqua to-tropical-teal transition-all duration-500"
-                                      style={{ width: `${contractSummary.progressPercent}%` }}
-                                    />
-                                  </div>
-                                  <div className="mt-2 flex items-center justify-between text-[10px] tabular-nums">
-                                    <span className="text-muted-teal">입금 완료</span>
-                                    <span className="text-soft-blush">잔여 {formatCurrency(contractSummary.unpaidAmount)}</span>
-                                  </div>
-                                </button>
+                                {confirmedTotalAmount !== null && Math.floor(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount && (
+                                  <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-soft-blush"><AlertCircle className="h-3.5 w-3.5" />금액 불일치</span>
+                                )}
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => setRequestedFlow("계약")}
+                                className="w-full rounded-xl border border-gray-200 border-l-4 border-l-muted-teal bg-white px-3 py-2.5 text-left transition-all hover:shadow-md hover:border-slate-400/40"
+                              >
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="rounded-lg bg-gray-50 px-3 py-3">
+                                    <p className="text-[11px] text-gray-400">VAT별도</p>
+                                    <p className="mt-0.5 text-sm font-semibold tabular-nums text-gray-700">
+                                      {formatCurrency(Math.floor(contractSummary.totalWithVat / 1.1))}
+                                    </p>
+                                  </div>
+                                  <div className="rounded-lg bg-slate-700/5 px-3 py-3">
+                                    <p className="text-[11px] text-gray-400">VAT포함</p>
+                                    <p className="mt-0.5 text-sm font-semibold tabular-nums text-slate-700">
+                                      {formatCurrency(contractSummary.totalWithVat)}
+                                    </p>
+                                  </div>
+                                </div>
+                              </button>
                             </div>
-                          )}
+
+                            {/* 정산 진행률 — 클릭 시 정산 탭 이동 */}
+                            <div>
+                              <p className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                                <Banknote className="h-4 w-4" />
+                                정산 진행률
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => setRequestedFlow("정산")}
+                                className="w-full rounded-xl border border-gray-200 border-l-4 border-l-vanilla-custard bg-white px-3 py-3 text-left transition-all hover:shadow-md hover:border-slate-400/40"
+                              >
+                                {/* 퍼센트 숫자 크게 표시 */}
+                                <div className="flex items-end justify-between mb-2">
+                                  <span className="text-2xl font-bold text-sky-aqua tabular-nums">{contractSummary.progressPercent}%</span>
+                                  <span className="text-xs text-gray-400 tabular-nums">
+                                    {formatCurrency(contractSummary.paidAmount)} / {formatCurrency(contractSummary.totalWithVat)}
+                                  </span>
+                                </div>
+                                <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
+                                  <div
+                                    className="h-full rounded-full bg-gradient-to-r from-muted-teal/70 to-muted-teal transition-all duration-500"
+                                    style={{ width: `${contractSummary.progressPercent}%` }}
+                                  />
+                                </div>
+                                <div className="mt-2 flex items-center justify-between text-xs tabular-nums">
+                                  <span className="text-muted-teal font-medium">입금 완료</span>
+                                  <span className="text-soft-blush font-medium">잔여 {formatCurrency(contractSummary.unpaidAmount)}</span>
+                                </div>
+                              </button>
+                            </div>
+                          </>
+                        )}
+
+                        {/* 메모 */}
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-4">
+                          <p className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 mb-1.5">
+                            <FileText className="h-4 w-4" />
+                            메모
+                          </p>
+                          <InlineEditMemo
+                            value={selectedItem.memo || ""}
+                            placeholder="메모를 입력하세요"
+                            onConfirm={(v) => updateRequestField("memo", v || null)}
+                          />
                         </div>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* ===== 오른쪽 영역: 영업 흐름 ===== */}
-                  <div className="w-1/2 shrink-0 overflow-y-auto px-6 py-6 bg-gray-50/50">
-                    <SalesFlowPanel
-                      quotations={quotations}
-                      onAddQuote={handleAddQuote}
-                      onEditQuote={handleEditQuote}
-                      confirmedQuoteId={confirmedQuoteId}
-                      onToggleConfirm={handleToggleConfirmedQuote}
-                      requestId={selectedItem.id}
-                      requestTitle={selectedItem.title}
-                      requestCustomer={selectedItem.customer}
-                      requestContractId={selectedItem.contract_id}
-                      onLinkContract={async (contractId) => {
-                        await updateRequestField("contract_id", contractId)
-                      }}
-                      onSavedContract={(contractId) => {
-                        void loadContractSummaryById(contractId, selectedItem.id)
-                      }}
-                      onSummaryChange={handleSummaryChange}
-                      contractSummary={contractSummary}
-                      requestedFlow={requestedFlow}
-                      requestedContractTab={requestedContractTab}
-                    />
-                  </div>
+                    }
+                  />
                 </div>
               </>
             )
@@ -4787,7 +4878,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                   value={createCustomerSearch}
                   onChange={(e) => setCreateCustomerSearch(e.target.value)}
                   autoFocus
-                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400"
                 />
               </div>
 
@@ -4811,11 +4902,11 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         }}
                         className={cn(
                           "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0",
-                          createForm.customer_id === c.id && "bg-sky-aqua/5"
+                          createForm.customer_id === c.id && "bg-slate-700/5"
                         )}
                       >
-                        <div className="w-7 h-7 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
-                          <Building2 className="h-3.5 w-3.5 text-tropical-teal" />
+                        <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                          <Building2 className="h-3.5 w-3.5 text-slate-500" />
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{c.company_name}</p>
@@ -4836,7 +4927,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                   }
                   setIsCreateCustomerMode(true)
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-sky-aqua/50 text-sky-aqua text-sm font-medium hover:border-sky-aqua hover:bg-sky-aqua/5 transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-slate-400/50 text-slate-700 text-sm font-medium hover:border-slate-400 hover:bg-slate-50 transition-all"
               >
                 <Plus className="h-4 w-4" />
                 새 고객 등록
@@ -4849,7 +4940,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
-                  회사명 <span className="text-soft-blush">*</span>
+                  회사명 <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   placeholder="예: (주)한국건설"
@@ -4915,7 +5006,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                     setIsCreatingCustomer(false)
                   }}
                   disabled={isCreatingCustomer || !createCustomerForm.company_name.trim()}
-                  className="px-4 py-2 text-sm rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm rounded-md bg-slate-700 text-white hover:bg-slate-700/80 transition-colors disabled:opacity-50"
                 >
                   {isCreatingCustomer ? "등록 중..." : "등록 후 연결"}
                 </button>

@@ -55,19 +55,19 @@ function ContractCard({ contract, isDragging, onClick, cardBarClass = "border-l-
             className={cn(
                 "group relative bg-white flex flex-col p-3 rounded-lg border border-gray-200 shadow-sm cursor-pointer transition-all hover:border-gray-300 hover:shadow-md border-l-4",
                 cardBarClass,
-                isDragging && "opacity-90 shadow-lg scale-105 rotate-2 z-50 cursor-grabbing ring-2 ring-sky-aqua/50"
+                isDragging && "opacity-90 shadow-lg scale-105 rotate-2 z-50 cursor-grabbing ring-2 ring-slate-300"
             )}
         >
             {/* Edit icon appears on hover */}
             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="p-1 rounded-md bg-gray-50 text-gray-400 hover:text-sky-aqua hover:bg-sky-aqua/10">
+                <div className="p-1 rounded-md bg-gray-50 text-gray-400 hover:text-slate-700 hover:bg-slate-100">
                     <Edit3 className="h-4 w-4" />
                 </div>
             </div>
 
             <div className="pr-6">
                 {/* 계약명 (title로 변경) */}
-                <h4 className="font-heading font-bold text-gray-900 text-sm mb-1 leading-snug">
+                <h4 className="font-sans font-bold text-gray-900 text-sm mb-1 leading-snug">
                     {contract.title}
                 </h4>
 
@@ -82,12 +82,12 @@ function ContractCard({ contract, isDragging, onClick, cardBarClass = "border-l-
                 {/* 계약 금액 (contract_amount로 변경) */}
                 <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-sky-aqua tabular-nums">
+                        <span className="font-semibold text-slate-700 tabular-nums">
                             {formatCurrency(contract.contract_amount)}
                         </span>
                         <span className={cn(
                             "text-[10px] px-1 py-0.5 rounded",
-                            contract.vat_inclusive ? "bg-muted-teal/10 text-muted-teal" : "bg-gray-100 text-gray-500"
+                            contract.vat_inclusive ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-500"
                         )}>
                             {contract.vat_inclusive ? "VAT 포함" : "VAT 별도"}
                         </span>

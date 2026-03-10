@@ -118,7 +118,7 @@ export default function NewContractDialog({ open, onOpenChange, customers }: New
             {/* 계약명 */}
             <div className="space-y-2">
               <Label className="text-sm font-semibold">
-                계약명 <span className="text-soft-blush">*</span>
+                계약명 <span className="text-red-500">*</span>
               </Label>
               <Input
                 value={formData.name}
@@ -135,9 +135,9 @@ export default function NewContractDialog({ open, onOpenChange, customers }: New
             <div className="space-y-2">
               <Label className="text-sm font-semibold">고객사 연동</Label>
               {selectedCustomer ? (
-                <div className="flex items-center justify-between p-3 rounded-lg border border-sky-aqua/30 bg-sky-aqua/5">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-slate-300 bg-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-white text-sky-aqua shadow-sm">
+                    <div className="p-2 rounded-full bg-white text-slate-700 shadow-sm">
                       <Building2 className="h-4 w-4" />
                     </div>
                     <div>
@@ -149,7 +149,7 @@ export default function NewContractDialog({ open, onOpenChange, customers }: New
                   </div>
                   <button
                     onClick={() => setIsCustomerModalOpen(true)}
-                    className="text-xs text-gray-500 hover:text-sky-aqua px-2 py-1"
+                    className="text-xs text-gray-500 hover:text-slate-700 px-2 py-1"
                   >
                     변경
                   </button>
@@ -157,7 +157,7 @@ export default function NewContractDialog({ open, onOpenChange, customers }: New
               ) : (
                 <button
                   onClick={() => setIsCustomerModalOpen(true)}
-                  className="w-full h-[56px] border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center gap-2 text-sm text-gray-500 hover:border-sky-aqua hover:text-sky-aqua hover:bg-sky-aqua/5 transition-all"
+                  className="w-full h-[56px] border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center gap-2 text-sm text-gray-500 hover:border-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
                 >
                   <Plus className="h-4 w-4" /> 고객사 선택하기
                 </button>
@@ -178,7 +178,7 @@ export default function NewContractDialog({ open, onOpenChange, customers }: New
             <button
               onClick={handleCreate}
               disabled={isCreating || !formData.name.trim()}
-              className="px-4 py-2 text-sm rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-md bg-slate-700 text-white hover:bg-slate-600 transition-colors disabled:opacity-50"
             >
               {isCreating ? "생성 중..." : "생성"}
             </button>
@@ -210,10 +210,10 @@ export default function NewContractDialog({ open, onOpenChange, customers }: New
                   <button
                     key={cust.id}
                     onClick={() => handleCustomerSelect(cust.id)}
-                    className="w-full flex flex-col text-left p-3 hover:bg-sky-aqua/5 rounded-lg border border-transparent hover:border-sky-aqua/20 transition-all group"
+                    className="w-full flex flex-col text-left p-3 hover:bg-slate-100 rounded-lg border border-transparent hover:border-slate-400/20 transition-all group"
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-sm text-gray-900 group-hover:text-sky-aqua transition-colors">{cust.company_name}</span>
+                      <span className="font-semibold text-sm text-gray-900 group-hover:text-slate-700 transition-colors">{cust.company_name}</span>
                       <span className="text-xs text-gray-400 font-sans">{cust.contact_name}</span>
                     </div>
                     {cust.phone && <span className="text-xs text-gray-500">{cust.phone}</span>}

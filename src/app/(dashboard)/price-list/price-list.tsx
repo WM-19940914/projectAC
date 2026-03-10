@@ -218,7 +218,7 @@ export default function PriceList({ items }: PriceListProps) {
                 setSearch("")
               }}
               className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === tab
-                ? "bg-sky-aqua text-white shadow-sm"
+                ? "bg-slate-700 text-white shadow-sm"
                 : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                 }`}
             >
@@ -234,7 +234,7 @@ export default function PriceList({ items }: PriceListProps) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsAdding(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-sky-aqua text-white rounded-xl text-sm font-semibold hover:bg-sky-aqua/90 transition-all shadow-sm active:scale-95"
+            className="flex items-center gap-1.5 px-4 py-2 bg-slate-700 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-all shadow-sm active:scale-95"
           >
             <Plus className="h-4 w-4" />
             새 항목
@@ -246,7 +246,7 @@ export default function PriceList({ items }: PriceListProps) {
               placeholder="상품명, 규격 검색..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 pr-8 h-9 text-sm rounded-xl border-gray-200 focus:border-sky-aqua focus:ring-sky-aqua/20"
+              className="pl-9 pr-8 h-9 text-sm rounded-xl border-gray-200 focus:border-slate-400 focus:ring-slate-300"
             />
             {search && (
               <button
@@ -273,12 +273,12 @@ export default function PriceList({ items }: PriceListProps) {
               key={sub}
               onClick={() => setSubFilter(sub)}
               className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${subFilter === sub
-                ? "bg-sky-aqua/10 text-sky-aqua border border-sky-aqua/30"
+                ? "bg-slate-100 text-slate-700 border border-slate-300"
                 : "text-gray-400 hover:text-gray-600 hover:bg-gray-50 border border-transparent"
                 }`}
             >
               {sub}
-              <span className={`ml-1 text-[11px] ${subFilter === sub ? "text-sky-aqua/60" : "opacity-40"}`}>{count}</span>
+              <span className={`ml-1 text-[11px] ${subFilter === sub ? "text-slate-500" : "opacity-40"}`}>{count}</span>
             </button>
           )
         })}
@@ -287,7 +287,7 @@ export default function PriceList({ items }: PriceListProps) {
       {/* 검색 결과 카운트 */}
       {search && (
         <div className="px-6 py-2.5 bg-white border-b text-sm text-gray-500">
-          검색 결과: <span className="font-semibold text-sky-aqua">{filteredItems.length}</span>건
+          검색 결과: <span className="font-semibold text-slate-700">{filteredItems.length}</span>건
         </div>
       )}
 
@@ -345,7 +345,7 @@ export default function PriceList({ items }: PriceListProps) {
                   onKeyDown={(e) => { if (e.key === "Enter") saveAdd() }}
                 />
                 <div className="shrink-0 w-[80px] flex items-center justify-center gap-1.5">
-                  <button onClick={saveAdd} className="p-1.5 text-sky-aqua hover:bg-sky-aqua/10 rounded transition-colors" title="저장">
+                  <button onClick={saveAdd} className="p-1.5 text-slate-700 hover:bg-slate-100 rounded transition-colors" title="저장">
                     <Check className="h-4 w-4" />
                   </button>
                   <button onClick={() => setIsAdding(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded transition-colors" title="취소">
@@ -360,7 +360,7 @@ export default function PriceList({ items }: PriceListProps) {
               return (
                 <div
                   key={item.id}
-                  className="group flex items-center gap-3 px-4 py-2.5 bg-white rounded-xl hover:shadow-sm hover:bg-sky-aqua/[0.02] transition-all cursor-default w-fit shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
+                  className="group flex items-center gap-3 px-4 py-2.5 bg-white rounded-xl hover:shadow-sm hover:bg-slate-50 transition-all cursor-default w-fit shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
                 >
                   {isEditing ? (
                     <>
@@ -370,7 +370,7 @@ export default function PriceList({ items }: PriceListProps) {
                       <Input className="shrink-0 w-[60px] h-8 text-xs" value={editForm.unit || ""} onChange={e => setEditForm({ ...editForm, unit: e.target.value })} />
                       <Input type="number" className="shrink-0 w-[120px] h-8 text-xs text-right" value={editForm.unit_price || 0} onChange={e => setEditForm({ ...editForm, unit_price: parseInt(e.target.value) || 0 })} onKeyDown={(e) => { if (e.key === "Enter") saveEdit() }} />
                       <div className="shrink-0 w-[80px] flex items-center justify-center gap-1.5">
-                        <button onClick={saveEdit} className="p-1 text-sky-aqua hover:bg-sky-aqua/10 rounded transition-colors" title="저장"><Check className="h-4 w-4" /></button>
+                        <button onClick={saveEdit} className="p-1 text-slate-700 hover:bg-slate-100 rounded transition-colors" title="저장"><Check className="h-4 w-4" /></button>
                         <button onClick={() => setEditingId(null)} className="p-1 text-gray-400 hover:bg-gray-100 rounded transition-colors" title="취소"><X className="h-4 w-4" /></button>
                       </div>
                     </>
@@ -403,10 +403,10 @@ export default function PriceList({ items }: PriceListProps) {
 
                       {/* 관리 버튼 (Hover 시 표시) */}
                       <div className="shrink-0 w-[80px] flex items-center justify-center gap-1 opacity-10 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => { setEditingId(item.id); setEditForm({ ...item }) }} className="p-1.5 text-gray-400 hover:text-sky-aqua hover:bg-sky-aqua/10 rounded transition-colors" title="수정">
+                        <button onClick={() => { setEditingId(item.id); setEditForm({ ...item }) }} className="p-1.5 text-gray-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors" title="수정">
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
-                        <button onClick={() => handleDelete(item.id, item.product_name)} className="p-1.5 text-gray-400 hover:text-soft-blush hover:bg-soft-blush/10 rounded transition-colors" title="삭제">
+                        <button onClick={() => handleDelete(item.id, item.product_name)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" title="삭제">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>

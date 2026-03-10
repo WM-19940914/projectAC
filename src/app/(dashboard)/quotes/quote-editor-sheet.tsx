@@ -819,12 +819,12 @@ export default function QuoteEditorSheet({
                     : "hover:bg-white/50"
                     }`}
                 >
-                  <span className={`text-xs font-medium transition-all ${activeTab === "simple" ? "text-sky-aqua" : "text-gray-400"
+                  <span className={`text-xs font-medium transition-all ${activeTab === "simple" ? "text-slate-700" : "text-gray-400"
                     }`}>
                     간이 견적서
                   </span>
                   {quoteType === "simple" && (
-                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-sky-aqua">
+                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-700">
                       <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
                     </span>
                   )}
@@ -842,12 +842,12 @@ export default function QuoteEditorSheet({
                     : "hover:bg-white/50"
                     }`}
                 >
-                  <span className={`text-xs font-medium transition-all ${activeTab !== "simple" ? "text-sky-aqua" : "text-gray-400"
+                  <span className={`text-xs font-medium transition-all ${activeTab !== "simple" ? "text-slate-700" : "text-gray-400"
                     }`}>
                     상세 견적서
                   </span>
                   {quoteType === "detailed" && (
-                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-sky-aqua">
+                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-700">
                       <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
                     </span>
                   )}
@@ -859,7 +859,7 @@ export default function QuoteEditorSheet({
                 <button
                   onClick={() => setDeleteDialogOpen(true)}
                   disabled={isDeleting}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg text-soft-blush hover:text-[#c4807e] hover:bg-soft-blush/10 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg text-red-500 hover:text-[#c4807e] hover:bg-red-50 transition-colors disabled:opacity-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   삭제하기
@@ -868,8 +868,8 @@ export default function QuoteEditorSheet({
               <button
                 onClick={() => setPricingOpen(!pricingOpen)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-all ${pricingOpen
-                  ? "bg-sky-aqua border-sky-aqua text-white"
-                  : "bg-white border-gray-300 text-gray-500 hover:border-sky-aqua/50 hover:text-sky-aqua"
+                  ? "bg-slate-700 border-slate-400 text-white"
+                  : "bg-white border-gray-300 text-gray-500 hover:border-slate-400 hover:text-slate-700"
                   }`}
               >
                 {pricingOpen
@@ -885,7 +885,7 @@ export default function QuoteEditorSheet({
               <button type="button"
                 onClick={() => { activeTabRef.current = "cover"; setActiveTab("cover") }}
                 className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-all ${activeTab === "cover"
-                  ? "border-sky-aqua text-sky-aqua"
+                  ? "border-slate-400 text-slate-700"
                   : "border-transparent text-gray-400 hover:text-gray-600"
                   }`}>
                 갑지
@@ -893,7 +893,7 @@ export default function QuoteEditorSheet({
               <button type="button"
                 onClick={() => { activeTabRef.current = "equipment"; setActiveTab("equipment") }}
                 className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-all ${activeTab === "equipment"
-                  ? "border-sky-aqua text-sky-aqua"
+                  ? "border-slate-400 text-slate-700"
                   : "border-transparent text-gray-400 hover:text-gray-600"
                   }`}>
                 <Package className="h-3 w-3" />
@@ -902,7 +902,7 @@ export default function QuoteEditorSheet({
               <button type="button"
                 onClick={() => { activeTabRef.current = "installation"; setActiveTab("installation") }}
                 className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-all ${activeTab === "installation"
-                  ? "border-sky-aqua text-sky-aqua"
+                  ? "border-slate-400 text-slate-700"
                   : "border-transparent text-gray-400 hover:text-gray-600"
                   }`}>
                 <Wrench className="h-3 w-3" />
@@ -914,13 +914,13 @@ export default function QuoteEditorSheet({
                   <button type="button"
                     onClick={() => { activeTabRef.current = sheet.id; setActiveTab(sheet.id) }}
                     className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-all ${activeTab === sheet.id
-                      ? "border-sky-aqua text-sky-aqua"
+                      ? "border-slate-400 text-slate-700"
                       : "border-transparent text-gray-400 hover:text-gray-600"
                       }`}>
                     {sheet.name}
                   </button>
                   <button type="button" onClick={() => setCustomSheets(prev => prev.filter(s => s.id !== sheet.id))}
-                    className="opacity-0 group-hover:opacity-100 -ml-2 mr-1 p-0.5 text-gray-300 hover:text-soft-blush transition-all">
+                    className="opacity-0 group-hover:opacity-100 -ml-2 mr-1 p-0.5 text-gray-300 hover:text-red-500 transition-all">
                     <Trash2 className="h-2.5 w-2.5" />
                   </button>
                 </div>
@@ -946,7 +946,7 @@ export default function QuoteEditorSheet({
                       }}
                       placeholder="내역서명을 적어주세요"
                       autoFocus
-                      className="w-[140px] px-2 py-1.5 text-xs border border-sky-aqua rounded-md focus:outline-none focus:ring-1 focus:ring-sky-aqua bg-sky-aqua/5 placeholder:text-gray-400"
+                      className="w-[140px] px-2 py-1.5 text-xs border border-slate-400 rounded-md focus:outline-none focus:ring-1 focus:ring-slate-300 bg-slate-50 placeholder:text-gray-400"
                     />
                     <button type="button" onClick={() => {
                       if (newSheetName.trim()) {
@@ -957,7 +957,7 @@ export default function QuoteEditorSheet({
                         activeTabRef.current = id
                         setActiveTab(id)
                       }
-                    }} className="p-1.5 text-sky-aqua hover:bg-sky-aqua/10 rounded transition-colors">
+                    }} className="p-1.5 text-slate-700 hover:bg-slate-100 rounded transition-colors">
                       <Check className="h-3.5 w-3.5" />
                     </button>
                     <button type="button" onClick={() => { setAddingSheet(false); setNewSheetName("") }}
@@ -967,7 +967,7 @@ export default function QuoteEditorSheet({
                   </div>
                 ) : (
                   <button type="button" onClick={() => setAddingSheet(true)}
-                    className="flex items-center gap-1 ml-2 px-2.5 py-1.5 text-[11px] font-medium text-sky-aqua bg-sky-aqua/10 hover:bg-sky-aqua/20 rounded-md transition-colors">
+                    className="flex items-center gap-1 ml-2 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-100 rounded-md transition-colors">
                     <Plus className="h-3 w-3" /> 추가
                   </button>
                 )
@@ -983,10 +983,10 @@ export default function QuoteEditorSheet({
             // 열린 상태: 견적서와 원가 분석 사이 중앙에 원형 버튼
             <button
               onClick={() => setPricingOpen(false)}
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 w-7 h-7 bg-white hover:bg-sky-aqua/10 border border-sky-aqua/30 rounded-full transition-all flex items-center justify-center shadow-sm"
+              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 w-7 h-7 bg-white hover:bg-slate-100 border border-slate-300 rounded-full transition-all flex items-center justify-center shadow-sm"
               style={{ left: 24 + 794 + 6 }}
             >
-              <svg className="h-3.5 w-3.5 text-sky-aqua" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="h-3.5 w-3.5 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M15 6l-6 6 6 6" />
               </svg>
             </button>
@@ -994,9 +994,9 @@ export default function QuoteEditorSheet({
             // 닫힌 상태: 우측 가장자리 반원
             <button
               onClick={() => setPricingOpen(true)}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-5 h-14 bg-sky-aqua/10 hover:bg-sky-aqua/20 border border-r-0 border-sky-aqua/30 rounded-l-full transition-all flex items-center justify-center"
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-5 h-14 bg-slate-100 hover:bg-slate-100 border border-r-0 border-slate-300 rounded-l-full transition-all flex items-center justify-center"
             >
-              <svg className="h-4 w-4 text-sky-aqua -mr-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="h-4 w-4 text-slate-700 -mr-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 6l6 6-6 6" />
               </svg>
             </button>
@@ -1020,12 +1020,12 @@ export default function QuoteEditorSheet({
                             <button onClick={() => logoInputRef.current?.click()}
                               className="px-1.5 py-0.5 bg-white rounded text-[9px] text-gray-700 hover:bg-gray-100">변경</button>
                             <button onClick={handleLogoDelete}
-                              className="px-1.5 py-0.5 bg-white rounded text-[9px] text-soft-blush hover:bg-soft-blush/10">삭제</button>
+                              className="px-1.5 py-0.5 bg-white rounded text-[9px] text-red-500 hover:bg-red-50">삭제</button>
                           </div>
                         </div>
                       ) : (
                         <button onClick={() => logoInputRef.current?.click()}
-                          className="h-10 px-4 border border-dashed border-gray-300 rounded-lg flex items-center gap-1.5 text-[11px] text-gray-400 hover:border-sky-aqua/50 hover:text-sky-aqua hover:bg-sky-aqua/5 transition-all">
+                          className="h-10 px-4 border border-dashed border-gray-300 rounded-lg flex items-center gap-1.5 text-[11px] text-gray-400 hover:border-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all">
                           {logoUploading ? (
                             <span className="animate-pulse">업로드 중...</span>
                           ) : (
@@ -1094,11 +1094,11 @@ export default function QuoteEditorSheet({
                                   <img src={stampUrl} alt="도장" className="h-[72px] w-[72px] object-contain" />
                                   <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
                                     <button onClick={() => stampInputRef.current?.click()} className="px-1.5 py-0.5 bg-white rounded text-[9px] text-gray-700 hover:bg-gray-100">변경</button>
-                                    <button onClick={handleStampDelete} className="px-1.5 py-0.5 bg-white rounded text-[9px] text-soft-blush hover:bg-soft-blush/10">삭제</button>
+                                    <button onClick={handleStampDelete} className="px-1.5 py-0.5 bg-white rounded text-[9px] text-red-500 hover:bg-red-50">삭제</button>
                                   </div>
                                 </div>
                               ) : (
-                                <button onClick={() => stampInputRef.current?.click()} className="h-[72px] w-[72px] border border-dashed border-gray-300 rounded-full flex flex-col items-center justify-center gap-0.5 text-[9px] text-gray-400 hover:border-sky-aqua/50 hover:text-sky-aqua hover:bg-sky-aqua/5 transition-all">
+                                <button onClick={() => stampInputRef.current?.click()} className="h-[72px] w-[72px] border border-dashed border-gray-300 rounded-full flex flex-col items-center justify-center gap-0.5 text-[9px] text-gray-400 hover:border-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all">
                                   {stampUploading ? <span className="animate-pulse text-[8px]">업로드...</span> : <><ImageIcon className="h-3.5 w-3.5" /><span>도장</span></>}
                                 </button>
                               )}
@@ -1134,9 +1134,9 @@ export default function QuoteEditorSheet({
                   <div className={`${leftW} border border-gray-200 rounded-lg`}>
                     <div className="px-4 py-3 bg-gray-50/50">
                       <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-sky-aqua" />
+                        <Package className="h-4 w-4 text-slate-700" />
                         <span className="font-sans font-semibold text-sm text-gray-900">장비 내역</span>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${equipTotal > 0 ? "bg-sky-aqua/10 text-sky-aqua" : "bg-gray-100 text-gray-400"}`}>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${equipTotal > 0 ? "bg-slate-100 text-slate-700" : "bg-gray-100 text-gray-400"}`}>
                           {equipTotal > 0 ? formatCurrency(equipTotal) : "0원"}
                         </span>
                       </div>
@@ -1156,11 +1156,11 @@ export default function QuoteEditorSheet({
                     <div className="flex-1 min-w-0 border border-gray-200 rounded-lg self-start bg-gray-50">
                       <div className="px-4 py-3 bg-gray-100/60 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4 text-sky-aqua" />
+                          <Package className="h-4 w-4 text-slate-700" />
                           <span className="font-sans font-semibold text-sm text-gray-900">장비 단가</span>
                         </div>
                         <button onClick={() => openPricePicker("equip")} type="button"
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-sky-aqua bg-sky-aqua/10 hover:bg-sky-aqua/20 rounded-md transition-colors">
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-100 rounded-md transition-colors">
                           <List className="h-3 w-3" /> 가격표
                         </button>
                       </div>
@@ -1178,9 +1178,9 @@ export default function QuoteEditorSheet({
                   <div className={`${leftW} border border-gray-200 rounded-lg`}>
                     <div className="px-4 py-3 bg-gray-50/50">
                       <div className="flex items-center gap-2">
-                        <Wrench className="h-4 w-4 text-tropical-teal" />
+                        <Wrench className="h-4 w-4 text-slate-500" />
                         <span className="font-sans font-semibold text-sm text-gray-900">설치비 내역</span>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${installTotal > 0 ? "bg-tropical-teal/10 text-tropical-teal" : "bg-gray-100 text-gray-400"}`}>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${installTotal > 0 ? "bg-slate-100 text-slate-500" : "bg-gray-100 text-gray-400"}`}>
                           {installTotal > 0 ? formatCurrency(installTotal) : "0원"}
                         </span>
                       </div>
@@ -1200,11 +1200,11 @@ export default function QuoteEditorSheet({
                     <div className="flex-1 min-w-0 border border-gray-200 rounded-lg self-start bg-gray-50">
                       <div className="px-4 py-3 bg-gray-100/60 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Wrench className="h-4 w-4 text-tropical-teal" />
+                          <Wrench className="h-4 w-4 text-slate-500" />
                           <span className="font-sans font-semibold text-sm text-gray-900">설치비 단가</span>
                         </div>
                         <button onClick={() => openPricePicker("install")} type="button"
-                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-tropical-teal bg-tropical-teal/10 hover:bg-tropical-teal/20 rounded-md transition-colors">
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors">
                           <List className="h-3 w-3" /> 가격표
                         </button>
                       </div>
@@ -1236,8 +1236,8 @@ export default function QuoteEditorSheet({
                             <SummaryRow label="총 합계" value={totalAmount} bold />
                             {/* 단위절사: 직접 입력, 빨간색 표시 */}
                             <div className="flex justify-between items-center text-xs">
-                              <span className="text-soft-blush font-medium">단위절사</span>
-                              <div className="flex items-center gap-0.5 text-soft-blush font-semibold">
+                              <span className="text-red-500 font-medium">단위절사</span>
+                              <div className="flex items-center gap-0.5 text-red-500 font-semibold">
                                 <span>-</span>
                                 <input
                                   type="text" inputMode="numeric"
@@ -1247,13 +1247,13 @@ export default function QuoteEditorSheet({
                                     setTruncationInput(raw ? Number(raw).toLocaleString() : "")
                                   }}
                                   placeholder="0"
-                                  className="w-[90px] text-right bg-transparent border-0 border-b border-soft-blush/60 focus:outline-none focus:border-soft-blush text-soft-blush font-semibold placeholder:text-soft-blush/30 tabular-nums text-xs px-0"
+                                  className="w-[90px] text-right bg-transparent border-0 border-b border-red-300 focus:outline-none focus:border-red-300 text-red-500 font-semibold placeholder:text-red-500/30 tabular-nums text-xs px-0"
                                 />
                               </div>
                             </div>
                             <SummaryRow label="공급가액" value={supplyAmount} />
                             <SummaryRow label="VAT (10%)" value={taxAmount} />
-                            <div className="-mx-5 px-5 py-3 bg-sky-aqua/10 border-t border-sky-aqua/20 flex justify-between items-center mt-1">
+                            <div className="-mx-5 px-5 py-3 bg-slate-100 border-t border-slate-300 flex justify-between items-center mt-1">
                               <span className="text-sm font-semibold text-gray-900">최종 견적</span>
                               <span className="text-sm font-bold text-gray-900 tabular-nums">{formatCurrency(grandTotal)}</span>
                             </div>
@@ -1288,7 +1288,7 @@ export default function QuoteEditorSheet({
                 <div className="w-[794px] shrink-0 bg-white border border-gray-300 shadow-md">
                   {/* ── 제목 영역 ── */}
                   <div className="border-b-2 border-gray-800 px-8 pt-8 pb-5">
-                    <h1 className="font-heading text-3xl font-bold text-center tracking-[0.5em] text-gray-900">
+                    <h1 className="font-sans text-3xl font-bold text-center tracking-[0.5em] text-gray-900">
                       견 적 서
                     </h1>
                     <p className="text-center text-xs text-gray-400 mt-1 tracking-widest">Quotation</p>
@@ -1303,11 +1303,11 @@ export default function QuoteEditorSheet({
                           <img src={logoUrl} alt="회사 로고" className="h-9 max-w-[120px] object-contain" />
                           <div className="absolute inset-0 bg-black/40 rounded opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
                             <button onClick={() => logoInputRef.current?.click()} className="px-1.5 py-0.5 bg-white rounded text-[9px] text-gray-700 hover:bg-gray-100">변경</button>
-                            <button onClick={handleLogoDelete} className="px-1.5 py-0.5 bg-white rounded text-[9px] text-soft-blush hover:bg-soft-blush/10">삭제</button>
+                            <button onClick={handleLogoDelete} className="px-1.5 py-0.5 bg-white rounded text-[9px] text-red-500 hover:bg-red-50">삭제</button>
                           </div>
                         </div>
                       ) : (
-                        <button onClick={() => logoInputRef.current?.click()} className="h-9 px-3 border border-dashed border-gray-300 rounded-lg flex items-center gap-1.5 text-[10px] text-gray-400 hover:border-sky-aqua/50 hover:text-sky-aqua hover:bg-sky-aqua/5 transition-all">
+                        <button onClick={() => logoInputRef.current?.click()} className="h-9 px-3 border border-dashed border-gray-300 rounded-lg flex items-center gap-1.5 text-[10px] text-gray-400 hover:border-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all">
                           {logoUploading ? <span className="animate-pulse">업로드 중...</span> : <><ImageIcon className="h-3.5 w-3.5" /> 로고</>}
                         </button>
                       )}
@@ -1333,11 +1333,11 @@ export default function QuoteEditorSheet({
                           <img src={stampUrl} alt="도장" className="h-16 w-16 object-contain" />
                           <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
                             <button onClick={() => stampInputRef.current?.click()} className="px-1 py-0.5 bg-white rounded text-[8px] text-gray-700 hover:bg-gray-100">변경</button>
-                            <button onClick={handleStampDelete} className="px-1 py-0.5 bg-white rounded text-[8px] text-soft-blush hover:bg-soft-blush/10">삭제</button>
+                            <button onClick={handleStampDelete} className="px-1 py-0.5 bg-white rounded text-[8px] text-red-500 hover:bg-red-50">삭제</button>
                           </div>
                         </div>
                       ) : (
-                        <button onClick={() => stampInputRef.current?.click()} className="h-16 w-16 border border-dashed border-gray-300 rounded-full flex flex-col items-center justify-center gap-0.5 text-[8px] text-gray-400 hover:border-sky-aqua/50 hover:text-sky-aqua hover:bg-sky-aqua/5 transition-all">
+                        <button onClick={() => stampInputRef.current?.click()} className="h-16 w-16 border border-dashed border-gray-300 rounded-full flex flex-col items-center justify-center gap-0.5 text-[8px] text-gray-400 hover:border-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all">
                           {stampUploading ? <span className="animate-pulse">업로드...</span> : <><ImageIcon className="h-3 w-3" /><span>도장</span></>}
                         </button>
                       )}
@@ -1445,10 +1445,10 @@ export default function QuoteEditorSheet({
                     <div className="grid grid-cols-[40px_80px_1fr_50px_50px_90px_100px_80px] border-b border-gray-200 text-xs bg-gray-50/50">
                       <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-400">1</div>
                       <div className="px-1 border-r border-gray-200 flex items-center">
-                        <input type="text" value={coverEquipLabel.name} onChange={(e) => setCoverEquipLabel(p => ({ ...p, name: e.target.value }))} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-sky-aqua rounded px-1 py-1 font-medium text-gray-700" />
+                        <input type="text" value={coverEquipLabel.name} onChange={(e) => setCoverEquipLabel(p => ({ ...p, name: e.target.value }))} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 font-medium text-gray-700" />
                       </div>
                       <div className="px-1 border-r border-gray-200 flex items-center">
-                        <input type="text" value={coverEquipLabel.desc} onChange={(e) => setCoverEquipLabel(p => ({ ...p, desc: e.target.value }))} className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-sky-aqua rounded px-1 py-1 text-gray-500" />
+                        <input type="text" value={coverEquipLabel.desc} onChange={(e) => setCoverEquipLabel(p => ({ ...p, desc: e.target.value }))} className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-500" />
                       </div>
                       <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-500">식</div>
                       <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-500">1</div>
@@ -1460,10 +1460,10 @@ export default function QuoteEditorSheet({
                     <div className="grid grid-cols-[40px_80px_1fr_50px_50px_90px_100px_80px] border-b border-gray-200 text-xs bg-gray-50/50">
                       <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-400">2</div>
                       <div className="px-1 border-r border-gray-200 flex items-center">
-                        <input type="text" value={coverInstallLabel.name} onChange={(e) => setCoverInstallLabel(p => ({ ...p, name: e.target.value }))} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-sky-aqua rounded px-1 py-1 font-medium text-gray-700" />
+                        <input type="text" value={coverInstallLabel.name} onChange={(e) => setCoverInstallLabel(p => ({ ...p, name: e.target.value }))} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 font-medium text-gray-700" />
                       </div>
                       <div className="px-1 border-r border-gray-200 flex items-center">
-                        <input type="text" value={coverInstallLabel.desc} onChange={(e) => setCoverInstallLabel(p => ({ ...p, desc: e.target.value }))} className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-sky-aqua rounded px-1 py-1 text-gray-500" />
+                        <input type="text" value={coverInstallLabel.desc} onChange={(e) => setCoverInstallLabel(p => ({ ...p, desc: e.target.value }))} className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-500" />
                       </div>
                       <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-500">식</div>
                       <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-500">1</div>
@@ -1474,28 +1474,28 @@ export default function QuoteEditorSheet({
 
                     {/* 추가 행들 (coverItems) */}
                     {coverItems.map((row, idx) => (
-                      <div key={idx} className="grid grid-cols-[40px_80px_1fr_50px_50px_90px_100px_80px] border-b border-gray-200 text-xs group hover:bg-sky-aqua/5 transition-colors">
+                      <div key={idx} className="grid grid-cols-[40px_80px_1fr_50px_50px_90px_100px_80px] border-b border-gray-200 text-xs group hover:bg-slate-50 transition-colors">
                         <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-700">{idx + 3}</div>
                         <div className="px-1 border-r border-gray-200 flex items-center">
-                          <input type="text" value={row.item_name} onChange={(e) => updateItem(setCoverItems, idx, "item_name", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-sky-aqua rounded px-1 py-1 font-medium text-gray-900" placeholder="항목명" />
+                          <input type="text" value={row.item_name} onChange={(e) => updateItem(setCoverItems, idx, "item_name", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 font-medium text-gray-900" placeholder="항목명" />
                         </div>
                         <div className="px-1 border-r border-gray-200 flex items-center">
-                          <input type="text" value={row.specification} onChange={(e) => updateItem(setCoverItems, idx, "specification", e.target.value)} className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-sky-aqua rounded px-1 py-1 text-gray-700" placeholder="내용" />
+                          <input type="text" value={row.specification} onChange={(e) => updateItem(setCoverItems, idx, "specification", e.target.value)} className="w-full bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-700" placeholder="내용" />
                         </div>
                         <div className="px-1 border-r border-gray-200 flex items-center">
-                          <input type="text" value={row.unit} onChange={(e) => updateItem(setCoverItems, idx, "unit", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-sky-aqua rounded px-1 py-1 text-gray-700" placeholder="단위" />
+                          <input type="text" value={row.unit} onChange={(e) => updateItem(setCoverItems, idx, "unit", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-700" placeholder="단위" />
                         </div>
                         <div className="px-1 border-r border-gray-200 flex items-center">
-                          <input type="text" inputMode="numeric" value={row.quantity || ""} onChange={(e) => updateItem(setCoverItems, idx, "quantity", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-sky-aqua rounded px-1 py-1 text-gray-700 tabular-nums" placeholder="0" />
+                          <input type="text" inputMode="numeric" value={row.quantity || ""} onChange={(e) => updateItem(setCoverItems, idx, "quantity", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-700 tabular-nums" placeholder="0" />
                         </div>
                         <div className="px-1 border-r border-gray-200 flex items-center">
-                          <input type="text" inputMode="numeric" value={row.unit_price || ""} onChange={(e) => updateItem(setCoverItems, idx, "unit_price", e.target.value)} className="w-full text-right bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-sky-aqua rounded px-1 py-1 text-gray-900 tabular-nums" placeholder="0" />
+                          <input type="text" inputMode="numeric" value={row.unit_price || ""} onChange={(e) => updateItem(setCoverItems, idx, "unit_price", e.target.value)} className="w-full text-right bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-900 tabular-nums" placeholder="0" />
                         </div>
                         <div className="px-2 py-2.5 text-right border-r border-gray-200 tabular-nums font-medium text-gray-900 bg-gray-50/30">
                           {formatCurrency(row.amount)}
                         </div>
                         <div className="flex justify-center items-center">
-                          <button onClick={() => setCoverItems(prev => prev.filter((_, j) => j !== idx))} className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-soft-blush hover:bg-soft-blush/10 rounded transition-all">
+                          <button onClick={() => setCoverItems(prev => prev.filter((_, j) => j !== idx))} className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all">
                             <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
@@ -1518,7 +1518,7 @@ export default function QuoteEditorSheet({
                     }
                     {/* 행 추가 버튼 */}
                     <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex justify-center">
-                      <button onClick={() => setCoverItems(p => [...p, emptyRow()])} type="button" className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-sky-aqua/5 hover:text-sky-aqua hover:border-sky-aqua transition-colors">
+                      <button onClick={() => setCoverItems(p => [...p, emptyRow()])} type="button" className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-slate-50 hover:text-slate-700 hover:border-slate-400 transition-colors">
                         <Plus className="h-3.5 w-3.5" /> 행 추가
                       </button>
                     </div>
@@ -1542,9 +1542,9 @@ export default function QuoteEditorSheet({
                         <div className="px-3 py-2.5 text-right tabular-nums font-semibold text-gray-900">{formatCurrency(totalAmount)}</div>
                       </div>
                       <div className="grid grid-cols-[90px_1fr] border-b border-gray-200">
-                        <div className="px-3 py-2.5 bg-gray-50 border-r border-gray-200 font-medium text-soft-blush">단위절사</div>
+                        <div className="px-3 py-2.5 bg-gray-50 border-r border-gray-200 font-medium text-red-500">단위절사</div>
                         <div className="px-3 py-2.5 text-right">
-                          <div className="flex items-center justify-end gap-0.5 text-soft-blush font-semibold text-xs">
+                          <div className="flex items-center justify-end gap-0.5 text-red-500 font-semibold text-xs">
                             <span>-</span>
                             <input
                               type="text" inputMode="numeric"
@@ -1554,7 +1554,7 @@ export default function QuoteEditorSheet({
                                 setTruncationInput(raw ? Number(raw).toLocaleString() : "")
                               }}
                               placeholder="0"
-                              className="w-[80px] text-right bg-transparent border-0 border-b border-soft-blush/60 focus:outline-none focus:border-soft-blush text-soft-blush font-semibold placeholder:text-soft-blush/30 tabular-nums text-xs px-0"
+                              className="w-[80px] text-right bg-transparent border-0 border-b border-red-300 focus:outline-none focus:border-red-300 text-red-500 font-semibold placeholder:text-red-500/30 tabular-nums text-xs px-0"
                             />
                           </div>
                         </div>
@@ -1568,8 +1568,8 @@ export default function QuoteEditorSheet({
                         <div className="px-3 py-2.5 text-right tabular-nums text-gray-900">{formatCurrency(taxAmount)}</div>
                       </div>
                       <div className="grid grid-cols-[90px_1fr]">
-                        <div className="px-3 py-4 bg-sky-aqua/10 border-r border-sky-aqua/20 font-bold text-gray-900 text-sm flex items-center">최종견적</div>
-                        <div className="px-3 py-4 bg-sky-aqua/10 text-right tabular-nums font-bold text-sky-aqua text-lg tracking-tight">{formatCurrency(grandTotal)}</div>
+                        <div className="px-3 py-4 bg-slate-100 border-r border-slate-300 font-bold text-gray-900 text-sm flex items-center">최종견적</div>
+                        <div className="px-3 py-4 bg-slate-100 text-right tabular-nums font-bold text-slate-700 text-lg tracking-tight">{formatCurrency(grandTotal)}</div>
                       </div>
                     </div>
                   </div>
@@ -1593,9 +1593,9 @@ export default function QuoteEditorSheet({
                 <div className={`${leftW} border border-gray-200 rounded-lg shadow-sm overflow-hidden`}>
                   <div className="px-4 py-3 bg-gray-50/50">
                     <div className="flex items-center gap-2">
-                      <Package className="h-4 w-4 text-sky-aqua" />
+                      <Package className="h-4 w-4 text-slate-700" />
                       <span className="font-sans font-semibold text-sm text-gray-900">장비 내역</span>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${equipTotal > 0 ? "bg-sky-aqua/10 text-sky-aqua" : "bg-gray-100 text-gray-400"}`}>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${equipTotal > 0 ? "bg-slate-100 text-slate-700" : "bg-gray-100 text-gray-400"}`}>
                         {equipTotal > 0 ? formatCurrency(equipTotal) : "0원"}
                       </span>
                     </div>
@@ -1622,11 +1622,11 @@ export default function QuoteEditorSheet({
                   <div className="flex-1 min-w-0 border border-gray-200 rounded-lg self-start bg-gray-50">
                     <div className="px-4 py-3 bg-gray-100/60 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-sky-aqua" />
+                        <Package className="h-4 w-4 text-slate-700" />
                         <span className="font-sans font-semibold text-sm text-gray-900">장비 단가</span>
                       </div>
                       <button onClick={() => openPricePicker("equip")} type="button"
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-sky-aqua bg-sky-aqua/10 hover:bg-sky-aqua/20 rounded-md transition-colors">
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-slate-700 bg-slate-100 hover:bg-slate-100 rounded-md transition-colors">
                         <List className="h-3 w-3" /> 가격표
                       </button>
                     </div>
@@ -1646,9 +1646,9 @@ export default function QuoteEditorSheet({
                 <div className={`${leftW} border border-gray-200 rounded-lg shadow-sm overflow-hidden`}>
                   <div className="px-4 py-3 bg-gray-50/50">
                     <div className="flex items-center gap-2">
-                      <Wrench className="h-4 w-4 text-tropical-teal" />
+                      <Wrench className="h-4 w-4 text-slate-500" />
                       <span className="font-sans font-semibold text-sm text-gray-900">설치비 내역</span>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${installTotal > 0 ? "bg-tropical-teal/10 text-tropical-teal" : "bg-gray-100 text-gray-400"}`}>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${installTotal > 0 ? "bg-slate-100 text-slate-500" : "bg-gray-100 text-gray-400"}`}>
                         {installTotal > 0 ? formatCurrency(installTotal) : "0원"}
                       </span>
                     </div>
@@ -1675,11 +1675,11 @@ export default function QuoteEditorSheet({
                   <div className="flex-1 min-w-0 border border-gray-200 rounded-lg self-start bg-gray-50">
                     <div className="px-4 py-3 bg-gray-100/60 flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Wrench className="h-4 w-4 text-tropical-teal" />
+                        <Wrench className="h-4 w-4 text-slate-500" />
                         <span className="font-sans font-semibold text-sm text-gray-900">설치비 단가</span>
                       </div>
                       <button onClick={() => openPricePicker("install")} type="button"
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-tropical-teal bg-tropical-teal/10 hover:bg-tropical-teal/20 rounded-md transition-colors">
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors">
                         <List className="h-3 w-3" /> 가격표
                       </button>
                     </div>
@@ -1700,7 +1700,7 @@ export default function QuoteEditorSheet({
                   <div className="px-4 py-3 bg-gray-50/50">
                     <div className="flex items-center gap-2">
                       <span className="font-sans font-semibold text-sm text-gray-900">{sheet.name}</span>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${sheet.items.reduce((s, r) => s + r.amount, 0) > 0 ? "bg-sky-aqua/10 text-sky-aqua" : "bg-gray-100 text-gray-400"
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${sheet.items.reduce((s, r) => s + r.amount, 0) > 0 ? "bg-slate-100 text-slate-700" : "bg-gray-100 text-gray-400"
                         }`}>
                         {sheet.items.reduce((s, r) => s + r.amount, 0) > 0
                           ? formatCurrency(sheet.items.reduce((s, r) => s + r.amount, 0))
@@ -1779,7 +1779,7 @@ export default function QuoteEditorSheet({
                   <div className="flex-1 min-w-0 border border-gray-200 rounded-lg self-start bg-gray-50">
                     <div className="px-4 py-3 bg-gray-100/60 flex items-center">
                       <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-sky-aqua" />
+                        <FileText className="h-4 w-4 text-slate-700" />
                         <span className="font-sans font-semibold text-sm text-gray-900">{sheet.name} 단가</span>
                       </div>
                     </div>
@@ -1832,14 +1832,14 @@ export default function QuoteEditorSheet({
               </span>
             )}
             {autoSaveStatus === "saved" && (
-              <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-muted-teal bg-muted-teal/10 rounded-full">
+              <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-green-600 bg-green-100 rounded-full">
                 <Check className="h-3 w-3" /> 저장됨
               </span>
             )}
             {autoSaveStatus === "error" && (
-              <span className="text-[10px] text-soft-blush">자동저장 실패</span>
+              <span className="text-[10px] text-red-500">자동저장 실패</span>
             )}
-            {saveError && <span className="text-[10px] text-soft-blush">{saveError}</span>}
+            {saveError && <span className="text-[10px] text-red-500">{saveError}</span>}
             <button onClick={handleSave} disabled={isSaving}
               className="px-2.5 py-1 text-[11px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center gap-1">
               {isSaving ? "저장..." : "바로 저장"}
@@ -1867,7 +1867,7 @@ export default function QuoteEditorSheet({
                 setSupplier({ ...businessSettings })
               }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded-md transition-all ${supplierMode === "company"
-                ? "bg-white text-sky-aqua shadow-sm"
+                ? "bg-white text-slate-700 shadow-sm"
                 : "text-gray-400 hover:text-gray-600"
                 }`}
             >
@@ -1882,7 +1882,7 @@ export default function QuoteEditorSheet({
                 setSupplier({ companyName: "", bizNumber: "", ceoName: "", email: "", address: "", manager: "", managerPhone: "", managerEmail: "" })
               }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded-md transition-all ${supplierMode === "custom"
-                ? "bg-white text-sky-aqua shadow-sm"
+                ? "bg-white text-slate-700 shadow-sm"
                 : "text-gray-400 hover:text-gray-600"
                 }`}
             >
@@ -1910,7 +1910,7 @@ export default function QuoteEditorSheet({
                   type="checkbox"
                   checked={supplierSaveAsDefault}
                   onChange={(e) => setSupplierSaveAsDefault(e.target.checked)}
-                  className="h-3.5 w-3.5 accent-sky-aqua rounded"
+                  className="h-3.5 w-3.5 accent-slate-700 rounded"
                 />
                 <span className="text-[11px] text-gray-500">다음 견적서에도 이 정보 사용하기</span>
               </label>
@@ -1961,7 +1961,7 @@ export default function QuoteEditorSheet({
                 }
               }}
               type="button"
-              className="w-full py-2 text-xs font-medium rounded-lg bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors"
+              className="w-full py-2 text-xs font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition-colors"
             >
               확인
             </button>
@@ -1987,7 +1987,7 @@ export default function QuoteEditorSheet({
                     address: customerData.address || "",
                     phone: customerData.phone || "",
                   })}
-                  className="flex items-center gap-1 text-[10px] text-sky-aqua hover:text-sky-aqua/80 transition-colors"
+                  className="flex items-center gap-1 text-[10px] text-slate-700 hover:text-slate-700/80 transition-colors"
                 >
                   <Building2 className="h-3 w-3" />
                   고객 정보 불러오기
@@ -2011,7 +2011,7 @@ export default function QuoteEditorSheet({
               onChange={(v) => setReceiver((s) => ({ ...s, phone: v }))} placeholder="010-0000-0000" />
           </div>
           <button onClick={() => setReceiverDialogOpen(false)} type="button"
-            className="w-full mt-1 py-2 text-xs font-medium rounded-lg bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors">
+            className="w-full mt-1 py-2 text-xs font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition-colors">
             확인
           </button>
         </DialogContent>
@@ -2021,8 +2021,8 @@ export default function QuoteEditorSheet({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="sm:max-w-[360px] p-6">
           <AlertDialogHeader className="space-y-2">
-            <div className="flex items-center justify-center w-11 h-11 rounded-full bg-soft-blush/20 mx-auto mb-1">
-              <Trash2 className="h-5 w-5 text-soft-blush" />
+            <div className="flex items-center justify-center w-11 h-11 rounded-full bg-red-100 mx-auto mb-1">
+              <Trash2 className="h-5 w-5 text-red-500" />
             </div>
             <AlertDialogTitle className="font-sans text-center text-base font-semibold">
               견적서를 삭제하시겠어요?
@@ -2044,7 +2044,7 @@ export default function QuoteEditorSheet({
             <button
               onClick={handleDelete}
               disabled={isDeleting}
-              className="flex-1 py-2 text-xs font-medium rounded-lg bg-soft-blush text-white hover:bg-[#e8b8b7] transition-colors disabled:opacity-50"
+              className="flex-1 py-2 text-xs font-medium rounded-lg bg-red-500 text-white hover:bg-[#e8b8b7] transition-colors disabled:opacity-50"
             >
               {isDeleting ? "삭제 중..." : "삭제하기"}
             </button>
@@ -2070,7 +2070,7 @@ export default function QuoteEditorSheet({
                 setSupplier((s) => ({ ...s, manager: businessSettings.manager, managerPhone: businessSettings.managerPhone }))
               }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded-md transition-all ${managerMode === "default"
-                ? "bg-white text-sky-aqua shadow-sm"
+                ? "bg-white text-slate-700 shadow-sm"
                 : "text-gray-400 hover:text-gray-600"
                 }`}
             >
@@ -2084,7 +2084,7 @@ export default function QuoteEditorSheet({
                 setSupplier((s) => ({ ...s, manager: "", managerPhone: "", managerEmail: "" }))
               }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded-md transition-all ${managerMode === "custom"
-                ? "bg-white text-sky-aqua shadow-sm"
+                ? "bg-white text-slate-700 shadow-sm"
                 : "text-gray-400 hover:text-gray-600"
                 }`}
             >
@@ -2108,7 +2108,7 @@ export default function QuoteEditorSheet({
                   type="checkbox"
                   checked={managerSaveAsDefault}
                   onChange={(e) => setManagerSaveAsDefault(e.target.checked)}
-                  className="h-3.5 w-3.5 accent-sky-aqua rounded"
+                  className="h-3.5 w-3.5 accent-slate-700 rounded"
                 />
                 <span className="text-[11px] text-gray-500">다음 견적서에도 이 정보 사용하기</span>
               </label>
@@ -2142,7 +2142,7 @@ export default function QuoteEditorSheet({
                 }
               }}
               type="button"
-              className="w-full py-2 text-xs font-medium rounded-lg bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors"
+              className="w-full py-2 text-xs font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition-colors"
             >
               확인
             </button>
@@ -2276,7 +2276,7 @@ function PricePickerDialog({ items, target, onSelect, onClose, selectedItems }: 
           <DialogTitle className="font-sans text-sm font-semibold">가격표에서 선택</DialogTitle>
           <DialogDescription className="text-[11px] text-gray-400">
             {pickedIds.size > 0
-              ? <span className="text-muted-teal font-medium">{pickedIds.size}개 선택됨</span>
+              ? <span className="text-green-600 font-medium">{pickedIds.size}개 선택됨</span>
               : "품목을 클릭하면 빈 행에 자동 입력됩니다"
             }
           </DialogDescription>
@@ -2287,7 +2287,7 @@ function PricePickerDialog({ items, target, onSelect, onClose, selectedItems }: 
           {(["장비", "설치비"] as const).map((tab) => (
             <button key={tab} type="button" onClick={() => handleTabChange(tab)}
               className={`flex-1 py-1.5 text-[11px] font-medium rounded-md transition-all ${activeTab === tab
-                ? "bg-white text-sky-aqua shadow-sm"
+                ? "bg-white text-slate-700 shadow-sm"
                 : "text-gray-400 hover:text-gray-600"
                 }`}>
               {tab === "장비" ? <><Package className="h-3 w-3 inline mr-1" />장비</> : <><Wrench className="h-3 w-3 inline mr-1" />설치비</>}
@@ -2301,7 +2301,7 @@ function PricePickerDialog({ items, target, onSelect, onClose, selectedItems }: 
           {subCategories.map((sub) => (
             <button key={sub} type="button" onClick={() => setSubFilter(sub)}
               className={`px-2 py-0.5 text-[10px] rounded-full transition-all ${subFilter === sub
-                ? "bg-sky-aqua/15 text-sky-aqua font-medium"
+                ? "bg-slate-100 text-slate-700 font-medium"
                 : "bg-gray-50 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                 }`}>
               {sub}
@@ -2316,7 +2316,7 @@ function PricePickerDialog({ items, target, onSelect, onClose, selectedItems }: 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="품목명 또는 규격으로 검색..."
-            className="pl-8 pr-8 h-8 text-xs border-gray-200 focus-visible:ring-1 focus-visible:ring-sky-aqua/50"
+            className="pl-8 pr-8 h-8 text-xs border-gray-200 focus-visible:ring-1 focus-visible:ring-slate-300/50"
           />
           {search && (
             <button onClick={() => setSearch("")} type="button"
@@ -2340,11 +2340,11 @@ function PricePickerDialog({ items, target, onSelect, onClose, selectedItems }: 
               return (
                 <button key={item.id} type="button" onClick={() => handleSelect(item)}
                   className={`w-full px-5 py-2.5 flex items-center gap-3 text-left border-b border-gray-50 transition-colors ${isPicked
-                    ? "bg-muted-teal/5 hover:bg-muted-teal/10"
+                    ? "bg-green-50 hover:bg-green-100"
                     : "hover:bg-gray-50"
                     }`}>
                   {/* 선택 표시 */}
-                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${isPicked ? "bg-muted-teal" : "bg-gray-100"
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${isPicked ? "bg-green-600" : "bg-gray-100"
                     }`}>
                     {isPicked ? (
                       <Check className="h-3 w-3 text-white" strokeWidth={3} />
@@ -2379,7 +2379,7 @@ function PricePickerDialog({ items, target, onSelect, onClose, selectedItems }: 
       {/* 하단 닫기 버튼 */}
       <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50">
         <button onClick={onClose} type="button"
-          className="w-full py-2 text-xs font-medium rounded-lg bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors">
+          className="w-full py-2 text-xs font-medium rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition-colors">
           닫기
         </button>
       </div>
@@ -2440,7 +2440,7 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
           <span className="text-[7px] text-gray-300 leading-none writing-vertical" style={{ writingMode: "vertical-rl" }}>여백</span>
         </div>
         {/* 테이블 본체 */}
-        <div className={`flex-1 grid grid-cols-[24px_194px_180px_42px_50px_120px_128px] bg-sky-aqua/10 border-y border-sky-aqua/20 ${HEADER_H}`}>
+        <div className={`flex-1 grid grid-cols-[24px_194px_180px_42px_50px_120px_128px] bg-slate-100 border-y border-slate-300 ${HEADER_H}`}>
           <div className="px-1 flex items-center justify-center text-[11px] font-medium text-gray-600">#</div>
           <div className="px-2 flex items-center justify-center text-[11px] font-medium text-gray-600">품목명</div>
           <div className="px-2 flex items-center justify-center text-[11px] font-medium text-gray-600">규격</div>
@@ -2464,7 +2464,7 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
             <div className="w-[18px] shrink-0 flex items-center justify-center">
               <button onClick={() => onToggleBlank(idx)}
                 className={`w-2.5 h-2.5 rounded-sm border transition-colors ${isBlankRow
-                  ? "bg-sky-aqua border-sky-aqua"
+                  ? "bg-slate-700 border-slate-400"
                   : "border-gray-300 hover:border-gray-500"
                   }`}>
                 {isBlankRow && (
@@ -2476,7 +2476,7 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
             </div>
             {/* 테이블 본체 */}
             <div className={`flex-1 grid grid-cols-[24px_194px_180px_42px_50px_120px_128px] ${ROW_H}`}>
-              <div className={`relative flex items-center justify-center text-[10px] ${idx >= 14 ? "text-soft-blush font-semibold" : "text-gray-300"}`}>
+              <div className={`relative flex items-center justify-center text-[10px] ${idx >= 14 ? "text-red-500 font-semibold" : "text-gray-300"}`}>
                 {item.item_name.trim() && !isMatched && (
                   <span className="absolute top-0 left-0 w-0 h-0"
                     style={{ borderTop: "6px solid #F0D2D1", borderRight: "6px solid transparent" }} />
@@ -2508,13 +2508,13 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
             <div className="w-[36px] shrink-0 flex items-center justify-center gap-0.5">
               {!isBlankRow && !isBelowBlank && clearRow && (
                 <button onClick={() => clearRow(idx)} title="데이터 초기화"
-                  className="p-0.5 rounded text-gray-300 hover:text-soft-blush hover:bg-soft-blush/10 transition-colors">
+                  className="p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
                   <Eraser className="h-3 w-3" />
                 </button>
               )}
               {!isBlankRow && !isBelowBlank && items.length > 1 && (
                 <button onClick={() => removeRow(idx)} title="행 삭제"
-                  className="p-0.5 rounded text-gray-300 hover:text-soft-blush hover:bg-soft-blush/10 transition-colors">
+                  className="p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
                   <XIcon className="h-3 w-3" />
                 </button>
               )}
@@ -2524,10 +2524,10 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
       })}
       <div className="px-4 py-2">
         {items.length >= 15 && (
-          <p className="text-[10px] text-soft-blush mb-1.5 text-center">A4 1페이지를 초과할 수 있습니다</p>
+          <p className="text-[10px] text-red-500 mb-1.5 text-center">A4 1페이지를 초과할 수 있습니다</p>
         )}
         <button onClick={addRow}
-          className="w-full py-2 flex items-center justify-center gap-1.5 text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg hover:border-sky-aqua/50 hover:text-sky-aqua hover:bg-sky-aqua/5 transition-all">
+          className="w-full py-2 flex items-center justify-center gap-1.5 text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg hover:border-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all">
           <Plus className="h-4 w-4" /> 행 추가
         </button>
       </div>
@@ -2584,12 +2584,12 @@ function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched
   return (
     <div onPaste={handlePaste}>
       {/* 헤더 - 10개 열 */}
-      <div className={`relative grid ${PRICING_COLS} bg-sky-aqua/10 border-y border-sky-aqua/20 ${HEADER_H}`}>
+      <div className={`relative grid ${PRICING_COLS} bg-slate-100 border-y border-slate-300 ${HEADER_H}`}>
         {/* 제안가 열 가운데 위에 단위↑ 토글 (absolute로 행 높이에 영향 없음) */}
         {onToggleRoundUp && (
           <button onClick={onToggleRoundUp}
             className={`absolute -top-[13px] z-10 text-[9px] leading-none px-1.5 py-[2px] rounded-sm transition-all ${roundUp
-              ? "bg-sky-aqua/15 text-sky-aqua"
+              ? "bg-slate-100 text-slate-700"
               : "bg-gray-100 text-gray-400"
               }`}
             style={{ left: 352, width: 76, textAlign: "center" }}>
@@ -2626,9 +2626,9 @@ function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched
             <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_amount > 0 ? item.purchase_amount.toLocaleString() : ""}</div>
             <CellPercent value={item.margin_rate} onChange={(v) => updateItem(idx, "margin_rate", v)} />
             <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.unit_price > 0 ? item.unit_price.toLocaleString() : ""}</div>
-            <div className={`flex items-center justify-end px-1 text-xs font-semibold tabular-nums bg-gray-100/60 ${item.profit < 0 ? "text-soft-blush" : "text-muted-teal"}`}>{item.profit !== 0 ? item.profit.toLocaleString() : ""}</div>
-            <CellPercent value={item.incentive_rate} onChange={(v) => updateItem(idx, "incentive_rate", v)} colorClass="text-muted-teal" />
-            <div className="flex items-center justify-end px-1 text-xs font-semibold text-muted-teal tabular-nums bg-gray-100/60">{incentiveAmount > 0 ? incentiveAmount.toLocaleString() : ""}</div>
+            <div className={`flex items-center justify-end px-1 text-xs font-semibold tabular-nums bg-gray-100/60 ${item.profit < 0 ? "text-red-500" : "text-green-600"}`}>{item.profit !== 0 ? item.profit.toLocaleString() : ""}</div>
+            <CellPercent value={item.incentive_rate} onChange={(v) => updateItem(idx, "incentive_rate", v)} colorClass="text-green-600" />
+            <div className="flex items-center justify-end px-1 text-xs font-semibold text-green-600 tabular-nums bg-gray-100/60">{incentiveAmount > 0 ? incentiveAmount.toLocaleString() : ""}</div>
           </div>
         )
       })}
@@ -2649,9 +2649,9 @@ function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched
             <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumPurchaseAmt > 0 ? sumPurchaseAmt.toLocaleString() : ""}</div>
             <div />
             <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumUnitPrice > 0 ? sumUnitPrice.toLocaleString() : ""}</div>
-            <div className={`flex items-center justify-end px-1 text-xs font-bold tabular-nums ${sumProfit < 0 ? "text-soft-blush" : "text-muted-teal"}`}>{sumProfit !== 0 ? sumProfit.toLocaleString() : ""}</div>
+            <div className={`flex items-center justify-end px-1 text-xs font-bold tabular-nums ${sumProfit < 0 ? "text-red-500" : "text-green-600"}`}>{sumProfit !== 0 ? sumProfit.toLocaleString() : ""}</div>
             <div />
-            <div className="flex items-center justify-end px-1 text-xs font-bold text-muted-teal tabular-nums">{sumIncentive > 0 ? sumIncentive.toLocaleString() : ""}</div>
+            <div className="flex items-center justify-end px-1 text-xs font-bold text-green-600 tabular-nums">{sumIncentive > 0 ? sumIncentive.toLocaleString() : ""}</div>
           </div>
         )
       })()}
@@ -2678,7 +2678,7 @@ function DialogField({ label, value, onChange, required, placeholder, multiline 
   return (
     <div className={`flex gap-3 ${multiline ? "items-start" : "items-center"}`}>
       <label className={`text-[11px] text-gray-400 w-[60px] shrink-0 ${multiline ? "pt-1.5" : ""}`}>
-        {label}{required && <span className="text-soft-blush ml-0.5">*</span>}
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
       </label>
       {multiline ? (
         <textarea value={value} onChange={(e) => onChange(e.target.value)}
@@ -2710,7 +2710,7 @@ function MiniRow({ label, value, highlight, percent }: { label: string; value: n
   return (
     <div className="flex justify-between text-xs">
       <span className="text-gray-500">{label}</span>
-      <span className={`tabular-nums ${highlight ? "font-bold text-muted-teal" : "font-medium text-gray-700"}`}>
+      <span className={`tabular-nums ${highlight ? "font-bold text-green-600" : "font-medium text-gray-700"}`}>
         {percent ? `${percent}%` : formatCurrency(value)}
       </span>
     </div>

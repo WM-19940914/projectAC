@@ -276,7 +276,7 @@ export default function QuotesList({ quotations, customers }: Props) {
           <p className="text-sm text-gray-500">총 {quotations.length}건</p>
           <button
             onClick={handleCreate}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition-colors"
           >
             <Plus className="h-4 w-4" />
             견적서 추가
@@ -293,7 +293,7 @@ export default function QuotesList({ quotations, customers }: Props) {
             placeholder="제목, 견적번호, 고객명, 의뢰명 검색"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400"
           />
         </div>
       </div>
@@ -311,7 +311,7 @@ export default function QuotesList({ quotations, customers }: Props) {
             {quotations.length === 0 && (
               <button
                 onClick={handleCreate}
-                className="mt-3 text-sm text-sky-aqua hover:underline"
+                className="mt-3 text-sm text-slate-700 hover:underline"
               >
                 첫 견적서를 작성해보세요
               </button>
@@ -349,12 +349,12 @@ export default function QuotesList({ quotations, customers }: Props) {
                   <tr
                     key={q.id}
                     onClick={() => handleRowClick(q.id)}
-                    className="border-b border-gray-100 hover:bg-sky-aqua/5 cursor-pointer transition-colors"
+                    className="border-b border-gray-100 hover:bg-slate-50 cursor-pointer transition-colors"
                   >
                     <td className="px-6 py-3">
                       <Badge
                         variant="secondary"
-                        className="text-[11px] bg-sky-aqua/10 text-sky-aqua"
+                        className="text-[11px] bg-slate-100 text-slate-700"
                       >
                         {q.quotation_number}
                       </Badge>
@@ -399,7 +399,7 @@ export default function QuotesList({ quotations, customers }: Props) {
                 placeholder="검색어를 입력하세요.."
                 value={requestSearch}
                 onChange={(e) => setRequestSearch(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400"
               />
             </div>
           </div>
@@ -417,7 +417,7 @@ export default function QuotesList({ quotations, customers }: Props) {
                     key={r.id}
                     className={`flex items-start gap-3 px-3 py-3 rounded-lg border cursor-pointer transition-colors ${
                       selectedRequestId === r.id
-                        ? "border-sky-aqua bg-sky-aqua/5"
+                        ? "border-slate-400 bg-slate-50"
                         : "border-gray-200 hover:border-gray-300"
                     }`}
                   >
@@ -426,7 +426,7 @@ export default function QuotesList({ quotations, customers }: Props) {
                       name="request"
                       checked={selectedRequestId === r.id}
                       onChange={() => setSelectedRequestId(r.id)}
-                      className="mt-0.5 accent-sky-aqua"
+                      className="mt-0.5 accent-slate-700"
                     />
                     <div className="min-w-0">
                       <p className="text-sm text-gray-900 leading-snug">{r.title}</p>
@@ -447,7 +447,7 @@ export default function QuotesList({ quotations, customers }: Props) {
                 setRequestDialogOpen(false)
                 setIsCreateRequestOpen(true)
               }}
-              className="flex-1 py-2.5 text-sm font-medium rounded-lg border border-sky-aqua text-sky-aqua hover:bg-sky-aqua/5 transition-colors"
+              className="flex-1 py-2.5 text-sm font-medium rounded-lg border border-slate-400 text-slate-700 hover:bg-slate-50 transition-colors"
             >
               새 의뢰 만들기
             </button>
@@ -484,7 +484,7 @@ export default function QuotesList({ quotations, customers }: Props) {
             {/* 제목 (필수) */}
             <div className="space-y-2">
               <Label htmlFor="req-title" className="text-sm font-medium">
-                제목 <span className="text-soft-blush">*</span>
+                제목 <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="req-title"
@@ -497,16 +497,16 @@ export default function QuotesList({ quotations, customers }: Props) {
 
             {/* 고객 선택 */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">고객 <span className="text-soft-blush">*</span></Label>
+              <Label className="text-sm font-medium">고객 <span className="text-red-500">*</span></Label>
               <button
                 type="button"
                 onClick={() => setIsCustomerModalOpen(true)}
-                className="w-full flex items-center justify-between px-3 py-2.5 border border-gray-200 rounded-lg hover:border-sky-aqua/50 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2.5 border border-gray-200 rounded-lg hover:border-slate-400 transition-colors"
               >
                 {createRequestForm.customer_id ? (
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
-                      <Building2 className="h-3 w-3 text-tropical-teal" />
+                    <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                      <Building2 className="h-3 w-3 text-slate-500" />
                     </div>
                     <span className="text-sm font-medium text-gray-900">
                       {localCustomers.find((c) => c.id === createRequestForm.customer_id)?.company_name || ""}
@@ -559,7 +559,7 @@ export default function QuotesList({ quotations, customers }: Props) {
             <button
               onClick={handleCreateRequest}
               disabled={isCreatingRequest || !createRequestForm.title.trim()}
-              className="px-4 py-2 text-sm rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors disabled:opacity-50"
+              className="px-4 py-2 text-sm rounded-md bg-slate-700 text-white hover:bg-slate-600 transition-colors disabled:opacity-50"
             >
               {isCreatingRequest ? "생성 중..." : "생성"}
             </button>
@@ -595,7 +595,7 @@ export default function QuotesList({ quotations, customers }: Props) {
                   value={customerSearch}
                   onChange={(e) => setCustomerSearch(e.target.value)}
                   autoFocus
-                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400"
                 />
               </div>
 
@@ -619,11 +619,11 @@ export default function QuotesList({ quotations, customers }: Props) {
                         }}
                         className={cn(
                           "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0",
-                          createRequestForm.customer_id === c.id && "bg-sky-aqua/5"
+                          createRequestForm.customer_id === c.id && "bg-slate-50"
                         )}
                       >
-                        <div className="w-7 h-7 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
-                          <Building2 className="h-3.5 w-3.5 text-tropical-teal" />
+                        <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                          <Building2 className="h-3.5 w-3.5 text-slate-500" />
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{c.company_name}</p>
@@ -644,7 +644,7 @@ export default function QuotesList({ quotations, customers }: Props) {
                   }
                   setIsCustomerCreateMode(true)
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-sky-aqua/50 text-sky-aqua text-sm font-medium hover:border-sky-aqua hover:bg-sky-aqua/5 transition-all"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-slate-400 text-slate-700 text-sm font-medium hover:border-slate-400 hover:bg-slate-50 transition-all"
               >
                 <Plus className="h-4 w-4" />
                 새 고객 등록
@@ -657,7 +657,7 @@ export default function QuotesList({ quotations, customers }: Props) {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
-                  회사명 <span className="text-soft-blush">*</span>
+                  회사명 <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   placeholder="예: (주)한국건설"
@@ -723,7 +723,7 @@ export default function QuotesList({ quotations, customers }: Props) {
                     setIsCreatingCustomer(false)
                   }}
                   disabled={isCreatingCustomer || !customerCreateForm.company_name.trim()}
-                  className="px-4 py-2 text-sm rounded-md bg-sky-aqua text-white hover:bg-sky-aqua/80 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm rounded-md bg-slate-700 text-white hover:bg-slate-600 transition-colors disabled:opacity-50"
                 >
                   {isCreatingCustomer ? "등록 중..." : "등록 후 연결"}
                 </button>

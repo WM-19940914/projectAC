@@ -110,7 +110,7 @@ function InlineTitle({
           if (e.key === "Escape") { setTempValue(value); setIsEditing(false) }
         }}
         autoFocus
-        className="font-sans text-2xl font-semibold text-left w-full bg-transparent border-b-2 border-sky-aqua focus:outline-none py-1"
+        className="font-sans text-2xl font-semibold text-left w-full bg-transparent border-b-2 border-slate-400 focus:outline-none py-1"
       />
     )
   }
@@ -118,7 +118,7 @@ function InlineTitle({
   return (
     <h2
       onClick={() => setIsEditing(true)}
-      className="font-sans text-2xl font-semibold text-left cursor-pointer rounded px-1 -mx-1 py-1 hover:bg-sky-aqua/5 transition-colors truncate"
+      className="font-sans text-2xl font-semibold text-left cursor-pointer rounded px-1 -mx-1 py-1 hover:bg-slate-50 transition-colors truncate"
       title={value}
     >
       {value}
@@ -196,7 +196,7 @@ function InlineDate({
             value={tempValue}
             onChange={(e) => setTempValue(e.target.value)}
             autoFocus
-            className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua mb-2"
+            className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-300/50 focus:border-slate-400 mb-2"
           />
           <div className="flex justify-end gap-1.5">
             <button
@@ -207,7 +207,7 @@ function InlineDate({
             </button>
             <button
               onClick={handleConfirm}
-              className="px-3 py-1 text-xs bg-sky-aqua text-white rounded hover:bg-sky-aqua/90 transition-colors font-medium"
+              className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600 transition-colors font-medium"
             >
               입력완료
             </button>
@@ -282,7 +282,7 @@ function InlineMemo({
             placeholder={placeholder}
             autoFocus
             rows={5}
-            className="w-full text-sm border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua resize-none"
+            className="w-full text-sm border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-slate-300/50 focus:border-slate-400 resize-none"
           />
           <div className="flex justify-end gap-1.5">
             <button
@@ -293,7 +293,7 @@ function InlineMemo({
             </button>
             <button
               onClick={handleConfirm}
-              className="px-3 py-1 text-xs bg-sky-aqua text-white rounded hover:bg-sky-aqua/90 transition-colors font-medium"
+              className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600 transition-colors font-medium"
             >
               입력완료
             </button>
@@ -303,7 +303,7 @@ function InlineMemo({
         <div
           onClick={handleOpen}
           className={cn(
-            "rounded-lg border bg-gray-50 p-4 min-h-[120px] cursor-pointer hover:bg-sky-aqua/5 transition-colors",
+            "rounded-lg border bg-gray-50 p-4 min-h-[120px] cursor-pointer hover:bg-slate-50 transition-colors",
             !value && "border-dashed border-gray-300"
           )}
           title="클릭하여 수정"
@@ -357,7 +357,7 @@ function InlineAmount({
   return (
     <div ref={wrapperRef} className="space-y-2">
       {/* 금액 표시/편집 */}
-      <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-sky-aqua/5 transition-colors">
+      <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-slate-50 transition-colors">
         <span className="text-sm text-gray-500">계약 금액</span>
         <div
           onClick={() => { setTempAmount(String(amount || "")); setIsEditing(true) }}
@@ -376,7 +376,7 @@ function InlineAmount({
                   onChange={(e) => setTempAmount(e.target.value)}
                   placeholder="금액을 입력하세요"
                   autoFocus
-                  className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 pr-8 text-right font-sans tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                  className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 pr-8 text-right font-sans tabular-nums focus:outline-none focus:ring-2 focus:ring-slate-300/50 focus:border-slate-400"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleConfirm()
                     if (e.key === "Escape") setIsEditing(false)
@@ -386,7 +386,7 @@ function InlineAmount({
               </div>
               <div className="flex justify-end gap-1.5">
                 <button onClick={() => setIsEditing(false)} className="px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded transition-colors">취소</button>
-                <button onClick={handleConfirm} className="px-3 py-1 text-xs bg-sky-aqua text-white rounded hover:bg-sky-aqua/90 transition-colors font-medium">입력완료</button>
+                <button onClick={handleConfirm} className="px-3 py-1 text-xs bg-slate-700 text-white rounded hover:bg-slate-600 transition-colors font-medium">입력완료</button>
               </div>
             </div>
           )}
@@ -401,7 +401,7 @@ function InlineAmount({
           className={cn(
             "text-xs px-2.5 py-1 rounded-full font-medium transition-all border",
             vatInclusive
-              ? "bg-muted-teal/10 text-muted-teal border-muted-teal/30"
+              ? "bg-green-100 text-green-600 border-green-300"
               : "bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200"
           )}
         >
@@ -433,7 +433,7 @@ function InlineSettlementType({
               className={cn(
                 "px-2.5 py-1 rounded-full text-xs font-medium transition-all border",
                 isSelected
-                  ? "bg-sky-aqua/10 text-sky-aqua border-sky-aqua shadow-sm"
+                  ? "bg-slate-100 text-slate-700 border-slate-400 shadow-sm"
                   : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:border-gray-300"
               )}
             >
@@ -509,10 +509,10 @@ function CustomerPanel({
         <div className="flex items-center gap-1.5 pb-2 border-b-2 border-gray-900">
           <span className="text-base font-bold text-gray-900">고객</span>
           {customer && !customer.deleted_at && (
-            <CheckCircle2 className="h-5 w-5 text-white fill-muted-teal" />
+            <CheckCircle2 className="h-5 w-5 text-white fill-green-500" />
           )}
           {customer?.deleted_at && (
-            <span className="w-4 h-4 rounded-full bg-soft-blush text-white text-[10px] font-bold flex items-center justify-center">!</span>
+            <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">!</span>
           )}
         </div>
       </div>
@@ -528,10 +528,10 @@ function CustomerPanel({
               <Building2 className="h-4 w-4 text-gray-400" />
               <span className="text-sm text-gray-500">고객을 연결해주세요.</span>
             </div>
-            <Search className="h-4 w-4 text-gray-300 group-hover:text-sky-aqua transition-colors" />
+            <Search className="h-4 w-4 text-gray-300 group-hover:text-slate-700 transition-colors" />
           </button>
-          <div className="rounded-md bg-sky-aqua/5 px-3 py-2.5">
-            <p className="text-xs text-sky-aqua">고객을 선택하거나 추가해주세요 :)</p>
+          <div className="rounded-md bg-slate-100 px-3 py-2.5">
+            <p className="text-xs text-slate-700">고객을 선택하거나 추가해주세요 :)</p>
           </div>
         </div>
       )}
@@ -541,21 +541,21 @@ function CustomerPanel({
         <div>
           <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-2 min-w-0">
-              <Building2 className="h-4 w-4 text-soft-blush shrink-0" />
-              <span className="text-sm font-medium text-soft-blush">삭제된 데이터</span>
+              <Building2 className="h-4 w-4 text-red-500 shrink-0" />
+              <span className="text-sm font-medium text-red-500">삭제된 데이터</span>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
-              <button onClick={() => setIsModalOpen(true)} className="p-1.5 rounded-md text-gray-400 hover:text-tropical-teal hover:bg-tropical-teal/10 transition-colors" title="변경">
+              <button onClick={() => setIsModalOpen(true)} className="p-1.5 rounded-md text-gray-400 hover:text-slate-500 hover:bg-slate-100 transition-colors" title="변경">
                 <Search className="h-3 w-3" />
               </button>
-              <button onClick={onUnlink} className="p-1.5 rounded-md text-gray-400 hover:text-soft-blush hover:bg-soft-blush/10 transition-colors" title="해제">
+              <button onClick={onUnlink} className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-colors" title="해제">
                 <X className="h-3 w-3" />
               </button>
             </div>
           </div>
-          <div className="rounded-md bg-soft-blush/10 px-3 py-2.5">
-            <p className="text-xs text-soft-blush font-medium">연결된 데이터가 삭제됐어요!</p>
-            <p className="text-xs text-soft-blush/80">다른 데이터로 연결을 변경해주세요.</p>
+          <div className="rounded-md bg-red-500/10 px-3 py-2.5">
+            <p className="text-xs text-red-500 font-medium">연결된 데이터가 삭제됐어요!</p>
+            <p className="text-xs text-red-500/80">다른 데이터로 연결을 변경해주세요.</p>
           </div>
         </div>
       )}
@@ -565,16 +565,16 @@ function CustomerPanel({
         <div>
           <div className="flex items-center justify-between py-2">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-6 h-6 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
-                <Building2 className="h-3 w-3 text-tropical-teal" />
+              <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                <Building2 className="h-3 w-3 text-slate-500" />
               </div>
-              <span className="text-sm font-medium text-sky-aqua truncate">{customer.company_name}</span>
+              <span className="text-sm font-medium text-slate-700 truncate">{customer.company_name}</span>
             </div>
             <div className="flex items-center gap-0.5 shrink-0">
-              <button onClick={() => setIsModalOpen(true)} className="p-1.5 rounded-md text-gray-400 hover:text-tropical-teal hover:bg-tropical-teal/10 transition-colors" title="변경">
+              <button onClick={() => setIsModalOpen(true)} className="p-1.5 rounded-md text-gray-400 hover:text-slate-500 hover:bg-slate-100 transition-colors" title="변경">
                 <Search className="h-3 w-3" />
               </button>
-              <button onClick={onUnlink} className="p-1.5 rounded-md text-gray-400 hover:text-soft-blush hover:bg-soft-blush/10 transition-colors" title="해제">
+              <button onClick={onUnlink} className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-colors" title="해제">
                 <X className="h-3 w-3" />
               </button>
             </div>
@@ -622,7 +622,7 @@ function CustomerPanel({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoFocus
-                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300/50 focus:border-slate-400"
                 />
               </div>
 
@@ -636,11 +636,11 @@ function CustomerPanel({
                       onClick={() => handleSelectCustomer(c.id)}
                       className={cn(
                         "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0",
-                        customer && c.id === customer.id && "bg-sky-aqua/5"
+                        customer && c.id === customer.id && "bg-slate-100"
                       )}
                     >
-                      <div className="w-7 h-7 rounded-full bg-tropical-teal/10 flex items-center justify-center shrink-0">
-                        <Building2 className="h-3.5 w-3.5 text-tropical-teal" />
+                      <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                        <Building2 className="h-3.5 w-3.5 text-slate-500" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{c.company_name}</p>
@@ -653,7 +653,7 @@ function CustomerPanel({
 
               <button
                 onClick={() => setIsCreateMode(true)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-sky-aqua hover:bg-sky-aqua/5 rounded-lg transition-colors border border-dashed border-sky-aqua/30"
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-slate-700 hover:bg-slate-50 rounded-lg transition-colors border border-dashed border-slate-400/30"
               >
                 <Plus className="h-4 w-4" /> 새 고객 등록
               </button>
@@ -668,21 +668,21 @@ function CustomerPanel({
                 value={createForm.company_name}
                 onChange={(e) => setCreateForm((p) => ({ ...p, company_name: e.target.value }))}
                 autoFocus
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300/50 focus:border-slate-400"
               />
               <input
                 type="text"
                 placeholder="담당자명"
                 value={createForm.contact_name}
                 onChange={(e) => setCreateForm((p) => ({ ...p, contact_name: e.target.value }))}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300/50 focus:border-slate-400"
               />
               <input
                 type="text"
                 placeholder="연락처"
                 value={createForm.phone}
                 onChange={(e) => setCreateForm((p) => ({ ...p, phone: e.target.value }))}
-                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-aqua/50 focus:border-sky-aqua"
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300/50 focus:border-slate-400"
               />
               <div className="flex gap-2">
                 <button
@@ -694,7 +694,7 @@ function CustomerPanel({
                 <button
                   onClick={handleCreateAndLink}
                   disabled={isCreating || !createForm.company_name.trim()}
-                  className="flex-1 py-2 text-sm bg-sky-aqua text-white rounded-lg hover:bg-sky-aqua/90 transition-colors disabled:opacity-50"
+                  className="flex-1 py-2 text-sm bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors disabled:opacity-50"
                 >
                   {isCreating ? "생성 중..." : "등록 후 연결"}
                 </button>
@@ -737,14 +737,14 @@ export default function ContractSheet({
             {saveMessage && (
               <span className={cn(
                 "text-sm",
-                saveMessage.includes("실패") ? "text-soft-blush" : "text-muted-teal"
+                saveMessage.includes("실패") ? "text-red-500" : "text-green-600"
               )}>
                 {saveMessage}
               </span>
             )}
             <button
               onClick={onDelete}
-              className="px-3 py-1.5 text-sm rounded-md text-soft-blush hover:bg-soft-blush/10 transition-colors"
+              className="px-3 py-1.5 text-sm rounded-md text-red-500 hover:bg-red-500/10 transition-colors"
             >
               삭제하기
             </button>
@@ -808,7 +808,7 @@ export default function ContractSheet({
               <Separator />
 
               {/* 착수일 */}
-              <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-sky-aqua/5 transition-colors">
+              <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-slate-50 transition-colors">
                 <span className="text-sm text-gray-500 flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> 착수일</span>
                 <InlineDate
                   value={contract.start_date || ""}
@@ -819,7 +819,7 @@ export default function ContractSheet({
               </div>
 
               {/* 종료일 */}
-              <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-sky-aqua/5 transition-colors">
+              <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-slate-50 transition-colors">
                 <span className="text-sm text-gray-500 flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> 종료일</span>
                 <InlineDate
                   value={contract.end_date || ""}

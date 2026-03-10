@@ -28,10 +28,10 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
         <div className="flex h-14 items-center border-b px-4">
           <Link
             href="/dashboard"
-            className="flex items-center gap-2 font-bold text-lg text-sky-aqua"
+            className="flex items-center gap-2 font-bold text-lg text-slate-700"
             onClick={handleItemClick}
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-aqua text-white text-sm font-bold">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-700 text-white text-sm font-bold">
               M
             </div>
             M
