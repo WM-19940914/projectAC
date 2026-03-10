@@ -23,7 +23,9 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet"
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CheckCircle2, EyeOff, FileText, Hash, Plus, Receipt, Search, Trash2, Truck, X, XCircle } from "lucide-react"
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CalendarRange, CheckCircle2, EyeOff, FileText, Hash, Plus, Receipt, Search, SmilePlus, Trash2, Truck, X, XCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useAuth } from "@/providers/auth-provider"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -60,13 +62,28 @@ import {
   DEFAULT_MIDDLE_INSTALLMENTS,
   EMPTY_STAGE_SCHEDULED_DATES,
 } from "./kanban-types"
-import { InlineTitle, InlineSelect, InlineDate, InlineEditMemo } from "./inline-editors"
+import { InlineTitle, InlineSelect } from "./inline-editors"
 import { CustomerDetailSheet } from "./customer-detail-sheet"
 import { SalesFlowPanel } from "./sales-flow-panel"
+import { SideOverviewPanel } from "./side-overview-panel"
+import { QuotationsTab } from "./quotations-tab"
+import { ContractFlowTab } from "./contract-flow-tab"
 import { CustomerPanel } from "./customer-panel"
+// overview-tab.tsx 삭제됨 → side-overview-panel.tsx로 대체 (위에서 import)
+
+// 시간대별 인사 메시지
+function getGreeting(): string {
+  const hour = new Date().getHours()
+  if (hour < 6) return "새벽에도 수고하세요"
+  if (hour < 12) return "좋은 아침이에요"
+  if (hour < 14) return "점심 맛있게 드세요"
+  if (hour < 18) return "좋은 오후에요"
+  return "오늘도 수고했어요"
+}
 
 export function RequestKanbanBoard({ columns: initialColumns, totalCount, customers, hiddenItems: initialHiddenItems, failedItems: initialFailedItems }: Props) {
   const router = useRouter()
+  const { profile } = useAuth()
 
   // 드래그로 카드 이동 시 화면에 바로 반영하기 위해 state로 관리
   const [columns, setColumns] = useState(initialColumns)
@@ -109,7 +126,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   // 자동저장 상태 메시지
   const [saveMessage, setSaveMessage] = useState("")
   // 탭 전환 요청 (개요 카드 클릭 시 해당 탭으로 이동)
-  const [requestedFlow, setRequestedFlow] = useState<"개요" | "견적" | "계약" | "정산" | "주문·배송" | "지출" | undefined>(undefined)
+  // requestedFlow 제거됨 — 탭 없는 전체 보기 레이아웃
 
   // 고객 목록 로컬 state (즉석 생성 시 낙관적 업데이트용)
   const [localCustomers, setLocalCustomers] = useState(customers)
@@ -518,6 +535,45 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     })
   }
 
+  // ----- 헤더 필터 state -----
+  // 검색어 (의뢰 제목 / 고객명)
+  const [searchQuery, setSearchQuery] = useState("")
+  // 기간 필터 (문의 일자 범위)
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  // 기간 필터 패널 열림/닫힘
+  const [isDateFilterOpen, setIsDateFilterOpen] = useState(false)
+
+  // 필터가 적용된 컬럼 데이터 — 검색어 + 기간 필터를 모두 반영
+  const filteredColumns = columns.map((col) => {
+    let items = col.items
+
+    // 검색어 필터
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase()
+      items = items.filter((item) =>
+        item.title.toLowerCase().includes(q) ||
+        (item.customer?.company_name || "").toLowerCase().includes(q)
+      )
+    }
+
+    // 기간 필터 (문의 일자)
+    if (dateFrom) {
+      items = items.filter((item) => item.inquiry_date && item.inquiry_date >= dateFrom)
+    }
+    if (dateTo) {
+      items = items.filter((item) => item.inquiry_date && item.inquiry_date <= dateTo)
+    }
+
+    return { ...col, items, count: items.length }
+  })
+
+  // 필터링된 총 건수
+  const filteredTotalCount = filteredColumns.reduce((sum, col) => sum + col.count, 0)
+
+  // 필터 활성 여부
+  const hasActiveFilter = searchQuery.trim() !== "" || dateFrom !== "" || dateTo !== ""
+
   // 의뢰 생성 다이얼로그용 state
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -729,16 +785,121 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   return (
     <div className="flex flex-col h-full overflow-auto -m-6 bg-white">
       {/* 페이지 헤더 */}
-      <div className="flex items-center justify-between px-6 py-3 border-b sticky top-0 bg-white z-10">
-        <h1 className="text-[15px] font-semibold text-slate-800">현장관리</h1>
-        <p className="text-sm text-gray-400">총 {totalCount}건</p>
+      <div className="sticky top-0 bg-white z-10 border-b">
+        <div className="flex items-center justify-between px-6 py-3">
+          {/* 좌측: 아이콘 + 타이틀 + 인사 + 통계 */}
+          <div className="flex items-center gap-4">
+            {/* 인사 메시지 */}
+            <div className="flex items-center gap-2">
+              <SmilePlus className="h-4.5 w-4.5 text-sky-aqua" />
+              <span className="text-[13px] text-gray-400">
+                {getGreeting()}, <span className="font-medium text-gray-500">{profile?.name || "사용자"}</span>님
+              </span>
+            </div>
+
+            <div className="h-4 w-px bg-gray-200" />
+
+            {/* 상태별 통계 배지 */}
+            <div className="flex items-center gap-1.5">
+              {filteredColumns.map((col) => {
+                const style = COLUMN_STYLES[col.status] || COLUMN_STYLES["견적 문의"]
+                return (
+                  <div key={col.status} className={cn("flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium", style.badge)}>
+                    <span>{col.status}</span>
+                    <span className="font-bold">{col.count}</span>
+                  </div>
+                )
+              })}
+              {hasActiveFilter && (
+                <span className="text-[11px] text-gray-400 ml-1">/ 전체 {totalCount}</span>
+              )}
+            </div>
+
+            <div className="h-4 w-px bg-gray-200" />
+
+            {/* 검색 입력 — 통계 배지 우측 */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+              <Input
+                placeholder="검색: 내용을 검색해주세요"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 h-8 w-[280px] text-sm bg-gray-50 border-gray-200 focus:bg-white"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 우측: 기간 필터 + 의뢰 생성 */}
+          <div className="flex items-center gap-2">
+            {/* 기간 필터 토글 버튼 */}
+            <button
+              onClick={() => setIsDateFilterOpen(!isDateFilterOpen)}
+              className={cn(
+                "flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm transition-all",
+                (dateFrom || dateTo)
+                  ? "border-sky-aqua/50 bg-sky-aqua/10 text-sky-aqua"
+                  : "border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"
+              )}
+            >
+              <CalendarRange className="h-3.5 w-3.5" />
+              <span>{(dateFrom || dateTo) ? "기간 설정됨" : "기간 필터"}</span>
+            </button>
+
+            {/* 의뢰 생성 버튼 */}
+            <Button
+              onClick={() => setIsCreateOpen(true)}
+              size="sm"
+              className="h-8 bg-sky-aqua hover:bg-sky-aqua/90 text-white gap-1.5"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              의뢰 생성
+            </Button>
+          </div>
+        </div>
+
+        {/* 기간 필터 패널 (토글 시 표시) */}
+        {isDateFilterOpen && (
+          <div className="flex items-center gap-3 px-6 pb-3 -mt-1">
+            <span className="text-xs text-gray-500 shrink-0">문의 일자</span>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-7 w-[140px] text-sm bg-gray-50 border-gray-200"
+            />
+            <span className="text-xs text-gray-400">~</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-7 w-[140px] text-sm bg-gray-50 border-gray-200"
+            />
+            {(dateFrom || dateTo) && (
+              <button
+                onClick={() => { setDateFrom(""); setDateTo("") }}
+                className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
+              >
+                <X className="h-3 w-3" />
+                초기화
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 칸반 보드 */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <div className="flex-1 bg-white">
           <div className="flex gap-4 p-4 [&_.text-\\[10px\\]]:text-xs [&_.text-\\[9px\\]]:text-[10px] [&_.text-xs]:text-sm">
-            {columns.map((col) => {
+            {filteredColumns.map((col) => {
               const style = COLUMN_STYLES[col.status] || COLUMN_STYLES["견적 문의"]
 
               return (
@@ -1241,30 +1402,24 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         </DialogContent>
       </Dialog>
 
-      {/* 의뢰 상세 패널 (오른쪽 슬라이드) — 단일 컬럼이므로 700px로 축소 */}
+      {/* 의뢰 상세 패널 (오른쪽 슬라이드) — 전체 보기 1400px */}
       <Sheet open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
-        <SheetContent side="right" className="w-full sm:max-w-[700px] p-0 flex flex-col [&>button:first-child]:hidden">
+        <SheetContent side="right" className="w-full sm:max-w-[1400px] p-0 flex flex-col [&>button:first-child]:hidden">
           {selectedItem && (() => {
             const confirmedQuoteId = selectedItem.confirmed_quote_id
-            const confirmedQuote = confirmedQuoteId
-              ? quotations.find((q) => q.id === confirmedQuoteId) ?? null
-              : null
-            const confirmedQuoteTitle = confirmedQuote?.title ?? "미확정"
-            const confirmedQuotationNumber = confirmedQuote?.quotation_number ?? "미확정"
-            const confirmedTotalAmount = confirmedQuote?.total_amount ?? null
-            const confirmedGrandTotal = confirmedQuote?.grand_total ?? null
+            // 확정 견적 관련 파생 데이터는 OverviewTab 내부에서 처리
             return (
               <>
-                {/* 상단 헤더: ← 닫기 + [상태 배지] + 자동저장 + 삭제 + ✕ */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/60 bg-gradient-to-r from-slate-50/80 to-white">
-                  <div className="flex items-center gap-3">
+                {/* 통합 헤더: ← 닫기 + 상태배지 + 제목 + 메타칩 + 액션 */}
+                <div className="border-b border-slate-200/60 bg-gradient-to-r from-slate-50/80 to-white">
+                  {/* 1행: 뒤로가기 + 상태 + 제목(편집 가능) + 우측 액션 */}
+                  <div className="flex items-center gap-3 px-5 pt-3 pb-1.5">
                     <button
                       onClick={() => setSelectedItem(null)}
-                      className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+                      className="p-1 rounded-full hover:bg-gray-100 transition-colors shrink-0"
                     >
-                      <ArrowLeft className="h-5 w-5 text-gray-600" />
+                      <ArrowLeft className="h-4.5 w-4.5 text-gray-500" />
                     </button>
-                    {/* 상태 배지 (클릭으로 변경 가능) */}
                     <InlineSelect
                       value={selectedItem.status}
                       displayValue={selectedItem.status}
@@ -1279,70 +1434,162 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                       }}
                       align="left"
                     />
+                    <SheetHeader className="flex-1 min-w-0">
+                      <SheetTitle className="sr-only">의뢰 상세</SheetTitle>
+                      <SheetDescription className="sr-only">의뢰 상세 정보</SheetDescription>
+                      <InlineTitle
+                        value={selectedItem.title}
+                        compact
+                        onConfirm={(v) => {
+                          if (v.trim()) updateRequestField("title", v.trim())
+                        }}
+                      />
+                    </SheetHeader>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {saveMessage && (
+                        <span className={cn(
+                          "text-xs",
+                          saveMessage.includes("실패") ? "text-red-500" : "text-muted-teal"
+                        )}>
+                          {saveMessage}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => {
+                          setDeleteTarget(selectedItem)
+                          setSelectedItem(null)
+                        }}
+                        className="px-2.5 py-1 text-xs rounded-md text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        삭제
+                      </button>
+                      <button
+                        onClick={() => setSelectedItem(null)}
+                        className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                      >
+                        <X className="h-4.5 w-4.5 text-gray-500" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {saveMessage && (
-                      <span className={cn(
-                        "text-sm",
-                        saveMessage.includes("실패") ? "text-red-500" : "text-green-600"
-                      )}>
-                        {saveMessage}
-                      </span>
-                    )}
-                    <button
-                      onClick={() => {
-                        setDeleteTarget(selectedItem)
-                        setSelectedItem(null)
-                      }}
-                      className="px-3 py-1.5 text-sm rounded-md text-red-500 hover:bg-red-500/10 transition-colors"
-                    >
-                      삭제하기
-                    </button>
-                    <button
-                      onClick={() => setSelectedItem(null)}
-                      className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
-                    >
-                      <X className="h-5 w-5 text-gray-600" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 제목 + 메타 정보 (날짜 · 고객) */}
-                <div className="px-6 pt-4 pb-3">
-                  <SheetHeader className="mb-2">
-                    <SheetTitle className="sr-only">의뢰 상세</SheetTitle>
-                    <SheetDescription className="sr-only">의뢰 상세 정보</SheetDescription>
-                    <InlineTitle
-                      value={selectedItem.title}
-                      onConfirm={(v) => {
-                        if (v.trim()) updateRequestField("title", v.trim())
-                      }}
-                    />
-                  </SheetHeader>
-                  {/* 메타 정보 한 줄: 날짜 · 고객 · 생성일 — pill 칩 스타일 */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-xs text-slate-600">
-                      <Calendar className="h-3 w-3" />
+                  {/* 2행: 메타 칩 (날짜 · 고객 · 생성일) — 좌측 여백 맞춤 */}
+                  <div className="flex items-center gap-1.5 px-5 pb-2.5 pl-[52px]">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100/80 text-[11px] text-slate-500">
+                      <Calendar className="h-2.5 w-2.5" />
                       {selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : "문의일 미지정"}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-xs text-slate-600">
-                      <Building2 className="h-3 w-3" />
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100/80 text-[11px] text-slate-500">
+                      <Building2 className="h-2.5 w-2.5" />
                       {selectedItem.customer?.company_name || "고객 미연결"}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-50 text-xs text-slate-400">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-50/80 text-[11px] text-slate-400">
                       {formatDateTime(selectedItem.created_at).replace(/^\d{2}/, '')} 생성
                     </span>
                   </div>
                 </div>
 
-                {/* 단일 컬럼 본문: 탭 네비 + 탭 내용 */}
-                <div className="flex-1 overflow-y-auto px-6 pt-2 pb-6 scrollbar-hidden">
+                {/* 전체 보기: 한 페이지 스크롤 */}
+                <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 scrollbar-hidden space-y-0">
+                  {/* ===== Row 1: 고객 | 견적서 | 계약 (3컬럼) ===== */}
+                  <div className="grid grid-cols-[1fr_1fr_1.5fr] gap-0 items-start border-b border-gray-200">
+                    {/* 고객 */}
+                    <div className="px-4 py-3 border-r border-gray-200">
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">고객</p>
+                      <SideOverviewPanel
+                        selectedItem={selectedItem}
+                        localCustomers={localCustomers}
+                        onCustomerLink={(id: string) => updateRequestField("customer_id", id)}
+                        onCustomerUnlink={() => updateRequestField("customer_id", null)}
+                        onCustomerCreateAndLink={async (form: { company_name: string; contact_name?: string; phone?: string }) => {
+                          const res = await fetch("/api/customers", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(form),
+                          })
+                          const result = await res.json()
+                          if (!res.ok) throw new Error(result.error)
+                          const nc = result.data
+                          setLocalCustomers((prev) => [...prev, {
+                            id: nc.id,
+                            company_name: nc.company_name,
+                            contact_name: nc.contact_name ?? null,
+                            phone: nc.phone ?? null,
+                            email: nc.email ?? null,
+                            address: nc.address ?? null,
+                            representative: nc.representative ?? null,
+                            business_number: nc.business_number ?? null,
+                            memo: nc.memo ?? null,
+                          }])
+                          const updatedItem = {
+                            ...selectedItem,
+                            customer: { id: nc.id, company_name: nc.company_name, deleted_at: null },
+                          }
+                          setSelectedItem((prev) => prev ? updatedItem : null)
+                          setColumns((prev) => prev.map((col) => ({
+                            ...col,
+                            items: col.items.map((i) => i.id === selectedItem.id ? updatedItem : i),
+                          })))
+                          setSaveMessage("저장 중...")
+                          try {
+                            const linkRes = await fetch("/api/requests", {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ id: selectedItem.id, customer_id: nc.id }),
+                            })
+                            if (!linkRes.ok) {
+                              setSaveMessage("저장 실패")
+                              setTimeout(() => setSaveMessage(""), 2000)
+                            } else {
+                              setSaveMessage("자동 저장됨")
+                              setTimeout(() => setSaveMessage(""), 1500)
+                            }
+                          } catch {
+                            setSaveMessage("저장 실패")
+                            setTimeout(() => setSaveMessage(""), 2000)
+                          }
+                        }}
+                        onOpenCustomerDetail={() => {
+                          if (selectedItem.customer?.id) setCustomerDetailId(selectedItem.customer.id)
+                        }}
+                        onUpdateField={(field, value) => updateRequestField(field, value)}
+                      />
+                    </div>
+                    {/* 견적서 */}
+                    <div className="px-4 py-3 border-r border-gray-200">
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">견적서</p>
+                      <QuotationsTab
+                        quotations={quotations}
+                        onAddQuote={handleAddQuote}
+                        onEditQuote={handleEditQuote}
+                        confirmedQuoteId={confirmedQuoteId}
+                        onToggleConfirm={handleToggleConfirmedQuote}
+                      />
+                    </div>
+                    {/* 계약 */}
+                    <div className="px-4 py-3">
+                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">계약</p>
+                      <ContractFlowTab
+                        requestId={selectedItem.id}
+                        requestTitle={selectedItem.title}
+                        requestCustomer={selectedItem.customer}
+                        requestContractId={selectedItem.contract_id}
+                        confirmedQuoteSupplyAmount={quotations.find((q) => q.id === confirmedQuoteId)?.total_amount ?? null}
+                        onLinkContract={async (contractId) => {
+                          await updateRequestField("contract_id", contractId)
+                        }}
+                        onSavedContract={(contractId) => {
+                          void loadContractSummaryById(contractId, selectedItem.id)
+                        }}
+                        onSummaryChange={handleSummaryChange}
+                        activeView="계약서"
+                      />
+                    </div>
+                  </div>
+
+                  {/* ===== Row 2: 정산 + 지출 ===== */}
+                  <div className="pt-4">
                   <SalesFlowPanel
                     quotations={quotations}
-                    onAddQuote={handleAddQuote}
-                    onEditQuote={handleEditQuote}
                     confirmedQuoteId={confirmedQuoteId}
-                    onToggleConfirm={handleToggleConfirmedQuote}
                     requestId={selectedItem.id}
                     requestTitle={selectedItem.title}
                     requestCustomer={selectedItem.customer}
@@ -1355,227 +1602,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                     }}
                     onSummaryChange={handleSummaryChange}
                     contractSummary={contractSummary}
-                    requestedFlow={requestedFlow}
-                    overviewContent={
-                      /* ===== 개요 탭 내용: 고객 + 견적 + 계약 + 정산 요약 카드 ===== */
-                      <div className="space-y-6">
-                        {/* 고객 정보 */}
-                        <CustomerPanel
-                          customer={selectedItem.customer}
-                          customers={localCustomers}
-                          onLink={(id) => updateRequestField("customer_id", id)}
-                          onUnlink={() => updateRequestField("customer_id", null)}
-                          onOpenDetail={() => {
-                            if (selectedItem.customer?.id) setCustomerDetailId(selectedItem.customer.id)
-                          }}
-                          onCreateAndLink={async (form) => {
-                            const res = await fetch("/api/customers", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify(form),
-                            })
-                            const result = await res.json()
-                            if (!res.ok) throw new Error(result.error)
-                            const nc = result.data
-                            setLocalCustomers((prev) => [...prev, {
-                              id: nc.id,
-                              company_name: nc.company_name,
-                              contact_name: nc.contact_name ?? null,
-                              phone: nc.phone ?? null,
-                              email: nc.email ?? null,
-                              address: nc.address ?? null,
-                              representative: nc.representative ?? null,
-                              business_number: nc.business_number ?? null,
-                              memo: nc.memo ?? null,
-                            }])
-                            const updatedItem = {
-                              ...selectedItem,
-                              customer: { id: nc.id, company_name: nc.company_name, deleted_at: null },
-                            }
-                            setSelectedItem((prev) => prev ? updatedItem : null)
-                            setColumns((prev) => prev.map((col) => ({
-                              ...col,
-                              items: col.items.map((i) => i.id === selectedItem.id ? updatedItem : i),
-                            })))
-                            setSaveMessage("저장 중...")
-                            try {
-                              const linkRes = await fetch("/api/requests", {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ id: selectedItem.id, customer_id: nc.id }),
-                              })
-                              if (!linkRes.ok) {
-                                setSaveMessage("저장 실패")
-                                setTimeout(() => setSaveMessage(""), 2000)
-                              } else {
-                                setSaveMessage("자동 저장됨")
-                                setTimeout(() => setSaveMessage(""), 1500)
-                              }
-                            } catch {
-                              setSaveMessage("저장 실패")
-                              setTimeout(() => setSaveMessage(""), 2000)
-                            }
-                          }}
-                        />
-
-                        {/* 문의 일시 */}
-                        <div className="flex items-center justify-between rounded-md px-2 -mx-2 py-1 cursor-pointer hover:bg-slate-50 transition-colors">
-                          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                            <Calendar className="h-4 w-4" />
-                            문의 일시
-                          </span>
-                          <InlineDate
-                            value={selectedItem.inquiry_date || ""}
-                            displayValue={selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : ""}
-                            placeholder="날짜 선택"
-                            onConfirm={(v) => updateRequestField("inquiry_date", v || null)}
-                          />
-                        </div>
-
-                        {/* 확정 견적서 요약 — 클릭 시 견적 탭 이동 */}
-                        <div>
-                          <div className="flex items-center justify-between gap-2 mb-1.5">
-                            <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                              <FileText className="h-4 w-4" />
-                              확정 견적서
-                            </p>
-                            {!confirmedQuoteId ? (
-                              <span className="text-[10px] text-gray-400">견적서를 확정 지어주세요</span>
-                            ) : confirmedTotalAmount !== null && contractSummary && Math.floor(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount ? (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-500"><AlertCircle className="h-3 w-3" />확정 견적금액과 계약금액이 다릅니다</span>
-                            ) : null}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (confirmedQuoteId) setRequestedFlow("견적")
-                            }}
-                            disabled={!confirmedQuoteId}
-                            className={cn(
-                              "w-full rounded-xl border border-gray-200 border-l-4 border-l-tropical-teal bg-white p-4 text-left transition-all",
-                              confirmedQuoteId
-                                ? "cursor-pointer hover:shadow-md hover:border-slate-400/40"
-                                : "cursor-default"
-                            )}
-                          >
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="rounded-lg bg-gray-50 px-3 py-3">
-                                <p className="text-[11px] text-gray-400">견적서명</p>
-                                <p className={cn("text-sm font-medium mt-0.5 truncate", confirmedQuote ? "text-gray-700" : "text-gray-300")}>
-                                  {confirmedQuote ? confirmedQuoteTitle : "미확정"}
-                                </p>
-                              </div>
-                              <div className="rounded-lg bg-gray-50 px-3 py-3">
-                                <p className="text-[11px] text-gray-400">견적번호</p>
-                                <p className={cn("text-sm font-medium mt-0.5 truncate", confirmedQuote ? "text-gray-700" : "text-gray-300")}>
-                                  {confirmedQuote ? confirmedQuotationNumber : "미확정"}
-                                </p>
-                              </div>
-                              <div className="rounded-lg bg-gray-50 px-3 py-3">
-                                <p className="text-[11px] text-gray-400">VAT별도</p>
-                                <p className={cn(
-                                  "text-sm font-medium mt-0.5 truncate tabular-nums",
-                                  confirmedQuote && confirmedTotalAmount !== null ? "text-gray-700" : "text-gray-300"
-                                )}>
-                                  {confirmedQuote && confirmedTotalAmount !== null ? formatCurrency(confirmedTotalAmount) : "미확정"}
-                                </p>
-                              </div>
-                              <div className="rounded-lg bg-sky-aqua/5 px-3 py-3">
-                                <p className="text-[11px] text-gray-400">VAT합계</p>
-                                <p className={cn(
-                                  "text-sm mt-0.5 truncate font-bold tabular-nums",
-                                  confirmedQuote && confirmedGrandTotal !== null ? "text-sky-aqua" : "text-gray-300"
-                                )}>
-                                  {confirmedQuote && confirmedGrandTotal !== null ? formatCurrency(confirmedGrandTotal) : "미확정"}
-                                </p>
-                              </div>
-                            </div>
-                          </button>
-                        </div>
-
-                        {/* 계약 정보 요약 — 클릭 시 계약 탭 이동 */}
-                        {contractSummary && (
-                          <>
-                            <div>
-                              <div className="mb-1.5 flex items-center justify-between gap-2">
-                                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                                  <Briefcase className="h-4 w-4" />
-                                  계약 정보
-                                </p>
-                                {confirmedTotalAmount !== null && Math.floor(contractSummary.totalWithVat / 1.1) !== confirmedTotalAmount && (
-                                  <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-soft-blush"><AlertCircle className="h-3.5 w-3.5" />금액 불일치</span>
-                                )}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setRequestedFlow("계약")}
-                                className="w-full rounded-xl border border-gray-200 border-l-4 border-l-muted-teal bg-white px-3 py-2.5 text-left transition-all hover:shadow-md hover:border-slate-400/40"
-                              >
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div className="rounded-lg bg-gray-50 px-3 py-3">
-                                    <p className="text-[11px] text-gray-400">VAT별도</p>
-                                    <p className="mt-0.5 text-sm font-semibold tabular-nums text-gray-700">
-                                      {formatCurrency(Math.floor(contractSummary.totalWithVat / 1.1))}
-                                    </p>
-                                  </div>
-                                  <div className="rounded-lg bg-slate-700/5 px-3 py-3">
-                                    <p className="text-[11px] text-gray-400">VAT포함</p>
-                                    <p className="mt-0.5 text-sm font-semibold tabular-nums text-slate-700">
-                                      {formatCurrency(contractSummary.totalWithVat)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </button>
-                            </div>
-
-                            {/* 정산 진행률 — 클릭 시 정산 탭 이동 */}
-                            <div>
-                              <p className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                                <Banknote className="h-4 w-4" />
-                                정산 진행률
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => setRequestedFlow("정산")}
-                                className="w-full rounded-xl border border-gray-200 border-l-4 border-l-vanilla-custard bg-white px-3 py-3 text-left transition-all hover:shadow-md hover:border-slate-400/40"
-                              >
-                                {/* 퍼센트 숫자 크게 표시 */}
-                                <div className="flex items-end justify-between mb-2">
-                                  <span className="text-2xl font-bold text-sky-aqua tabular-nums">{contractSummary.progressPercent}%</span>
-                                  <span className="text-xs text-gray-400 tabular-nums">
-                                    {formatCurrency(contractSummary.paidAmount)} / {formatCurrency(contractSummary.totalWithVat)}
-                                  </span>
-                                </div>
-                                <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
-                                  <div
-                                    className="h-full rounded-full bg-gradient-to-r from-muted-teal/70 to-muted-teal transition-all duration-500"
-                                    style={{ width: `${contractSummary.progressPercent}%` }}
-                                  />
-                                </div>
-                                <div className="mt-2 flex items-center justify-between text-xs tabular-nums">
-                                  <span className="text-muted-teal font-medium">입금 완료</span>
-                                  <span className="text-soft-blush font-medium">잔여 {formatCurrency(contractSummary.unpaidAmount)}</span>
-                                </div>
-                              </button>
-                            </div>
-                          </>
-                        )}
-
-                        {/* 메모 */}
-                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-4">
-                          <p className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 mb-1.5">
-                            <FileText className="h-4 w-4" />
-                            메모
-                          </p>
-                          <InlineEditMemo
-                            value={selectedItem.memo || ""}
-                            placeholder="메모를 입력하세요"
-                            onConfirm={(v) => updateRequestField("memo", v || null)}
-                          />
-                        </div>
-                      </div>
-                    }
                   />
+                  </div>
                 </div>
               </>
             )

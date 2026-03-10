@@ -65,7 +65,7 @@ export function ContractFlowTab({
   onLinkContract: (contractId: string | null) => Promise<void>
   onSavedContract?: (contractId: string) => void
   onSummaryChange?: (summary: ContractSummary) => void
-  activeView: "계약서" | "정산 현황"
+  activeView: "계약서" | "정산 현황" | "전체"
 }) {
   // 계약이 있으면 로딩 완료 전까지 진행률이 0%로 잘못 표시되는 것을 방지
   const [isLoading, setIsLoading] = useState(!!requestContractId)
@@ -1049,240 +1049,216 @@ export function ContractFlowTab({
     }
   }, [])
 
+  // "전체" 모드: 계약서 + 정산 현황을 2컬럼 그리드로 동시 표시
+  const showContract = activeView === "계약서" || activeView === "전체"
+  const showSettlement = activeView === "정산 현황" || activeView === "전체"
+
   return (
-    <div>
-      {activeView === "계약서" && (
+    <div className={activeView === "전체" ? "grid grid-cols-2 gap-6 items-start" : ""}>
+      {showContract && (
         isLoading ? (
-          <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
-            <p className="text-sm font-medium text-gray-500">계약 정보를 불러오는 중입니다.</p>
+          <div className="py-8 text-center">
+            <p className="text-xs text-gray-400">계약 정보를 불러오는 중...</p>
           </div>
         ) : (
     <div className="space-y-3">
-      {!isPersistedContract && (
-        <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-xs font-semibold text-gray-700">계약을 생성해주세요</p>
-              <p className="text-[10px] text-gray-400">상단 버튼으로 계약 생성 후 저장이 시작됩니다.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => { void handleSave("manual") }}
-              disabled={!canSave || isUnlinkingContract}
-              className="inline-flex h-8 items-center justify-center rounded-md bg-slate-700 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {isSaving ? "생성 중..." : "계약 생성하기"}
-            </button>
-          </div>
+      {/* 계약 미생성 → 생성 버튼 */}
+      {!isContractFormVisible && (
+        <div className="py-6 text-center">
+          <p className="text-xs text-gray-400 mb-2">계약 정보 없음</p>
+          <button
+            type="button"
+            onClick={() => { void handleSave("manual") }}
+            disabled={!canSave || isUnlinkingContract}
+            className="inline-flex h-7 items-center justify-center rounded bg-slate-700 px-3 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+          >
+            {isSaving ? "생성 중..." : "계약 생성"}
+          </button>
         </div>
       )}
 
-      <div className={cn("rounded-xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center", isContractFormVisible && "hidden")}>
-        <p className="text-sm font-semibold text-gray-600">계약을 생성해주세요</p>
-        <p className="mt-1 text-xs text-gray-400">`계약 생성하기`를 누르면 계약이 생성되고 입력 폼이 열립니다.</p>
-      </div>
-
-      <div className={cn("rounded-xl border border-gray-200/80 bg-white p-2.5 space-y-2 shadow-[0_1px_0_rgba(17,24,39,0.03)]", !isContractFormVisible && "hidden")}>
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-gray-700">계약 정보</p>
+      {/* 계약 폼 — 플랫 레이아웃 */}
+      <div className={cn("space-y-2", !isContractFormVisible && "hidden")}>
+        {/* 계약 제목 + 삭제 — 보더리스 인라인 */}
+        <div className="flex items-center gap-1">
+          <input
+            id="contract-title"
+            value={draft.title}
+            onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))}
+            placeholder="계약 제목"
+            className="flex-1 min-w-0 text-xs font-medium text-gray-800 bg-transparent border-0 border-b border-transparent focus:border-gray-300 focus:outline-none py-0.5 px-0 placeholder:text-gray-300 truncate"
+          />
           {isPersistedContract && (
             <button
               type="button"
               onClick={() => setIsUnlinkDialogOpen(true)}
               disabled={isUnlinkingContract}
-              aria-label={isUnlinkingContract ? "연결 해제 중" : "연결 해제"}
-              title={isUnlinkingContract ? "연결 해제 중" : "연결 해제"}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-red-300/50 bg-white text-red-500 hover:bg-red-500/10 disabled:opacity-40"
+              title="계약 삭제"
+              className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:text-red-400 transition-colors shrink-0"
             >
-              <Unlink className="h-3.5 w-3.5" />
+              <Unlink className="h-3 w-3" />
             </button>
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-1.5">
-          <div className="max-w-[520px] rounded-lg border border-gray-100 bg-gray-50/50 p-2 space-y-1">
-            <Label htmlFor="contract-title" className="text-[10px] font-medium text-gray-500">계약 제목</Label>
-            <Input
-              id="contract-title"
-              value={draft.title}
-              onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))}
-              placeholder="계약 제목을 입력하세요"
-              className="h-7 border-gray-200 bg-white text-sm focus:ring-slate-300"
-            />
-          </div>
-        </div>
-
-        <div className="grid max-w-[520px] grid-cols-2 gap-1.5">
-          <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-2 space-y-1">
-            <Label htmlFor="contract-start" className="text-[10px] font-medium text-gray-500">계약 착수일</Label>
-            <Input
+        {/* 날짜 + 금액 — 1행, 보더리스 */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <label className="text-[10px] text-gray-400 shrink-0">착수</label>
+            <input
               id="contract-start"
               type="date"
               value={draft.start_date}
               onChange={(e) => setDraft((prev) => ({ ...prev, start_date: e.target.value }))}
-              className="h-6 border-gray-200 bg-white px-2 font-sans text-[8px] font-normal text-gray-500 focus:ring-slate-300"
+              className="flex-1 min-w-0 h-6 bg-transparent border-0 border-b border-transparent focus:border-gray-300 focus:outline-none px-0 text-xs text-gray-600"
             />
           </div>
-
-          <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-2 space-y-1">
-            <Label htmlFor="contract-end" className="text-[10px] font-medium text-gray-500">계약 종료일</Label>
-            <Input
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <label className="text-[10px] text-gray-400 shrink-0">종료</label>
+            <input
               id="contract-end"
               type="date"
               value={draft.end_date}
               onChange={(e) => setDraft((prev) => ({ ...prev, end_date: e.target.value }))}
-              className="h-6 border-gray-200 bg-white px-2 font-sans text-[8px] font-normal text-gray-500 focus:ring-slate-300"
+              className="flex-1 min-w-0 h-6 bg-transparent border-0 border-b border-transparent focus:border-gray-300 focus:outline-none px-0 text-xs text-gray-600"
             />
           </div>
-        </div>
-
-        <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Label htmlFor="contract-amount" className="text-base font-semibold text-slate-700">
-                <span className="inline-flex items-center gap-1">
-                  <Banknote className="h-4 w-4" />
-                  <span> 총 계약금액</span>
-                </span>
-              </Label>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <div className="flex items-center gap-1.5">
-                <Popover open={isAmountModalOpen} onOpenChange={setIsAmountModalOpen}>
-                  <PopoverTrigger asChild>
-                    <Input
-                      id="contract-amount"
-                      type="text"
-                      value={draft.contract_amount > 0 ? draft.contract_amount.toLocaleString("ko-KR") : ""}
-                      readOnly
-                      onClick={openAmountModal}
-                      placeholder="0"
-                      className="h-7 w-52 cursor-pointer border-gray-200 bg-white text-sm font-semibold text-right tabular-nums focus:ring-slate-300"
-                    />
-                  </PopoverTrigger>
-                  <PopoverContent align="end" side="bottom" sideOffset={6} className="w-52 border-gray-200 p-2.5">
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        disabled={typeof confirmedQuoteSupplyAmount !== "number"}
-                        onClick={() => {
-                          if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
-                            setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
-                          }
-                        }}
-                        className="inline-flex h-8 w-full items-center justify-center rounded-md border border-gray-300 bg-gray-100 px-2 text-[10px] font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-200 hover:text-gray-800 disabled:opacity-40"
-                      >
-                        확정 견적금액 불러오기
-                      </button>
-                      <Input
-                        id="contract-amount-editor"
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9,]*"
-                        value={amountInputValue}
-                        onChange={(e) => {
-                          const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
-                          setAmountInputValue(digitsOnly ? Number(digitsOnly).toLocaleString("ko-KR") : "")
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            handleApplyAmount()
-                          }
-                        }}
-                        placeholder="0"
-                        className="h-8 border-gray-200 bg-white text-sm font-semibold text-right tabular-nums focus:ring-slate-300"
-                      />
-                      <p className="text-right text-[10px] font-semibold text-red-500">VAT별도</p>
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setIsAmountModalOpen(false)}
-                          className="px-2 py-1 text-[10px] rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50"
-                        >
-                          취소
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleApplyAmount}
-                          className="px-2 py-1 text-[10px] rounded-md bg-slate-700 text-white hover:bg-slate-700/90"
-                        >
-                          적용
-                        </button>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-                <span className="text-[10px] text-gray-400">원</span>
+          <div className="w-px h-5 bg-gray-200 shrink-0" />
+          <Popover open={isAmountModalOpen} onOpenChange={setIsAmountModalOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                onClick={openAmountModal}
+                title="계약금액 (VAT별도)"
+                className="text-sm font-semibold tabular-nums text-gray-800 hover:text-slate-600 transition-colors shrink-0 whitespace-nowrap"
+              >
+                {supplyAmount > 0 ? formatCurrency(supplyAmount) : "금액 입력"}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" side="bottom" sideOffset={4} className="w-52 border-gray-200 p-2.5">
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  disabled={typeof confirmedQuoteSupplyAmount !== "number"}
+                  onClick={() => {
+                    if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
+                      setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
+                    }
+                  }}
+                  className="inline-flex h-7 w-full items-center justify-center rounded border border-gray-200 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                >
+                  확정 견적금액 불러오기
+                </button>
+                <Input
+                  id="contract-amount-editor"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9,]*"
+                  value={amountInputValue}
+                  onChange={(e) => {
+                    const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                    setAmountInputValue(digitsOnly ? Number(digitsOnly).toLocaleString("ko-KR") : "")
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      handleApplyAmount()
+                    }
+                  }}
+                  placeholder="0"
+                  className="h-7 border-gray-200 text-sm font-semibold text-right tabular-nums focus:ring-slate-300"
+                />
+                <p className="text-right text-[10px] text-gray-400">VAT별도 금액</p>
+                <div className="flex items-center justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsAmountModalOpen(false)}
+                    className="px-2 py-1 text-[10px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyAmount}
+                    className="px-2 py-1 text-[10px] rounded bg-slate-700 text-white hover:bg-slate-700/90"
+                  >
+                    적용
+                  </button>
+                </div>
               </div>
-              <p className="text-[9px] font-medium text-red-500">VAT 별도 금액</p>
-            </div>
-          </div>
+            </PopoverContent>
+          </Popover>
         </div>
-      </div>
 
-      <div className={cn("rounded-xl border border-gray-200 bg-white p-3.5 space-y-3", !isContractFormVisible && "hidden")}>
+        {/* 정산 형태 + VAT포함 — 1행 */}
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-gray-700">정산 형태</p>
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-gray-500">{stageSummary}</p>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500">정산</span>
+            <span className="text-[11px] text-gray-600">{stageSummary}</span>
             <button
               type="button"
               onClick={openSettlementModal}
-              className="inline-flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 hover:border-slate-400/40 hover:text-slate-700"
+              className="text-[10px] text-slate-600 font-medium hover:text-slate-800 underline underline-offset-2"
             >
-              설정
+              변경
             </button>
           </div>
+          {supplyAmount > 0 && (
+            <span className="text-[11px] font-medium text-gray-600 shrink-0">
+              VAT포함 {formatCurrency(totalWithVat)}
+            </span>
+          )}
         </div>
 
-        <p className="text-xs font-medium text-gray-500">정산 금액 자동 계산</p>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-md bg-gray-50 px-3 py-2.5">
-            <p className="text-xs text-gray-400">VAT별도</p>
-            <p className="mt-1 text-sm font-semibold tabular-nums text-gray-700">{formatCurrency(supplyAmount)}</p>
-          </div>
-          <div className="rounded-md bg-slate-700/5 px-3 py-2.5">
-            <p className="text-xs text-gray-400">VAT 포함</p>
-            <p className="mt-1 text-sm font-semibold tabular-nums text-slate-700">{formatCurrency(totalWithVat)}</p>
-          </div>
-        </div>
-
-        {settlementRows.length === 0 ? (
-          <p className="text-xs text-gray-400">설정 버튼에서 정산 형태를 선택하세요.</p>
-        ) : (
-          <div className="overflow-hidden rounded-lg border border-gray-100">
-            <div className="grid grid-cols-[100px_108px_1fr] gap-2 bg-gray-50 px-3 py-2">
-              <p className="text-[11px] text-gray-500">구분</p>
-              <p className="text-[11px] text-gray-500">입금예정일</p>
-              <p className="text-[11px] text-right text-gray-500">VAT포함</p>
-            </div>
-            {settlementRowsWithScheduledDate.map((row) => (
-              <div key={row.key} className="grid grid-cols-[100px_108px_1fr] gap-2 border-t border-gray-100 bg-white px-3 py-2.5">
-                <p className="text-sm font-medium text-gray-700">{row.label}</p>
-                <p className="text-sm text-gray-600">{row.scheduledDate || "-"}</p>
-                <p className="text-sm text-right tabular-nums font-semibold text-slate-700">{formatCurrency(row.total)}</p>
+        {/* 정산 테이블 — 미니멀 */}
+        {settlementRows.length > 0 && (
+          <div className="text-[11px]">
+            {settlementRowsWithScheduledDate.map((row) => {
+              // 단계별 비율 표시: "선금" → "선금30%", "중도금 1차" → "중도금 1차 (40%)"
+              const stageKey = row.key === "선금" ? "선금" : row.key === "잔금" ? "잔금" : "중도금"
+              const ratio = stageRatios[stageKey as keyof typeof stageRatios] ?? 0
+              const labelWithRatio = row.key.startsWith("middle-")
+                ? `${row.label} (${formatStagePercent(ratio)}%)`
+                : `${row.label} ${formatStagePercent(ratio)}%`
+              return (
+              <div key={row.key} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-b-0">
+                <span className="text-gray-600">{labelWithRatio}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-400">{row.scheduledDate || ""}</span>
+                  <span className="font-medium tabular-nums text-gray-700">{formatCurrency(row.total)}</span>
+                </div>
               </div>
-            ))}
+              )
+            })}
           </div>
         )}
-      </div>
 
-      <div className={cn("flex items-center justify-between gap-2 px-0.5", !isContractFormVisible && "hidden")}>
-        <p className={cn("text-[10px]", saveMessage.includes("실패") ? "text-red-500" : "text-gray-500")}>
-          {saveMessage || (isPersistedContract ? "입력값은 자동 저장됩니다." : "계약 생성 버튼을 눌러주세요.")}
-        </p>
-        {isPersistedContract && (
-          <button
-            type="button"
-            onClick={() => { void handleSave("manual") }}
-            disabled={!canSave}
-            className="inline-flex h-8 items-center justify-center rounded-md bg-slate-700 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {isSaving ? "저장 중..." : "즉시 저장"}
-          </button>
-        )}
+        {/* 저장 상태 */}
+        <div className="flex items-center justify-between gap-2">
+          <p className={cn("text-[10px]", saveMessage.includes("실패") ? "text-red-500" : "text-gray-400")}>
+            {saveMessage || (isPersistedContract ? "자동 저장" : "")}
+          </p>
+          {isPersistedContract && (
+            <button
+              type="button"
+              onClick={() => { void handleSave("manual") }}
+              disabled={!canSave}
+              className="text-[10px] text-slate-600 font-medium hover:text-slate-800 underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
+            >
+              {isSaving ? "저장 중..." : "즉시 저장"}
+            </button>
+          )}
+          {!isPersistedContract && (
+            <button
+              type="button"
+              onClick={() => { void handleSave("manual") }}
+              disabled={!canSave || isUnlinkingContract}
+              className="inline-flex h-7 items-center justify-center rounded bg-slate-700 px-3 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+            >
+              {isSaving ? "생성 중..." : "계약 생성"}
+            </button>
+          )}
+        </div>
       </div>
 
       <Dialog open={isUnlinkDialogOpen} onOpenChange={setIsUnlinkDialogOpen}>
@@ -1433,7 +1409,7 @@ export function ContractFlowTab({
         )
       )}
 
-      {activeView === "정산 현황" && (
+      {showSettlement && (
         isLoading ? (
           <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
             <p className="text-sm font-medium text-gray-500">정산 현황을 불러오는 중입니다.</p>

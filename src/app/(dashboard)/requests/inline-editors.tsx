@@ -11,9 +11,11 @@ import { Badge } from "@/components/ui/badge"
 export function InlineTitle({
   value,
   onConfirm,
+  compact = false,
 }: {
   value: string
   onConfirm: (value: string) => void
+  compact?: boolean
 }) {
   const [isEditing, setIsEditing] = useState(false)
   const [tempValue, setTempValue] = useState(value)
@@ -62,7 +64,10 @@ export function InlineTitle({
           if (e.key === "Escape") { setTempValue(value); setIsEditing(false) }
         }}
         autoFocus
-        className="font-sans text-2xl font-semibold text-left w-full bg-transparent border-b-2 border-slate-400 focus:outline-none py-1"
+        className={cn(
+          "font-sans font-semibold text-left w-full bg-transparent border-b-2 border-slate-400 focus:outline-none",
+          compact ? "text-base py-0.5" : "text-2xl py-1"
+        )}
       />
     )
   }
@@ -70,7 +75,10 @@ export function InlineTitle({
   return (
     <h2
       onClick={() => setIsEditing(true)}
-      className="font-sans text-2xl font-semibold text-left cursor-pointer rounded px-1 -mx-1 py-1 hover:bg-slate-50 transition-colors truncate"
+      className={cn(
+        "font-sans font-semibold text-left cursor-pointer rounded px-1 -mx-1 hover:bg-slate-50 transition-colors truncate",
+        compact ? "text-base py-0.5" : "text-2xl py-1"
+      )}
       title={value}
     >
       {value}

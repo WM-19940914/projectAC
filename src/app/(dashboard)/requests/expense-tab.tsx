@@ -601,11 +601,13 @@ export default function ExpenseTab({
   totalSettlement = 0,
   totalContractAmount = 0,
   incentiveTotal = 0,
+  layout = "stacked",
 }: {
   requestId: string
   totalSettlement?: number
   totalContractAmount?: number
   incentiveTotal?: number
+  layout?: "stacked" | "side-by-side"
 }) {
   const [expenses, setExpenses] = useState<ExpenseItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -672,21 +674,86 @@ export default function ExpenseTab({
     )
   }
 
+  // 게이지 요약 데이터 (side-by-side에서도 사용)
+  const netProfit = totalSettlement - grandTotal
+  const profitRate = totalContractAmount > 0
+    ? (netProfit / totalContractAmount) * 100
+    : 0
+  const gaugeRatio = totalContractAmount > 0
+    ? grandTotal / totalContractAmount
+    : 0
+
+  // side-by-side 레이아웃: 좌측 요약 | 우측 내역
+  if (layout === "side-by-side") {
+    return (
+      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-6 items-start">
+        {/* 좌측: 지출 요약 */}
+        <div className="space-y-4">
+          <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-[140px] h-[82px] shrink-0">
+                <GaugeChart ratio={gaugeRatio} />
+              </div>
+              <div className="w-full space-y-2">
+                <div className="text-center">
+                  <p className="text-[10px] font-medium text-gray-400 mb-0.5">총 지출금액 <span className="text-gray-300">(VAT별도)</span></p>
+                  <p className="text-lg font-bold tabular-nums text-gray-900 leading-none">
+                    {formatCurrency(grandTotal)}
+                    <span className="text-xs font-normal text-gray-400 ml-0.5">원</span>
+                  </p>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${netProfit >= 0 ? "bg-slate-50 border border-slate-200" : "bg-red-500/20 border border-red-300"}`}>
+                    <span className="text-[10px] text-gray-500">순이익</span>
+                    <span className={`text-[11px] font-bold tabular-nums ${netProfit >= 0 ? "text-slate-700" : "text-red-500"}`}>
+                      {formatCurrency(netProfit)}원
+                    </span>
+                  </div>
+                  <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${profitRate >= 0 ? "bg-slate-50 border border-slate-200" : "bg-red-500/20 border border-red-300"}`}>
+                    <span className="text-[10px] text-gray-500">이익률</span>
+                    <span className={`text-[11px] font-bold tabular-nums ${profitRate >= 0 ? "text-slate-700" : "text-red-500"}`}>
+                      {profitRate.toFixed(2)}%
+                    </span>
+                  </div>
+                  {incentiveTotal > 0 && (
+                    <div className="inline-flex items-center gap-1 rounded-md px-2 py-1 bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] text-gray-500">장려금</span>
+                      <span className="text-[11px] font-bold tabular-nums text-slate-700">
+                        {formatCurrency(incentiveTotal)}원
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* 우측: 지출 내역 */}
+        <div className="space-y-4">
+          <ExpenseSection
+            category="장비"
+            items={equipmentItems}
+            onAdd={handleAdd}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+          />
+          <div className="border-t border-gray-100" />
+          <ExpenseSection
+            category="설치"
+            items={installItems}
+            onAdd={handleAdd}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+          />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5">
       {/* 게이지 요약 카드 */}
       {(() => {
-        // 순이익 = 총 정산금액(입금액) - 총 지출
-        const netProfit = totalSettlement - grandTotal
-        // 이익률 = 순이익 / 계약금액(VAT포함) × 100 (계약 없으면 0)
-        const profitRate = totalContractAmount > 0
-          ? (netProfit / totalContractAmount) * 100
-          : 0
-        // 게이지 비율: 지출 / 계약금액 (계약 없으면 0)
-        const gaugeRatio = totalContractAmount > 0
-          ? grandTotal / totalContractAmount
-          : 0
-
         return (
           <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
             <div className="flex items-center justify-between">

@@ -17,6 +17,7 @@ import { Box, Building2, Pencil, Plus, Search, X } from "lucide-react"
 import type { CustomerOption } from "./kanban-types"
 
 // ----- 고객 연결/표시 패널 컴포넌트 (컴팩트 + Dialog 모달) -----
+// compact=true → 버튼 + Dialog만 렌더 (개요 탭 1줄 요약에서 사용)
 export function CustomerPanel({
   customer,
   customers,
@@ -24,6 +25,7 @@ export function CustomerPanel({
   onUnlink,
   onCreateAndLink,
   onOpenDetail,
+  compact = false,
 }: {
   customer: { id: string; company_name: string; deleted_at: string | null } | null
   customers: CustomerOption[]
@@ -31,6 +33,7 @@ export function CustomerPanel({
   onUnlink: () => void
   onCreateAndLink: (form: { company_name: string; contact_name?: string; phone?: string }) => Promise<void>
   onOpenDetail: () => void
+  compact?: boolean
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -83,6 +86,157 @@ export function CustomerPanel({
     setIsCreating(false)
   }
 
+  // ----- compact 모드: 버튼 + Dialog만 렌더 -----
+  if (compact) {
+    return (
+      <>
+        <div className="flex items-center gap-1">
+          {/* 고객 미연결: 연결하기 버튼 */}
+          {!customer && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md bg-sky-aqua text-white text-xs font-semibold hover:bg-sky-aqua/80 transition-colors"
+            >
+              <Search className="h-3 w-3" />
+              연결하기
+            </button>
+          )}
+          {/* 연결됨 or 삭제됨: 변경 + 해제 버튼 */}
+          {customer && (
+            <>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                title="고객 변경"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <Search className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={onUnlink}
+                title="고객 연결 해제"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* 고객 연결 모달 (공유) */}
+        <Dialog open={isModalOpen} onOpenChange={(open) => !open && closeModal()}>
+          <DialogContent className="sm:max-w-[420px]">
+            <DialogHeader>
+              <DialogTitle className="font-sans text-lg">고객 연결</DialogTitle>
+              <DialogDescription className="text-sm text-gray-500">
+                기존 고객을 검색하거나, 새로운 고객을 등록하세요.
+              </DialogDescription>
+            </DialogHeader>
+
+            {!isCreateMode && (
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="회사명, 담당자명으로 검색"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    autoFocus
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-400"
+                  />
+                </div>
+                <div className="max-h-[240px] overflow-y-auto border border-gray-200 rounded-lg">
+                  {filteredCustomers.length === 0 ? (
+                    <p className="text-xs text-gray-400 text-center py-6">검색 결과가 없습니다</p>
+                  ) : (
+                    filteredCustomers.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => handleSelectCustomer(c.id)}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0",
+                          customer && c.id === customer.id && "bg-slate-700/5"
+                        )}
+                      >
+                        <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                          <Building2 className="h-3.5 w-3.5 text-slate-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{c.company_name}</p>
+                          {c.contact_name && (
+                            <p className="text-xs text-gray-500 truncate">{c.contact_name}</p>
+                          )}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    if (searchQuery.trim()) setCreateForm((prev) => ({ ...prev, company_name: searchQuery.trim() }))
+                    setIsCreateMode(true)
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border-2 border-dashed border-slate-400/50 text-slate-700 text-sm font-medium hover:border-slate-400 hover:bg-slate-50 transition-all"
+                >
+                  <Plus className="h-4 w-4" />
+                  새 고객 등록
+                </button>
+              </div>
+            )}
+
+            {isCreateMode && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    회사명 <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    placeholder="예: (주)한국건설"
+                    value={createForm.company_name}
+                    onChange={(e) => setCreateForm((prev) => ({ ...prev, company_name: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">담당자명</Label>
+                  <Input
+                    placeholder="예: 홍길동"
+                    value={createForm.contact_name}
+                    onChange={(e) => setCreateForm((prev) => ({ ...prev, contact_name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">연락처</Label>
+                  <Input
+                    placeholder="예: 010-1234-5678"
+                    value={createForm.phone}
+                    onChange={(e) => setCreateForm((prev) => ({ ...prev, phone: e.target.value }))}
+                  />
+                </div>
+                <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                  <button
+                    onClick={() => { setIsCreateMode(false); setCreateForm({ company_name: "", contact_name: "", phone: "" }) }}
+                    className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    뒤로
+                  </button>
+                  <button
+                    onClick={handleCreateAndLink}
+                    disabled={isCreating || !createForm.company_name.trim()}
+                    className="px-4 py-2 text-sm rounded-md bg-slate-700 text-white hover:bg-slate-700/80 transition-colors disabled:opacity-50"
+                  >
+                    {isCreating ? "등록 중..." : "등록 후 연결"}
+                  </button>
+                </DialogFooter>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </>
+    )
+  }
+
+  // ----- 기본 모드 (기존 UI) -----
   return (
     <div>
       <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 mb-2">
