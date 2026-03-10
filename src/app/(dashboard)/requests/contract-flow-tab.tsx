@@ -65,7 +65,7 @@ export function ContractFlowTab({
   onLinkContract: (contractId: string | null) => Promise<void>
   onSavedContract?: (contractId: string) => void
   onSummaryChange?: (summary: ContractSummary) => void
-  activeView: "계약서" | "정산 현황" | "전체"
+  activeView: "계약서" | "정산 현황" | "전체" | "통합"
 }) {
   // 계약이 있으면 로딩 완료 전까지 진행률이 0%로 잘못 표시되는 것을 방지
   const [isLoading, setIsLoading] = useState(!!requestContractId)
@@ -1052,6 +1052,7 @@ export function ContractFlowTab({
   // "전체" 모드: 계약서 + 정산 현황을 2컬럼 그리드로 동시 표시
   const showContract = activeView === "계약서" || activeView === "전체"
   const showSettlement = activeView === "정산 현황" || activeView === "전체"
+  const showIntegrated = activeView === "통합"
 
   return (
     <div className={activeView === "전체" ? "grid grid-cols-2 gap-6 items-start" : ""}>
@@ -1261,150 +1262,6 @@ export function ContractFlowTab({
         </div>
       </div>
 
-      <Dialog open={isUnlinkDialogOpen} onOpenChange={setIsUnlinkDialogOpen}>
-        <DialogContent className="sm:max-w-[320px]">
-          <DialogHeader>
-            <DialogTitle className="text-sm">연결 해제 및 계약 삭제</DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">
-              현재 카드의 연결을 해제하고 계약 정보도 함께 삭제합니다.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => setIsUnlinkDialogOpen(false)}
-              className="px-3 py-1.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsUnlinkDialogOpen(false)
-                void handleUnlinkContract()
-              }}
-              className="px-3 py-1.5 text-xs rounded-md bg-red-500 text-white hover:bg-red-500/90"
-            >
-              확인
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isSettlementModalOpen} onOpenChange={setIsSettlementModalOpen}>
-        <DialogContent className="sm:max-w-[420px]">
-          <DialogHeader>
-            <DialogTitle className="font-sans text-base">정산 형태 설정</DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">
-              체크박스로 단계를 선택하고 비율(%)과 정산예정일을 설정하세요.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2.5">
-            {SETTLEMENT_STAGE_ORDER.map((stage) => {
-              const checked = modalStages.includes(stage)
-              return (
-                <div key={stage} className="flex items-start justify-between gap-2 rounded-md border border-gray-200 bg-white px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => handleToggleModalStage(stage)}
-                      className="h-3.5 w-3.5 rounded border-slate-400 accent-slate-700 focus:ring-2 focus:ring-slate-300/60"
-                    />
-                    <span className={cn("text-sm", checked ? "text-gray-700" : "text-gray-400")}>{stage}</span>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={checked ? (modalRatios[stage] === 0 ? "" : String(modalRatios[stage])) : ""}
-                        placeholder="0"
-                        disabled={!checked}
-                        onFocus={(e) => e.currentTarget.select()}
-                        onChange={(e) => {
-                          if (!checked) return
-                          const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
-                          const nextValue = digitsOnly ? Number(digitsOnly) : 0
-                          setModalRatios((prev) => ({
-                            ...prev,
-                            [stage]: Number.isFinite(nextValue) ? Math.max(0, Math.min(100, Math.round(nextValue))) : 0,
-                          }))
-                        }}
-                        className={cn(
-                          "h-7 w-16 rounded-md border px-2 text-right text-xs tabular-nums focus:outline-none",
-                          checked
-                            ? "border-gray-300 bg-white focus:ring-2 focus:ring-slate-300/50"
-                            : "border-gray-200 bg-gray-100 text-gray-300"
-                        )}
-                      />
-                      <span className={cn("text-[10px]", checked ? "text-gray-500" : "text-gray-300")}>%</span>
-                      {stage === "중도금" && checked && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-gray-500">회차</span>
-                          <select
-                            value={modalMiddleInstallments}
-                            onChange={(e) => setModalMiddleInstallments(normalizeMiddleInstallments(e.target.value))}
-                            className="h-7 rounded-md border border-gray-300 bg-white px-1.5 text-[10px] text-gray-600 focus:outline-none focus:ring-2 focus:ring-slate-300/50"
-                          >
-                            {[1, 2, 3, 4, 5].map((count) => (
-                              <option key={count} value={count}>{count}회</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      <span className={cn("text-[10px]", checked ? "text-gray-500" : "text-gray-300")}>예정일</span>
-                      <input
-                        type="date"
-                        value={checked ? modalScheduledDates[stage] : ""}
-                        disabled={!checked}
-                        onChange={(e) => {
-                          if (!checked) return
-                          setModalScheduledDates((prev) => ({
-                            ...prev,
-                            [stage]: e.target.value,
-                          }))
-                        }}
-                        className={cn(
-                          "h-7 rounded-md border px-2 text-[10px] focus:outline-none",
-                          checked
-                            ? "border-gray-300 bg-white text-gray-600 focus:ring-2 focus:ring-slate-300/50"
-                            : "border-gray-200 bg-gray-100 text-gray-300"
-                        )}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => setIsSettlementModalOpen(false)}
-              className="px-3 py-1.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              onClick={handleApplySettlement}
-              disabled={modalStages.length === 0 || modalSelectedRatioSum > 100}
-              className="px-3 py-1.5 text-xs rounded-md bg-slate-700 text-white hover:bg-slate-700/90 disabled:opacity-40"
-            >
-              적용
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
         )
       )}
@@ -1620,6 +1477,552 @@ export function ContractFlowTab({
           </div>
         )
       )}
+
+      {/* ===== 통합 뷰: 계약정보 | 정산카드 | 입금내역 (3컬럼) ===== */}
+      {showIntegrated && (
+        isLoading ? (
+          <div className="py-8 text-center">
+            <p className="text-xs text-gray-400">불러오는 중...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-[0.8fr_1fr_1.5fr] gap-0 items-start">
+            {/* ── 좌측: 계약 정보 ── */}
+            <div className="pr-4 border-r border-gray-200">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">계약 정보</p>
+              {!isContractFormVisible ? (
+                <div className="py-6 text-center">
+                  <p className="text-xs text-gray-400 mb-2">계약 정보 없음</p>
+                  <button
+                    type="button"
+                    onClick={() => { void handleSave("manual") }}
+                    disabled={!canSave || isUnlinkingContract}
+                    className="inline-flex h-7 items-center justify-center rounded bg-slate-700 px-3 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+                  >
+                    {isSaving ? "생성 중..." : "계약 생성"}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {/* 제목 + 삭제 */}
+                  <div className="flex items-center gap-1">
+                    <input
+                      value={draft.title}
+                      onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))}
+                      placeholder="계약 제목"
+                      className="flex-1 min-w-0 text-xs font-medium text-gray-800 bg-transparent border-0 border-b border-transparent focus:border-gray-300 focus:outline-none py-0.5 px-0 placeholder:text-gray-300 truncate"
+                    />
+                    {isPersistedContract && (
+                      <button
+                        type="button"
+                        onClick={() => setIsUnlinkDialogOpen(true)}
+                        disabled={isUnlinkingContract}
+                        title="계약 삭제"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                      >
+                        <Unlink className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 착수 / 종료 — 세로 배치 */}
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] text-gray-400 shrink-0 w-7">착수</label>
+                      <input
+                        type="date"
+                        value={draft.start_date}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, start_date: e.target.value }))}
+                        className="flex-1 min-w-0 h-6 bg-transparent border-0 border-b border-transparent focus:border-gray-300 focus:outline-none px-0 text-xs text-gray-600"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] text-gray-400 shrink-0 w-7">종료</label>
+                      <input
+                        type="date"
+                        value={draft.end_date}
+                        onChange={(e) => setDraft((prev) => ({ ...prev, end_date: e.target.value }))}
+                        className="flex-1 min-w-0 h-6 bg-transparent border-0 border-b border-transparent focus:border-gray-300 focus:outline-none px-0 text-xs text-gray-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 계약금액 */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-gray-400">계약금액</span>
+                    <Popover open={isAmountModalOpen} onOpenChange={setIsAmountModalOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={openAmountModal}
+                          title="계약금액 (VAT별도)"
+                          className="text-xs font-semibold tabular-nums text-gray-800 hover:text-slate-600 transition-colors"
+                        >
+                          {supplyAmount > 0 ? formatCurrency(supplyAmount) : "금액 입력"}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" side="bottom" sideOffset={4} className="w-52 border-gray-200 p-2.5">
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            disabled={typeof confirmedQuoteSupplyAmount !== "number"}
+                            onClick={() => {
+                              if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
+                                setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
+                              }
+                            }}
+                            className="inline-flex h-7 w-full items-center justify-center rounded border border-gray-200 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                          >
+                            확정 견적금액 불러오기
+                          </button>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9,]*"
+                            value={amountInputValue}
+                            onChange={(e) => {
+                              const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                              setAmountInputValue(digitsOnly ? Number(digitsOnly).toLocaleString("ko-KR") : "")
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault()
+                                handleApplyAmount()
+                              }
+                            }}
+                            placeholder="0"
+                            className="h-7 border-gray-200 text-sm font-semibold text-right tabular-nums focus:ring-slate-300"
+                          />
+                          <p className="text-right text-[10px] text-gray-400">VAT별도 금액</p>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setIsAmountModalOpen(false)}
+                              className="px-2 py-1 text-[10px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50"
+                            >
+                              취소
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleApplyAmount}
+                              className="px-2 py-1 text-[10px] rounded bg-slate-700 text-white hover:bg-slate-700/90"
+                            >
+                              적용
+                            </button>
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  {/* 정산 형태 */}
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] text-gray-400 shrink-0">정산</span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-[10px] text-gray-600 truncate">{stageSummary}</span>
+                      <button
+                        type="button"
+                        onClick={openSettlementModal}
+                        className="text-[10px] text-slate-600 font-medium hover:text-slate-800 underline underline-offset-2 shrink-0"
+                      >
+                        변경
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* VAT포함 */}
+                  {supplyAmount > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-400">VAT포함</span>
+                      <span className="text-xs font-semibold tabular-nums text-gray-700">{formatCurrency(totalWithVat)}</span>
+                    </div>
+                  )}
+
+                  {/* 저장 상태 */}
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100">
+                    <p className={cn("text-[10px]", saveMessage.includes("실패") ? "text-red-500" : "text-gray-400")}>
+                      {saveMessage || (isPersistedContract ? "자동 저장" : "")}
+                    </p>
+                    {isPersistedContract && (
+                      <button
+                        type="button"
+                        onClick={() => { void handleSave("manual") }}
+                        disabled={!canSave}
+                        className="text-[10px] text-slate-600 font-medium hover:text-slate-800 underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
+                      >
+                        {isSaving ? "저장 중..." : "즉시 저장"}
+                      </button>
+                    )}
+                    {!isPersistedContract && (
+                      <button
+                        type="button"
+                        onClick={() => { void handleSave("manual") }}
+                        disabled={!canSave || isUnlinkingContract}
+                        className="inline-flex h-6 items-center justify-center rounded bg-slate-700 px-2.5 text-[10px] font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+                      >
+                        {isSaving ? "생성 중..." : "계약 생성"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── 중앙: 정산 카드 ── */}
+            <div className="px-4 border-r border-gray-200">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">정산 현황</p>
+              {!isContractFormVisible ? (
+                <p className="text-xs text-gray-300 py-6 text-center">계약 생성 후 표시됩니다</p>
+              ) : settlementStatusRows.length === 0 ? (
+                <p className="text-xs text-gray-300 py-6 text-center">정산 단계 없음</p>
+              ) : (
+                <div className="space-y-2">
+                  {settlementStatusRows.map((row) => {
+                    const stageKey = row.key === "선금" ? "선금" : row.key === "잔금" ? "잔금" : "중도금"
+                    const ratio = stageRatios[stageKey as keyof typeof stageRatios] ?? 0
+                    const labelWithRatio = row.key.startsWith("middle-")
+                      ? `${row.label} (${formatStagePercent(ratio)}%)`
+                      : `${row.label} ${formatStagePercent(ratio)}%`
+                    return (
+                      <div
+                        key={row.key}
+                        className={cn(
+                          "rounded-lg border p-2.5 space-y-1.5",
+                          row.overdueDays > 0
+                            ? "border-red-300/60 bg-red-50/50"
+                            : row.paymentConfirmed
+                              ? "border-slate-400/60 bg-slate-50/50"
+                              : "border-gray-200 bg-white"
+                        )}
+                      >
+                        {/* 라벨 + 상태 + 금액 */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-semibold text-gray-700">{labelWithRatio}</span>
+                            <span className={cn(
+                              "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold",
+                              row.paymentConfirmed
+                                ? "border-slate-400/40 bg-slate-100 text-slate-700"
+                                : row.actualAmount > 0
+                                  ? "border-amber-300 bg-amber-50 text-amber-700"
+                                  : "border-gray-200 bg-gray-50 text-gray-500"
+                            )}>
+                              {row.paymentStatusLabel}
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-bold tabular-nums text-gray-700">{formatCurrency(row.plannedAmount)}</span>
+                        </div>
+
+                        {/* 정산예정일 */}
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="text-gray-400">예정일</span>
+                          <span className={cn(row.overdueDays > 0 ? "text-red-600 font-medium" : "text-gray-600")}>
+                            {row.scheduledDate || "—"}
+                            {row.overdueDays > 0 && ` (D+${row.overdueDays})`}
+                          </span>
+                        </div>
+
+                        {/* 계산서 발행 */}
+                        <div className="flex items-center justify-between text-[10px]">
+                          <label className="inline-flex items-center gap-1 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={row.taxInvoiceIssued}
+                              onChange={(e) => {
+                                const issued = e.target.checked
+                                const updates: Partial<SettlementStatusInput> = { tax_invoice_issued: issued }
+                                if (issued && !row.taxInvoiceDate) {
+                                  updates.tax_invoice_date = new Date().toISOString().split("T")[0]
+                                }
+                                if (!issued) {
+                                  updates.tax_invoice_date = ""
+                                }
+                                updateSettlementStatus(row.key, updates)
+                              }}
+                              className="h-3 w-3 rounded border-slate-400 accent-slate-700"
+                            />
+                            <span className="text-gray-500">
+                              {row.taxInvoiceIssued ? "계산서 발행" : "계산서 미발행"}
+                            </span>
+                          </label>
+                          {row.taxInvoiceIssued && (
+                            <input
+                              type="date"
+                              value={row.taxInvoiceDate || ""}
+                              onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_date: e.target.value })}
+                              className="h-5 border-0 border-b border-transparent focus:border-gray-300 bg-transparent px-0 text-[10px] text-gray-600 outline-none"
+                            />
+                          )}
+                        </div>
+
+                        {/* 정산 요약 (입금 있을 때만) */}
+                        {row.actualAmount > 0 && (
+                          <div className="flex items-center justify-between text-[10px] pt-0.5 border-t border-gray-100">
+                            <span className="text-gray-400">정산금액</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold tabular-nums text-gray-800">{formatCurrency(row.actualAmount)}</span>
+                              {row.shortfallAmount > 0 && (
+                                <span className="text-red-500 font-medium">-{formatCurrency(row.shortfallAmount)}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── 우측: 입금내역 (가로 배치) ── */}
+            <div className="pl-4">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">입금내역</p>
+              {!isContractFormVisible ? (
+                <p className="text-xs text-gray-300 py-6 text-center">계약 생성 후 표시됩니다</p>
+              ) : settlementStatusRows.length === 0 ? (
+                <p className="text-xs text-gray-300 py-6 text-center">정산 단계 없음</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {settlementStatusRows.map((row) => (
+                    <div key={row.key} className="space-y-1.5">
+                      {/* 단계 헤더 + 추가 */}
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-semibold text-gray-600">{row.label}</p>
+                        <button
+                          type="button"
+                          onClick={() => addSettlementPaymentEntry(row.key)}
+                          className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-600 hover:text-slate-800"
+                        >
+                          <Plus className="h-3 w-3" />
+                          추가
+                        </button>
+                      </div>
+
+                      {/* 입금 엔트리 — 2줄 레이아웃 (좁은 컬럼 대응) */}
+                      {row.paymentEntries.length === 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => addSettlementPaymentEntry(row.key)}
+                          className="w-full rounded border border-dashed border-gray-200 py-3 text-center text-[10px] text-gray-400 hover:border-slate-400/40 hover:text-slate-600 transition-colors"
+                        >
+                          <Plus className="inline h-3 w-3 mr-0.5 -mt-0.5" />
+                          추가
+                        </button>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {row.paymentEntries.map((entry, index) => (
+                            <div key={entry.id} className="rounded border border-gray-100 bg-gray-50/40 px-2 py-1.5 space-y-1">
+                              {/* 1줄: 입완 + 금액 + 자동 + 삭제 */}
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { confirmed: !entry.confirmed })}
+                                  className={cn(
+                                    "h-4 w-4 rounded border flex items-center justify-center transition-colors shrink-0",
+                                    entry.confirmed
+                                      ? "border-slate-400 bg-slate-700"
+                                      : "border-gray-300 bg-white hover:border-gray-400"
+                                  )}
+                                  title={entry.confirmed ? "입금 확인됨" : "입금 미확인"}
+                                >
+                                  {entry.confirmed && <CheckCircle2 className="h-3 w-3 text-white" />}
+                                </button>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={entry.amount > 0 ? entry.amount.toLocaleString("ko-KR") : ""}
+                                  onChange={(e) => {
+                                    const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                                    updateSettlementPaymentEntry(row.key, entry.id, {
+                                      amount: digitsOnly ? Math.max(0, Math.round(Number(digitsOnly))) : 0,
+                                    })
+                                  }}
+                                  placeholder="금액"
+                                  className="h-5 min-w-0 flex-1 border-0 border-b border-gray-200 bg-transparent px-0 text-[10px] font-semibold tabular-nums text-gray-700 outline-none focus:border-slate-400"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { amount: row.plannedAmount })}
+                                  className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold text-slate-600 ring-1 ring-slate-300/40 hover:bg-slate-50"
+                                  title="계획금액 자동입력"
+                                >
+                                  자동
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeSettlementPaymentEntry(row.key, entry.id)}
+                                  className="inline-flex h-4 w-4 items-center justify-center text-gray-300 hover:text-red-500 shrink-0"
+                                  aria-label={`입금내역 ${index + 1} 삭제`}
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </div>
+                              {/* 2줄: 날짜 */}
+                              <div className="pl-[22px]">
+                                <input
+                                  type="date"
+                                  value={entry.paid_at}
+                                  onChange={(e) => updateSettlementPaymentEntry(row.key, entry.id, { paid_at: e.target.value })}
+                                  className="h-5 border-0 border-b border-transparent focus:border-gray-300 bg-transparent px-0 text-[10px] text-gray-500 outline-none"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      )}
+
+      {/* ===== 공용 Dialog — 모든 activeView에서 접근 가능 ===== */}
+      <Dialog open={isUnlinkDialogOpen} onOpenChange={setIsUnlinkDialogOpen}>
+        <DialogContent className="sm:max-w-[320px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm">연결 해제 및 계약 삭제</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              현재 카드의 연결을 해제하고 계약 정보도 함께 삭제합니다.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setIsUnlinkDialogOpen(false)}
+              className="px-3 py-1.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsUnlinkDialogOpen(false)
+                void handleUnlinkContract()
+              }}
+              className="px-3 py-1.5 text-xs rounded-md bg-red-500 text-white hover:bg-red-500/90"
+            >
+              확인
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSettlementModalOpen} onOpenChange={setIsSettlementModalOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="font-sans text-base">정산 형태 설정</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              체크박스로 단계를 선택하고 비율(%)과 정산예정일을 설정하세요.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2.5">
+            {SETTLEMENT_STAGE_ORDER.map((stage) => {
+              const checked = modalStages.includes(stage)
+              return (
+                <div key={stage} className="flex items-start justify-between gap-2 rounded-md border border-gray-200 bg-white px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleModalStage(stage)}
+                      className="h-3.5 w-3.5 rounded border-slate-400 accent-slate-700 focus:ring-2 focus:ring-slate-300/60"
+                    />
+                    <span className={cn("text-sm", checked ? "text-gray-700" : "text-gray-400")}>{stage}</span>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={checked ? (modalRatios[stage] === 0 ? "" : String(modalRatios[stage])) : ""}
+                        placeholder="0"
+                        disabled={!checked}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onChange={(e) => {
+                          if (!checked) return
+                          const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                          const nextValue = digitsOnly ? Number(digitsOnly) : 0
+                          setModalRatios((prev) => ({
+                            ...prev,
+                            [stage]: Number.isFinite(nextValue) ? Math.max(0, Math.min(100, Math.round(nextValue))) : 0,
+                          }))
+                        }}
+                        className={cn(
+                          "h-7 w-16 rounded-md border px-2 text-right text-xs tabular-nums focus:outline-none",
+                          checked
+                            ? "border-gray-300 bg-white focus:ring-2 focus:ring-slate-300/50"
+                            : "border-gray-200 bg-gray-100 text-gray-300"
+                        )}
+                      />
+                      <span className={cn("text-[10px]", checked ? "text-gray-500" : "text-gray-300")}>%</span>
+                      {stage === "중도금" && checked && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-gray-500">회차</span>
+                          <select
+                            value={modalMiddleInstallments}
+                            onChange={(e) => setModalMiddleInstallments(normalizeMiddleInstallments(e.target.value))}
+                            className="h-7 rounded-md border border-gray-300 bg-white px-1.5 text-[10px] text-gray-600 focus:outline-none focus:ring-2 focus:ring-slate-300/50"
+                          >
+                            {[1, 2, 3, 4, 5].map((count) => (
+                              <option key={count} value={count}>{count}회</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className={cn("text-[10px]", checked ? "text-gray-500" : "text-gray-300")}>예정일</span>
+                      <input
+                        type="date"
+                        value={checked ? modalScheduledDates[stage] : ""}
+                        disabled={!checked}
+                        onChange={(e) => {
+                          if (!checked) return
+                          setModalScheduledDates((prev) => ({
+                            ...prev,
+                            [stage]: e.target.value,
+                          }))
+                        }}
+                        className={cn(
+                          "h-7 rounded-md border px-2 text-[10px] focus:outline-none",
+                          checked
+                            ? "border-gray-300 bg-white text-gray-600 focus:ring-2 focus:ring-slate-300/50"
+                            : "border-gray-200 bg-gray-100 text-gray-300"
+                        )}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => setIsSettlementModalOpen(false)}
+              className="px-3 py-1.5 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleApplySettlement}
+              disabled={modalStages.length === 0 || modalSelectedRatioSum > 100}
+              className="px-3 py-1.5 text-xs rounded-md bg-slate-700 text-white hover:bg-slate-700/90 disabled:opacity-40"
+            >
+              적용
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

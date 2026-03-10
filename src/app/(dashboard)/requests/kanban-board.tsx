@@ -65,6 +65,7 @@ import {
 import { InlineTitle, InlineSelect } from "./inline-editors"
 import { CustomerDetailSheet } from "./customer-detail-sheet"
 import { SalesFlowPanel } from "./sales-flow-panel"
+import OrderDeliveryTab from "./order-delivery-tab"
 import { SideOverviewPanel } from "./side-overview-panel"
 import { QuotationsTab } from "./quotations-tab"
 import { ContractFlowTab } from "./contract-flow-tab"
@@ -123,6 +124,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [isDeleting, setIsDeleting] = useState(false)
   // 상세 패널용 state
   const [selectedItem, setSelectedItem] = useState<RequestItem | null>(null)
+  const [sheetView, setSheetView] = useState<"영업" | "주문배송">("영업")
   // 자동저장 상태 메시지
   const [saveMessage, setSaveMessage] = useState("")
   // 탭 전환 요청 (개요 카드 클릭 시 해당 탭으로 이동)
@@ -1487,10 +1489,29 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                   </div>
                 </div>
 
-                {/* 전체 보기: 한 페이지 스크롤 */}
+                {/* 뷰 전환 탭 */}
+                <div className="flex items-center gap-1 px-5 py-1.5 border-b border-gray-200">
+                  {(["영업", "주문배송"] as const).map((view) => (
+                    <button
+                      key={view}
+                      onClick={() => setSheetView(view)}
+                      className={cn(
+                        "px-3 py-1 text-xs font-medium rounded-md transition-colors",
+                        sheetView === view
+                          ? "bg-slate-700 text-white"
+                          : "text-gray-500 hover:bg-gray-100"
+                      )}
+                    >
+                      {view === "영업" ? "영업 관리" : "주문·배송"}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 영업 관리 뷰 */}
+                {sheetView === "영업" && (
                 <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 scrollbar-hidden space-y-0">
                   {/* ===== Row 1: 고객 | 견적서 | 계약 (3컬럼) ===== */}
-                  <div className="grid grid-cols-[1fr_1fr_1.5fr] gap-0 items-start border-b border-gray-200">
+                  <div className="grid grid-cols-3 gap-0 items-start border-b border-gray-200">
                     {/* 고객 */}
                     <div className="px-4 py-3 border-r border-gray-200">
                       <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">고객</p>
@@ -1564,24 +1585,15 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         onToggleConfirm={handleToggleConfirmedQuote}
                       />
                     </div>
-                    {/* 계약 */}
+                    {/* 계약 — 구축예정 placeholder */}
                     <div className="px-4 py-3">
                       <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">계약</p>
-                      <ContractFlowTab
-                        requestId={selectedItem.id}
-                        requestTitle={selectedItem.title}
-                        requestCustomer={selectedItem.customer}
-                        requestContractId={selectedItem.contract_id}
-                        confirmedQuoteSupplyAmount={quotations.find((q) => q.id === confirmedQuoteId)?.total_amount ?? null}
-                        onLinkContract={async (contractId) => {
-                          await updateRequestField("contract_id", contractId)
-                        }}
-                        onSavedContract={(contractId) => {
-                          void loadContractSummaryById(contractId, selectedItem.id)
-                        }}
-                        onSummaryChange={handleSummaryChange}
-                        activeView="계약서"
-                      />
+                      <div className="flex flex-col items-center justify-center py-8">
+                        <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center mb-2">
+                          <FileText className="h-4 w-4 text-gray-300" />
+                        </div>
+                        <p className="text-xs text-gray-300">구축예정입니다</p>
+                      </div>
                     </div>
                   </div>
 
@@ -1605,6 +1617,19 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                   />
                   </div>
                 </div>
+                )}
+
+                {/* 주문·배송 뷰 */}
+                {sheetView === "주문배송" && (
+                <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 scrollbar-hidden">
+                  <OrderDeliveryTab
+                    requestId={selectedItem.id}
+                    defaultSiteName={selectedItem.title}
+                    confirmedQuoteId={confirmedQuoteId}
+                    onEditQuote={handleEditQuote}
+                  />
+                </div>
+                )}
               </>
             )
           })()}

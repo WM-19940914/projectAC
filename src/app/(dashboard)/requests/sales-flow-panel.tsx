@@ -50,7 +50,7 @@ export function SalesFlowPanel({
         onLinkContract={onLinkContract}
         onSavedContract={onSavedContract}
         onSummaryChange={onSummaryChange}
-        activeView="정산 현황"
+        activeView="통합"
       />
 
       {/* 지출 */}
