@@ -23,7 +23,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet"
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CalendarRange, CheckCircle2, EyeOff, FileText, Hash, Plus, Receipt, Search, SmilePlus, Trash2, Truck, X, XCircle } from "lucide-react"
+import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CalendarRange, CheckCircle2, EyeOff, Hash, Plus, Receipt, Search, SmilePlus, Trash2, Truck, X, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/providers/auth-provider"
 import { Input } from "@/components/ui/input"
@@ -1509,12 +1509,9 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
                 {/* 영업 관리 뷰 */}
                 {sheetView === "영업" && (
-                <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 scrollbar-hidden space-y-0">
-                  {/* ===== Row 1: 고객 | 견적서 | 계약 (3컬럼) ===== */}
-                  <div className="grid grid-cols-3 gap-0 items-start border-b border-gray-200">
-                    {/* 고객 */}
-                    <div className="px-4 py-3 border-r border-gray-200">
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">고객</p>
+                <div className="flex-1 overflow-y-auto bg-slate-50 px-5 pb-8 pt-4 scrollbar-hidden">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(320px,360px)_minmax(0,1fr)]">
+                    <div className="space-y-4">
                       <SideOverviewPanel
                         selectedItem={selectedItem}
                         localCustomers={localCustomers}
@@ -1573,10 +1570,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         }}
                         onUpdateField={(field, value) => updateRequestField(field, value)}
                       />
-                    </div>
-                    {/* 견적서 */}
-                    <div className="px-4 py-3 border-r border-gray-200">
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">견적서</p>
+
                       <QuotationsTab
                         quotations={quotations}
                         onAddQuote={handleAddQuote}
@@ -1585,36 +1579,25 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         onToggleConfirm={handleToggleConfirmedQuote}
                       />
                     </div>
-                    {/* 계약 — 구축예정 placeholder */}
-                    <div className="px-4 py-3">
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">계약</p>
-                      <div className="flex flex-col items-center justify-center py-8">
-                        <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center mb-2">
-                          <FileText className="h-4 w-4 text-gray-300" />
-                        </div>
-                        <p className="text-xs text-gray-300">구축예정입니다</p>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* ===== Row 2: 정산 + 지출 ===== */}
-                  <div className="pt-4">
-                  <SalesFlowPanel
-                    quotations={quotations}
-                    confirmedQuoteId={confirmedQuoteId}
-                    requestId={selectedItem.id}
-                    requestTitle={selectedItem.title}
-                    requestCustomer={selectedItem.customer}
-                    requestContractId={selectedItem.contract_id}
-                    onLinkContract={async (contractId) => {
-                      await updateRequestField("contract_id", contractId)
-                    }}
-                    onSavedContract={(contractId) => {
-                      void loadContractSummaryById(contractId, selectedItem.id)
-                    }}
-                    onSummaryChange={handleSummaryChange}
-                    contractSummary={contractSummary}
-                  />
+                    <div className="min-w-0">
+                      <SalesFlowPanel
+                        quotations={quotations}
+                        confirmedQuoteId={confirmedQuoteId}
+                        requestId={selectedItem.id}
+                        requestTitle={selectedItem.title}
+                        requestCustomer={selectedItem.customer}
+                        requestContractId={selectedItem.contract_id}
+                        onLinkContract={async (contractId) => {
+                          await updateRequestField("contract_id", contractId)
+                        }}
+                        onSavedContract={(contractId) => {
+                          void loadContractSummaryById(contractId, selectedItem.id)
+                        }}
+                        onSummaryChange={handleSummaryChange}
+                        contractSummary={contractSummary}
+                      />
+                    </div>
                   </div>
                 </div>
                 )}

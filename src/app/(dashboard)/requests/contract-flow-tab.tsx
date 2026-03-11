@@ -460,30 +460,29 @@ export function ContractFlowTab({
     }
   })
 
+  const paidAmount = settlementStatusRows.reduce((sum, row) => sum + row.actualAmount, 0)
+  const clampedPaid = Math.min(Math.max(0, paidAmount), totalWithVat)
+  const unpaidAmount = Math.max(0, totalWithVat - clampedPaid)
+  const progressPercent = totalWithVat > 0
+    ? Math.min(100, Math.round((clampedPaid / totalWithVat) * 100))
+    : 0
+  const allEntries = settlementStatusRows.flatMap((row) => row.paymentEntries)
+  const confirmedEntryCount = allEntries.filter((entry) => entry.confirmed).length
+  const allConfirmed = allEntries.length > 0 && confirmedEntryCount === allEntries.length
+  const stageCount = settlementStatusRows.length
+  const issuedCount = settlementStatusRows.filter((row) => row.taxInvoiceIssued).length
+  const taxInvoiceAllIssued = stageCount > 0 && issuedCount === stageCount
+  const taxInvoiceSomeIssued = issuedCount > 0 && issuedCount < stageCount
+  const overdueCount = settlementStatusRows.filter((row) => row.overdueDays > 0).length
+  const nextPendingStage = settlementStatusRows.find((row) => !row.paymentConfirmed) ?? null
+
   useEffect(() => {
     if (!onSummaryChange) return
     // 데이터 로딩 중에는 기본값(0%)으로 덮어쓰지 않음
     if (isLoading) return
 
-    const paidAmount = settlementStatusRows.reduce((sum, row) => {
-      return sum + row.actualAmount
-    }, 0)
-    const clampedPaid = Math.min(Math.max(0, paidAmount), totalWithVat)
-    const unpaidAmount = Math.max(0, totalWithVat - clampedPaid)
-    const progressPercent = totalWithVat > 0
-      ? Math.min(100, Math.round((clampedPaid / totalWithVat) * 100))
-      : 0
-    // 모든 입금내역이 입완 체크되었는지 확인
-    const allEntries = settlementStatusRows.flatMap((row) => row.paymentEntries)
-    const allConfirmed = allEntries.length > 0 && allEntries.every((e) => e.confirmed)
-    // 세금계산서 발행 여부 요약
-    const stageCount = settlementStatusRows.length
-    const issuedCount = settlementStatusRows.filter((row) => row.taxInvoiceIssued).length
-    const taxInvoiceAllIssued = stageCount > 0 && issuedCount === stageCount
-    const taxInvoiceSomeIssued = issuedCount > 0 && issuedCount < stageCount
     // 단계별 입금완료 요약
     const stageSummariesForCard = settlementStatusRows.map((row) => {
-      const rowEntries = row.paymentEntries
       const rowPaid = row.paymentEntries.reduce((sum, e) => sum + (e.confirmed ? e.amount : 0), 0)
       const plannedAmount = row.plannedAmount
       const stageStatus: "paid" | "partial" | "unpaid" =
@@ -508,7 +507,20 @@ export function ContractFlowTab({
       taxInvoiceSomeIssued,
       stageSummaries: stageSummariesForCard,
     })
-  }, [onSummaryChange, requestContractId, draft.id, settlementStatusRows, totalWithVat, isLoading])
+  }, [
+    allConfirmed,
+    clampedPaid,
+    draft.id,
+    isLoading,
+    onSummaryChange,
+    requestContractId,
+    settlementStatusRows,
+    taxInvoiceAllIssued,
+    taxInvoiceSomeIssued,
+    totalWithVat,
+    unpaidAmount,
+    progressPercent,
+  ])
   const stageSummary = selectedStages.length > 0
     ? selectedStages.map((stage) => (
       stage === "중도금"
@@ -1485,31 +1497,63 @@ export function ContractFlowTab({
             <p className="text-xs text-gray-400">불러오는 중...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-[0.8fr_1fr_1.5fr] gap-0 items-start">
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.45fr)]">
             {/* ── 좌측: 계약 정보 ── */}
-            <div className="pr-4 border-r border-gray-200">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">계약 정보</p>
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">계약 정보</p>
+                <h3 className="mt-2 text-xl font-semibold text-slate-900">
+                  {isContractFormVisible ? "현장 계약 기본값" : "연결된 계약이 없습니다"}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  계약 금액과 정산 구조를 먼저 정리해두면 이후 수금 관리가 같은 기준으로 이어집니다.
+                </p>
+              </div>
               {!isContractFormVisible ? (
-                <div className="py-6 text-center">
-                  <p className="text-xs text-gray-400 mb-2">계약 정보 없음</p>
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-10 text-center">
+                  <p className="text-base font-medium text-slate-700">계약 정보 없음</p>
+                  <p className="mt-2 text-sm text-slate-400">확정 견적을 계약 기준으로 옮겨서 정산 흐름을 시작하세요.</p>
                   <button
                     type="button"
                     onClick={() => { void handleSave("manual") }}
                     disabled={!canSave || isUnlinkingContract}
-                    className="inline-flex h-7 items-center justify-center rounded bg-slate-700 px-3 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+                    className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-slate-900 px-5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40"
                   >
                     {isSaving ? "생성 중..." : "계약 생성"}
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">공급가액</p>
+                      <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">
+                        {supplyAmount > 0 ? `${formatCurrency(supplyAmount)}원` : "금액 입력"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">VAT 포함</p>
+                      <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">
+                        {totalWithVat > 0 ? `${formatCurrency(totalWithVat)}원` : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">입금 완료</p>
+                      <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">{formatCurrency(clampedPaid)}원</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">미수금</p>
+                      <p className="mt-2 text-lg font-semibold tabular-nums text-slate-900">{formatCurrency(unpaidAmount)}원</p>
+                    </div>
+                  </div>
+
                   {/* 제목 + 삭제 */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                     <input
                       value={draft.title}
                       onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))}
                       placeholder="계약 제목"
-                      className="flex-1 min-w-0 text-xs font-medium text-gray-800 bg-transparent border-0 border-b border-transparent focus:border-gray-300 focus:outline-none py-0.5 px-0 placeholder:text-gray-300 truncate"
+                      className="flex-1 min-w-0 border-0 bg-transparent px-0 py-0.5 text-lg font-semibold text-slate-900 outline-none placeholder:text-slate-300"
                     />
                     {isPersistedContract && (
                       <button
@@ -1517,51 +1561,56 @@ export function ContractFlowTab({
                         onClick={() => setIsUnlinkDialogOpen(true)}
                         disabled={isUnlinkingContract}
                         title="계약 삭제"
-                        className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-slate-200 text-slate-300 transition-colors hover:border-red-200 hover:text-red-500"
                       >
-                        <Unlink className="h-3 w-3" />
+                        <Unlink className="h-4 w-4" />
                       </button>
                     )}
                   </div>
 
                   {/* 착수 / 종료 — 세로 배치 */}
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1">
-                      <label className="text-[10px] text-gray-400 shrink-0 w-7">착수</label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                      <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">착수일</label>
                       <input
                         type="date"
                         value={draft.start_date}
                         onChange={(e) => setDraft((prev) => ({ ...prev, start_date: e.target.value }))}
-                        className="flex-1 min-w-0 h-6 bg-transparent border-0 border-b border-transparent focus:border-gray-300 focus:outline-none px-0 text-xs text-gray-600"
+                        className="mt-2 h-8 w-full border-0 bg-transparent px-0 text-sm text-slate-700 outline-none"
                       />
                     </div>
-                    <div className="flex items-center gap-1">
-                      <label className="text-[10px] text-gray-400 shrink-0 w-7">종료</label>
+                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                      <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">종료일</label>
                       <input
                         type="date"
                         value={draft.end_date}
                         onChange={(e) => setDraft((prev) => ({ ...prev, end_date: e.target.value }))}
-                        className="flex-1 min-w-0 h-6 bg-transparent border-0 border-b border-transparent focus:border-gray-300 focus:outline-none px-0 text-xs text-gray-600"
+                        className="mt-2 h-8 w-full border-0 bg-transparent px-0 text-sm text-slate-700 outline-none"
                       />
                     </div>
                   </div>
 
                   {/* 계약금액 */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-gray-400">계약금액</span>
+                  <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                    <div>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">계약금액</span>
+                      <p className="mt-2 text-base font-semibold tabular-nums text-slate-900">
+                        {supplyAmount > 0 ? `${formatCurrency(supplyAmount)}원` : "금액 입력"}
+                      </p>
+                    </div>
                     <Popover open={isAmountModalOpen} onOpenChange={setIsAmountModalOpen}>
                       <PopoverTrigger asChild>
                         <button
                           type="button"
                           onClick={openAmountModal}
                           title="계약금액 (VAT별도)"
-                          className="text-xs font-semibold tabular-nums text-gray-800 hover:text-slate-600 transition-colors"
+                          className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                         >
-                          {supplyAmount > 0 ? formatCurrency(supplyAmount) : "금액 입력"}
+                          금액 수정
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent align="end" side="bottom" sideOffset={4} className="w-52 border-gray-200 p-2.5">
-                        <div className="space-y-2">
+                      <PopoverContent align="end" side="bottom" sideOffset={6} className="w-60 border-slate-200 p-3">
+                        <div className="space-y-3">
                           <button
                             type="button"
                             disabled={typeof confirmedQuoteSupplyAmount !== "number"}
@@ -1570,7 +1619,7 @@ export function ContractFlowTab({
                                 setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
                               }
                             }}
-                            className="inline-flex h-7 w-full items-center justify-center rounded border border-gray-200 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                            className="inline-flex h-9 w-full items-center justify-center rounded-xl border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
                           >
                             확정 견적금액 불러오기
                           </button>
@@ -1590,21 +1639,21 @@ export function ContractFlowTab({
                               }
                             }}
                             placeholder="0"
-                            className="h-7 border-gray-200 text-sm font-semibold text-right tabular-nums focus:ring-slate-300"
+                            className="h-10 border-slate-200 text-right text-base font-semibold tabular-nums focus:ring-slate-300"
                           />
-                          <p className="text-right text-[10px] text-gray-400">VAT별도 금액</p>
-                          <div className="flex items-center justify-end gap-1.5">
+                          <p className="text-right text-[11px] text-slate-400">VAT 제외 금액</p>
+                          <div className="flex items-center justify-end gap-2">
                             <button
                               type="button"
                               onClick={() => setIsAmountModalOpen(false)}
-                              className="px-2 py-1 text-[10px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50"
+                              className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50"
                             >
                               취소
                             </button>
                             <button
                               type="button"
                               onClick={handleApplyAmount}
-                              className="px-2 py-1 text-[10px] rounded bg-slate-700 text-white hover:bg-slate-700/90"
+                              className="rounded-xl bg-slate-900 px-3 py-1.5 text-xs text-white hover:bg-slate-800"
                             >
                               적용
                             </button>
@@ -1615,39 +1664,38 @@ export function ContractFlowTab({
                   </div>
 
                   {/* 정산 형태 */}
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] text-gray-400 shrink-0">정산</span>
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4">
                     <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-[10px] text-gray-600 truncate">{stageSummary}</span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">정산 구조</p>
+                        <span className="mt-2 block truncate text-sm text-slate-700">{stageSummary}</span>
+                      </div>
                       <button
                         type="button"
                         onClick={openSettlementModal}
-                        className="text-[10px] text-slate-600 font-medium hover:text-slate-800 underline underline-offset-2 shrink-0"
+                        className="ml-auto inline-flex h-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50"
                       >
-                        변경
+                        구조 변경
                       </button>
                     </div>
                   </div>
 
-                  {/* VAT포함 */}
-                  {supplyAmount > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] text-gray-400">VAT포함</span>
-                      <span className="text-xs font-semibold tabular-nums text-gray-700">{formatCurrency(totalWithVat)}</span>
-                    </div>
-                  )}
-
                   {/* 저장 상태 */}
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100">
-                    <p className={cn("text-[10px]", saveMessage.includes("실패") ? "text-red-500" : "text-gray-400")}>
-                      {saveMessage || (isPersistedContract ? "자동 저장" : "")}
-                    </p>
+                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <div>
+                      <p className={cn("text-xs font-medium", saveMessage.includes("실패") ? "text-red-500" : "text-slate-500")}>
+                        {saveMessage || (isPersistedContract ? "자동 저장 중" : "계약 생성 전")}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {requestCustomer ? `${requestCustomer.company_name} 기준 계약` : "고객 연결 상태를 확인하세요"}
+                      </p>
+                    </div>
                     {isPersistedContract && (
                       <button
                         type="button"
                         onClick={() => { void handleSave("manual") }}
                         disabled={!canSave}
-                        className="text-[10px] text-slate-600 font-medium hover:text-slate-800 underline underline-offset-2 disabled:opacity-40 disabled:no-underline"
+                        className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 px-4 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-white disabled:opacity-40"
                       >
                         {isSaving ? "저장 중..." : "즉시 저장"}
                       </button>
@@ -1657,7 +1705,7 @@ export function ContractFlowTab({
                         type="button"
                         onClick={() => { void handleSave("manual") }}
                         disabled={!canSave || isUnlinkingContract}
-                        className="inline-flex h-6 items-center justify-center rounded bg-slate-700 px-2.5 text-[10px] font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+                        className="inline-flex h-10 items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40"
                       >
                         {isSaving ? "생성 중..." : "계약 생성"}
                       </button>
@@ -1668,14 +1716,69 @@ export function ContractFlowTab({
             </div>
 
             {/* ── 중앙: 정산 카드 ── */}
-            <div className="px-4 border-r border-gray-200">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">정산 현황</p>
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">정산 현황</p>
+                <h3 className="mt-2 text-xl font-semibold text-slate-900">단계별 수금 진행 상태</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  예정일, 입금 완료, 계산서 발행을 한 번에 보고 다음 액션을 결정합니다.
+                </p>
+              </div>
               {!isContractFormVisible ? (
-                <p className="text-xs text-gray-300 py-6 text-center">계약 생성 후 표시됩니다</p>
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-10 text-center">
+                  <p className="text-sm text-slate-400">계약 생성 후 정산 현황이 표시됩니다.</p>
+                </div>
               ) : settlementStatusRows.length === 0 ? (
-                <p className="text-xs text-gray-300 py-6 text-center">정산 단계 없음</p>
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-10 text-center">
+                  <p className="text-sm text-slate-400">정산 단계가 아직 설정되지 않았습니다.</p>
+                </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">정산 진행</p>
+                        <p className="mt-2 text-base font-semibold text-slate-900">
+                          {clampedPaid > 0 ? `${formatCurrency(clampedPaid)}원 입금 완료` : "아직 입금 내역이 없습니다"}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {nextPendingStage
+                            ? `다음 확인 단계: ${nextPendingStage.label} · ${nextPendingStage.scheduledDate || "예정일 미지정"}`
+                            : "모든 단계가 완료되었습니다"}
+                        </p>
+                      </div>
+                      <div className="min-w-[180px]">
+                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
+                          <div className="h-full rounded-full bg-slate-900" style={{ width: `${progressPercent}%` }} />
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+                          <span>완료 {formatCurrency(clampedPaid)}원</span>
+                          <span>잔액 {formatCurrency(unpaidAmount)}원</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <span className={cn(
+                      "inline-flex h-9 items-center rounded-full px-3 text-xs font-medium",
+                      allConfirmed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                    )}>
+                      {allConfirmed ? "입금 확인 완료" : `입금 확인 ${confirmedEntryCount}/${allEntries.length || 0}`}
+                    </span>
+                    <span className={cn(
+                      "inline-flex h-9 items-center rounded-full px-3 text-xs font-medium",
+                      taxInvoiceAllIssued
+                        ? "bg-emerald-100 text-emerald-700"
+                        : taxInvoiceSomeIssued
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-slate-100 text-slate-600"
+                    )}>
+                      {taxInvoiceAllIssued ? "계산서 발행 완료" : taxInvoiceSomeIssued ? "계산서 일부 발행" : "계산서 발행 대기"}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
                   {settlementStatusRows.map((row) => {
                     const stageKey = row.key === "선금" ? "선금" : row.key === "잔금" ? "잔금" : "중도금"
                     const ratio = stageRatios[stageKey as keyof typeof stageRatios] ?? 0
@@ -1686,44 +1789,51 @@ export function ContractFlowTab({
                       <div
                         key={row.key}
                         className={cn(
-                          "rounded-lg border p-2.5 space-y-1.5",
+                          "rounded-2xl border px-4 py-4",
                           row.overdueDays > 0
-                            ? "border-red-300/60 bg-red-50/50"
+                            ? "border-red-200 bg-red-50/60"
                             : row.paymentConfirmed
-                              ? "border-slate-400/60 bg-slate-50/50"
-                              : "border-gray-200 bg-white"
+                              ? "border-emerald-200 bg-emerald-50/50"
+                              : "border-slate-200 bg-white"
                         )}
                       >
                         {/* 라벨 + 상태 + 금액 */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[11px] font-semibold text-gray-700">{labelWithRatio}</span>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">정산 단계</p>
+                            <span className="mt-2 block text-base font-semibold text-slate-900">{labelWithRatio}</span>
+                          </div>
+                          <div className="text-right">
                             <span className={cn(
-                              "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold",
+                              "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold",
                               row.paymentConfirmed
-                                ? "border-slate-400/40 bg-slate-100 text-slate-700"
+                                ? "bg-emerald-100 text-emerald-700"
                                 : row.actualAmount > 0
-                                  ? "border-amber-300 bg-amber-50 text-amber-700"
-                                  : "border-gray-200 bg-gray-50 text-gray-500"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-slate-100 text-slate-500"
                             )}>
                               {row.paymentStatusLabel}
                             </span>
+                            <span className="mt-2 block text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(row.plannedAmount)}원</span>
                           </div>
-                          <span className="text-[11px] font-bold tabular-nums text-gray-700">{formatCurrency(row.plannedAmount)}</span>
                         </div>
 
                         {/* 정산예정일 */}
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="text-gray-400">예정일</span>
-                          <span className={cn(row.overdueDays > 0 ? "text-red-600 font-medium" : "text-gray-600")}>
-                            {row.scheduledDate || "—"}
-                            {row.overdueDays > 0 && ` (D+${row.overdueDays})`}
+                        <div className="mt-4 flex items-center justify-between rounded-xl bg-white/80 px-3 py-3 text-sm">
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">예정일</p>
+                            <span className={cn("mt-1 block font-medium", row.overdueDays > 0 ? "text-red-600" : "text-slate-700")}>
+                              {row.scheduledDate || "미지정"}
+                            </span>
+                          </div>
+                          <span className={cn("text-sm font-medium", row.overdueDays > 0 ? "text-red-600" : "text-slate-500")}>
+                            {row.overdueDays > 0 ? `D+${row.overdueDays}` : "정상"}
                           </span>
                         </div>
 
                         {/* 계산서 발행 */}
-                        <div className="flex items-center justify-between text-[10px]">
-                          <label className="inline-flex items-center gap-1 cursor-pointer">
+                        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-3 text-sm">
+                          <label className="inline-flex items-center gap-2 cursor-pointer text-slate-600">
                             <input
                               type="checkbox"
                               checked={row.taxInvoiceIssued}
@@ -1738,10 +1848,10 @@ export function ContractFlowTab({
                                 }
                                 updateSettlementStatus(row.key, updates)
                               }}
-                              className="h-3 w-3 rounded border-slate-400 accent-slate-700"
+                              className="h-4 w-4 rounded border-slate-300 accent-slate-700"
                             />
-                            <span className="text-gray-500">
-                              {row.taxInvoiceIssued ? "계산서 발행" : "계산서 미발행"}
+                            <span>
+                              {row.taxInvoiceIssued ? "계산서 발행 완료" : "계산서 미발행"}
                             </span>
                           </label>
                           {row.taxInvoiceIssued && (
@@ -1749,19 +1859,19 @@ export function ContractFlowTab({
                               type="date"
                               value={row.taxInvoiceDate || ""}
                               onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_date: e.target.value })}
-                              className="h-5 border-0 border-b border-transparent focus:border-gray-300 bg-transparent px-0 text-[10px] text-gray-600 outline-none"
+                              className="h-8 border-0 bg-transparent px-0 text-sm text-slate-600 outline-none"
                             />
                           )}
                         </div>
 
                         {/* 정산 요약 (입금 있을 때만) */}
                         {row.actualAmount > 0 && (
-                          <div className="flex items-center justify-between text-[10px] pt-0.5 border-t border-gray-100">
-                            <span className="text-gray-400">정산금액</span>
+                          <div className="mt-3 flex items-center justify-between rounded-xl border border-slate-200 bg-white/80 px-3 py-3 text-sm">
+                            <span className="text-slate-400">실입금</span>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold tabular-nums text-gray-800">{formatCurrency(row.actualAmount)}</span>
+                              <span className="font-semibold tabular-nums text-slate-900">{formatCurrency(row.actualAmount)}원</span>
                               {row.shortfallAmount > 0 && (
-                                <span className="text-red-500 font-medium">-{formatCurrency(row.shortfallAmount)}</span>
+                                <span className="font-medium text-red-500">-{formatCurrency(row.shortfallAmount)}원</span>
                               )}
                             </div>
                           </div>
@@ -1769,30 +1879,58 @@ export function ContractFlowTab({
                       </div>
                     )
                   })}
+                  </div>
                 </div>
               )}
             </div>
 
             {/* ── 우측: 입금내역 (가로 배치) ── */}
-            <div className="pl-4">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">입금내역</p>
+            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
+              <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">입금내역</p>
+                  <h3 className="mt-2 text-xl font-semibold text-slate-900">단계별 입금 장부</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    실제 입금 예정과 입금 완료를 엔트리 단위로 관리해 정산 현황과 자동으로 연결합니다.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex h-9 items-center rounded-full bg-slate-100 px-3 text-xs font-medium text-slate-600">
+                    총 엔트리 {allEntries.length}건
+                  </span>
+                  <span className={cn(
+                    "inline-flex h-9 items-center rounded-full px-3 text-xs font-medium",
+                    overdueCount > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"
+                  )}>
+                    {overdueCount > 0 ? `지연 단계 ${overdueCount}건` : "지연 없음"}
+                  </span>
+                </div>
+              </div>
               {!isContractFormVisible ? (
-                <p className="text-xs text-gray-300 py-6 text-center">계약 생성 후 표시됩니다</p>
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-10 text-center">
+                  <p className="text-sm text-slate-400">계약 생성 후 입금내역을 관리할 수 있습니다.</p>
+                </div>
               ) : settlementStatusRows.length === 0 ? (
-                <p className="text-xs text-gray-300 py-6 text-center">정산 단계 없음</p>
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50/70 px-4 py-10 text-center">
+                  <p className="text-sm text-slate-400">정산 단계가 없어서 입금내역을 표시할 수 없습니다.</p>
+                </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {settlementStatusRows.map((row) => (
-                    <div key={row.key} className="space-y-1.5">
+                    <div key={row.key} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
                       {/* 단계 헤더 + 추가 */}
                       <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-semibold text-gray-600">{row.label}</p>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">정산 단계</p>
+                          <p className="mt-2 text-base font-semibold text-slate-900">{row.label}</p>
+                          <p className="mt-1 text-sm text-slate-500">계획 금액 {formatCurrency(row.plannedAmount)}원</p>
+                        </div>
                         <button
                           type="button"
                           onClick={() => addSettlementPaymentEntry(row.key)}
-                          className="inline-flex items-center gap-0.5 text-[10px] font-medium text-slate-600 hover:text-slate-800"
+                          className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
                         >
-                          <Plus className="h-3 w-3" />
+                          <Plus className="h-3.5 w-3.5" />
                           추가
                         </button>
                       </div>
@@ -1802,29 +1940,29 @@ export function ContractFlowTab({
                         <button
                           type="button"
                           onClick={() => addSettlementPaymentEntry(row.key)}
-                          className="w-full rounded border border-dashed border-gray-200 py-3 text-center text-[10px] text-gray-400 hover:border-slate-400/40 hover:text-slate-600 transition-colors"
+                          className="mt-4 w-full rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400 transition-colors hover:border-slate-400 hover:text-slate-600"
                         >
-                          <Plus className="inline h-3 w-3 mr-0.5 -mt-0.5" />
-                          추가
+                          <Plus className="mx-auto mb-2 h-4 w-4" />
+                          첫 입금 엔트리 추가
                         </button>
                       ) : (
-                        <div className="space-y-1.5">
+                        <div className="mt-4 space-y-3">
                           {row.paymentEntries.map((entry, index) => (
-                            <div key={entry.id} className="rounded border border-gray-100 bg-gray-50/40 px-2 py-1.5 space-y-1">
+                            <div key={entry.id} className="rounded-2xl border border-slate-200 bg-white px-3.5 py-3">
                               {/* 1줄: 입완 + 금액 + 자동 + 삭제 */}
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { confirmed: !entry.confirmed })}
                                   className={cn(
-                                    "h-4 w-4 rounded border flex items-center justify-center transition-colors shrink-0",
+                                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors",
                                     entry.confirmed
-                                      ? "border-slate-400 bg-slate-700"
-                                      : "border-gray-300 bg-white hover:border-gray-400"
+                                      ? "border-emerald-500 bg-emerald-500"
+                                      : "border-slate-300 bg-white hover:border-slate-400"
                                   )}
                                   title={entry.confirmed ? "입금 확인됨" : "입금 미확인"}
                                 >
-                                  {entry.confirmed && <CheckCircle2 className="h-3 w-3 text-white" />}
+                                  {entry.confirmed && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
                                 </button>
                                 <input
                                   type="text"
@@ -1837,12 +1975,12 @@ export function ContractFlowTab({
                                     })
                                   }}
                                   placeholder="금액"
-                                  className="h-5 min-w-0 flex-1 border-0 border-b border-gray-200 bg-transparent px-0 text-[10px] font-semibold tabular-nums text-gray-700 outline-none focus:border-slate-400"
+                                  className="min-w-0 flex-1 border-0 bg-transparent px-0 text-base font-semibold tabular-nums text-slate-900 outline-none"
                                 />
                                 <button
                                   type="button"
                                   onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { amount: row.plannedAmount })}
-                                  className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold text-slate-600 ring-1 ring-slate-300/40 hover:bg-slate-50"
+                                  className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-200"
                                   title="계획금액 자동입력"
                                 >
                                   자동
@@ -1850,20 +1988,26 @@ export function ContractFlowTab({
                                 <button
                                   type="button"
                                   onClick={() => removeSettlementPaymentEntry(row.key, entry.id)}
-                                  className="inline-flex h-4 w-4 items-center justify-center text-gray-300 hover:text-red-500 shrink-0"
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-slate-300 hover:bg-red-500/10 hover:text-red-500"
                                   aria-label={`입금내역 ${index + 1} 삭제`}
                                 >
-                                  <X className="h-2.5 w-2.5" />
+                                  <X className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                               {/* 2줄: 날짜 */}
-                              <div className="pl-[22px]">
+                              <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
                                 <input
                                   type="date"
                                   value={entry.paid_at}
                                   onChange={(e) => updateSettlementPaymentEntry(row.key, entry.id, { paid_at: e.target.value })}
-                                  className="h-5 border-0 border-b border-transparent focus:border-gray-300 bg-transparent px-0 text-[10px] text-gray-500 outline-none"
+                                  className="h-8 border-0 bg-transparent px-0 text-sm text-slate-500 outline-none"
                                 />
+                                <span className={cn(
+                                  "inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-medium",
+                                  entry.confirmed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                                )}>
+                                  {entry.confirmed ? "입금 확인" : "입금 예정"}
+                                </span>
                               </div>
                             </div>
                           ))}

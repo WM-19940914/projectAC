@@ -388,20 +388,20 @@ function ExpenseCard({
       tabIndex={0}
       onClick={() => onEdit(item)}
       onKeyDown={(e) => e.key === "Enter" && onEdit(item)}
-      className="rounded-lg border border-gray-200 bg-white px-3.5 pt-3 pb-3 cursor-pointer hover:border-slate-400 hover:shadow-sm transition-all"
+      className="cursor-pointer rounded-2xl border border-slate-200 bg-slate-50/50 px-4 pb-4 pt-4 transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:shadow-sm"
     >
       {/* 1행: 지출일자 + 배지 + 삭제 버튼 */}
       <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-          <span className="text-xs font-bold text-gray-800 shrink-0">{item.expense_date}</span>
+          <span className="shrink-0 text-sm font-semibold text-slate-900">{item.expense_date}</span>
           {item.is_unpaid && (
-            <span className="inline-flex items-center gap-0.5 rounded-full border border-red-300 bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-700">
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
               <span className="inline-block h-1 w-1 rounded-full bg-red-500" />
               미지급
             </span>
           )}
           {item.needs_tax_invoice && (
-            <span className="inline-flex items-center gap-0.5 rounded-full border border-red-300 bg-red-100 px-1.5 py-0.5 text-[9px] font-semibold text-gray-700">
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-red-200 bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
               <span className="inline-block h-1 w-1 rounded-full bg-red-500" />
               세금계산서
             </span>
@@ -414,34 +414,34 @@ function ExpenseCard({
             e.stopPropagation()
             onDelete(item.id)
           }}
-          className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-300 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+          className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-xl text-slate-300 transition-colors hover:bg-red-500/10 hover:text-red-500"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {/* 2행: 거래처 / 거래내용 (항상 표시) */}
-      <div className="space-y-0.5 mb-2.5">
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="w-[42px] shrink-0 whitespace-nowrap text-gray-400">거래처</span>
-          <span className="font-medium text-gray-800 truncate">{item.vendor || ""}</span>
+      <div className="mb-3.5 space-y-1.5">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="w-[46px] shrink-0 whitespace-nowrap text-slate-400">거래처</span>
+          <span className="truncate font-medium text-slate-800">{item.vendor || "미입력"}</span>
         </div>
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className="w-[42px] shrink-0 whitespace-nowrap text-gray-400">거래내용</span>
-          <span className="text-gray-700 truncate">{item.description || ""}</span>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="w-[46px] shrink-0 whitespace-nowrap text-slate-400">거래내용</span>
+          <span className="truncate text-slate-700">{item.description || "미입력"}</span>
         </div>
       </div>
 
       {/* 3행: 금액 1행 인라인 */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-slate-500">VAT별도</span>
-          <span className="tabular-nums text-sm font-semibold text-slate-700">{formatCurrency(item.amount)}<span className="ml-0.5 text-[10px] font-normal text-slate-400">원</span></span>
+          <span className="text-[10px] text-slate-500">VAT별도</span>
+          <span className="tabular-nums text-base font-semibold text-slate-900">{formatCurrency(item.amount)}<span className="ml-0.5 text-[10px] font-normal text-slate-400">원</span></span>
         </div>
         <div className="w-px h-3 bg-gray-200" />
         <div className="flex items-center gap-1">
-          <span className="text-[9px] text-gray-400">VAT포함</span>
-          <span className="tabular-nums text-sm font-semibold text-gray-500">{formatCurrency(vatIncluded)}<span className="ml-0.5 text-[10px] font-normal text-gray-400">원</span></span>
+          <span className="text-[10px] text-slate-400">VAT포함</span>
+          <span className="tabular-nums text-sm font-semibold text-slate-500">{formatCurrency(vatIncluded)}<span className="ml-0.5 text-[10px] font-normal text-slate-400">원</span></span>
         </div>
       </div>
     </div>
@@ -490,21 +490,21 @@ function ExpenseSection({
   }
 
   return (
-    <div className="space-y-2.5">
+    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
       {/* 섹션 헤더 */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-gray-700">{category} 지출</p>
+          <p className="text-base font-semibold text-slate-800">{category} 지출</p>
           {items.length > 0 && (
-            <span className="text-[11px] font-semibold tabular-nums text-slate-700">
-              합계 {formatCurrency(total)}원 <span className="text-[9px] font-medium text-gray-400">VAT별도</span>
+            <span className="text-xs font-semibold tabular-nums text-slate-600">
+              합계 {formatCurrency(total)}원 <span className="text-[10px] font-medium text-slate-400">VAT별도</span>
             </span>
           )}
         </div>
         <button
           type="button"
           onClick={openAdd}
-          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-gray-600 hover:border-slate-400 hover:text-slate-700 transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
         >
           <Plus className="h-3 w-3" />
           지출 추가
@@ -513,12 +513,12 @@ function ExpenseSection({
 
       {/* 지출 목록 */}
       {items.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-6 text-center">
-          <Receipt className="mx-auto mb-1.5 h-5 w-5 text-gray-200" />
-          <p className="text-xs text-gray-400">등록된 {category} 지출이 없습니다.</p>
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-4 py-10 text-center">
+          <Receipt className="mx-auto mb-2 h-5 w-5 text-slate-200" />
+          <p className="text-sm text-slate-400">등록된 {category} 지출이 없습니다.</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="mt-4 space-y-3">
           {items.map((item) => (
             <ExpenseCard key={item.id} item={item} onEdit={openEdit} onDelete={onDelete} />
           ))}
@@ -532,7 +532,7 @@ function ExpenseSection({
         onClose={() => setDialogOpen(false)}
         onSave={handleSave}
       />
-    </div>
+    </section>
   )
 }
 
@@ -686,50 +686,49 @@ export default function ExpenseTab({
   // side-by-side 레이아웃: 좌측 요약 | 우측 내역
   if (layout === "side-by-side") {
     return (
-      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-6 items-start">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(280px,320px)_minmax(0,1fr)]">
         {/* 좌측: 지출 요약 */}
-        <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-white px-4 py-4">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-[140px] h-[82px] shrink-0">
-                <GaugeChart ratio={gaugeRatio} />
-              </div>
-              <div className="w-full space-y-2">
-                <div className="text-center">
-                  <p className="text-[10px] font-medium text-gray-400 mb-0.5">총 지출금액 <span className="text-gray-300">(VAT별도)</span></p>
-                  <p className="text-lg font-bold tabular-nums text-gray-900 leading-none">
-                    {formatCurrency(grandTotal)}
-                    <span className="text-xs font-normal text-gray-400 ml-0.5">원</span>
-                  </p>
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${netProfit >= 0 ? "bg-slate-50 border border-slate-200" : "bg-red-500/20 border border-red-300"}`}>
-                    <span className="text-[10px] text-gray-500">순이익</span>
-                    <span className={`text-[11px] font-bold tabular-nums ${netProfit >= 0 ? "text-slate-700" : "text-red-500"}`}>
-                      {formatCurrency(netProfit)}원
-                    </span>
-                  </div>
-                  <div className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${profitRate >= 0 ? "bg-slate-50 border border-slate-200" : "bg-red-500/20 border border-red-300"}`}>
-                    <span className="text-[10px] text-gray-500">이익률</span>
-                    <span className={`text-[11px] font-bold tabular-nums ${profitRate >= 0 ? "text-slate-700" : "text-red-500"}`}>
-                      {profitRate.toFixed(2)}%
-                    </span>
-                  </div>
-                  {incentiveTotal > 0 && (
-                    <div className="inline-flex items-center gap-1 rounded-md px-2 py-1 bg-slate-50 border border-slate-200">
-                      <span className="text-[10px] text-gray-500">장려금</span>
-                      <span className="text-[11px] font-bold tabular-nums text-slate-700">
-                        {formatCurrency(incentiveTotal)}원
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
+        <div className="rounded-3xl border border-slate-200 bg-slate-950 px-5 py-5 text-white shadow-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">수익성 요약</p>
+          <div className="mt-5 flex flex-col items-center gap-3">
+            <div className="h-[96px] w-[170px] shrink-0">
+              <GaugeChart ratio={gaugeRatio} />
             </div>
+            <div className="text-center">
+              <p className="text-[11px] font-medium text-slate-400">총 지출금액</p>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-white">
+                {formatCurrency(grandTotal)}
+                <span className="ml-1 text-xs font-normal text-slate-400">원</span>
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">VAT 제외 기준</p>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-2">
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-3.5 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">순이익</p>
+              <p className={`mt-2 text-lg font-semibold tabular-nums ${netProfit >= 0 ? "text-white" : "text-red-300"}`}>
+                {formatCurrency(netProfit)}원
+              </p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-3.5 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">이익률</p>
+              <p className={`mt-2 text-lg font-semibold tabular-nums ${profitRate >= 0 ? "text-white" : "text-red-300"}`}>
+                {profitRate.toFixed(2)}%
+              </p>
+            </div>
+            {incentiveTotal > 0 && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-3.5 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">장려금</p>
+                <p className="mt-2 text-lg font-semibold tabular-nums text-white">
+                  {formatCurrency(incentiveTotal)}원
+                </p>
+              </div>
+            )}
           </div>
         </div>
         {/* 우측: 지출 내역 */}
-        <div className="space-y-4">
+        <div className="grid gap-5 2xl:grid-cols-2">
           <ExpenseSection
             category="장비"
             items={equipmentItems}
@@ -737,7 +736,6 @@ export default function ExpenseTab({
             onUpdate={handleUpdate}
             onDelete={handleDelete}
           />
-          <div className="border-t border-gray-100" />
           <ExpenseSection
             category="설치"
             items={installItems}

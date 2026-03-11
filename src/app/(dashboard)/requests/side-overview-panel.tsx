@@ -3,6 +3,7 @@
 // ----- 고객 정보 패널 (심플 플랫) -----
 
 import { formatPhone } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { Pencil } from "lucide-react"
 import type { CustomerOption } from "./kanban-types"
 import { CustomerPanel } from "./customer-panel"
@@ -40,57 +41,100 @@ export function SideOverviewPanel({
   // 미연결 상태
   if (!selectedItem.customer) {
     return (
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-gray-300">고객 미연결</span>
-        <CustomerPanel
-          customer={null}
-          customers={localCustomers}
-          onLink={onCustomerLink}
-          onUnlink={onCustomerUnlink}
-          onCreateAndLink={onCustomerCreateAndLink}
-          onOpenDetail={onOpenCustomerDetail}
-          compact
-        />
-      </div>
+      <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">고객 정보</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-900">고객을 연결해주세요</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              영업 진행 전 고객사를 먼저 연결하면 견적, 계약, 정산 정보가 한 흐름으로 묶입니다.
+            </p>
+          </div>
+          <CustomerPanel
+            customer={null}
+            customers={localCustomers}
+            onLink={onCustomerLink}
+            onUnlink={onCustomerUnlink}
+            onCreateAndLink={onCustomerCreateAndLink}
+            onOpenDetail={onOpenCustomerDetail}
+            compact
+          />
+        </div>
+      </section>
     )
   }
 
   // 삭제된 고객
   if (selectedItem.customer.deleted_at) {
     return (
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-red-400">삭제된 고객</span>
-        <CustomerPanel
-          customer={selectedItem.customer}
-          customers={localCustomers}
-          onLink={onCustomerLink}
-          onUnlink={onCustomerUnlink}
-          onCreateAndLink={onCustomerCreateAndLink}
-          onOpenDetail={onOpenCustomerDetail}
-          compact
-        />
-      </div>
+      <section className="rounded-2xl border border-red-200 bg-red-50/70 p-5 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-400">고객 정보</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-900">삭제된 고객이 연결되어 있습니다</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+              다른 고객으로 교체하거나 연결을 해제해야 현재 현장 정보가 정확하게 유지됩니다.
+            </p>
+          </div>
+          <CustomerPanel
+            customer={selectedItem.customer}
+            customers={localCustomers}
+            onLink={onCustomerLink}
+            onUnlink={onCustomerUnlink}
+            onCreateAndLink={onCustomerCreateAndLink}
+            onOpenDetail={onOpenCustomerDetail}
+            compact
+          />
+        </div>
+      </section>
     )
   }
 
-  // 연결된 고객 — 플랫 리스트
+  const infoItems = [
+    {
+      label: "담당자",
+      value: customerDetail?.contact_name || "미등록",
+      muted: !customerDetail?.contact_name,
+    },
+    {
+      label: "연락처",
+      value: customerDetail?.phone ? formatPhone(customerDetail.phone) : "미등록",
+      muted: !customerDetail?.phone,
+    },
+    {
+      label: "이메일",
+      value: customerDetail?.email || "미등록",
+      muted: !customerDetail?.email,
+    },
+    {
+      label: "주소",
+      value: customerDetail?.address || "미등록",
+      muted: !customerDetail?.address,
+    },
+  ]
+
   return (
-    <div className="space-y-2">
-      {/* 회사명 + 액션 */}
-      <div className="flex items-center justify-between gap-2">
-        <button
-          onClick={onOpenCustomerDetail}
-          className="text-sm font-semibold text-gray-900 truncate hover:text-gray-700 transition-colors"
-        >
-          {selectedItem.customer.company_name}
-        </button>
-        <div className="flex items-center gap-0.5 shrink-0">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">고객 정보</p>
+          <button
+            onClick={onOpenCustomerDetail}
+            className="mt-2 block min-w-0 text-left text-lg font-semibold text-slate-900 transition-colors hover:text-slate-700"
+          >
+            <span className="block truncate">{selectedItem.customer.company_name}</span>
+          </button>
+          <p className="mt-1 text-sm text-slate-500">
+            현장과 연결된 고객 기본 정보를 빠르게 확인하고 수정할 수 있습니다.
+          </p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={onOpenCustomerDetail}
             title="고객 상세"
-            className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-700"
           >
-            <Pencil className="h-3 w-3" />
+            <Pencil className="h-4 w-4" />
           </button>
           <CustomerPanel
             customer={selectedItem.customer}
@@ -104,36 +148,16 @@ export function SideOverviewPanel({
         </div>
       </div>
 
-      {/* 상세 정보 — 라벨:값 */}
-      <div className="space-y-1">
-        {customerDetail?.contact_name && (
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-400">담당자</span>
-            <span className="text-gray-700">{customerDetail.contact_name}</span>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {infoItems.map((item) => (
+          <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
+            <p className={cn("mt-2 text-sm leading-6", item.muted ? "text-slate-400" : "text-slate-700")}>
+              {item.value}
+            </p>
           </div>
-        )}
-        {customerDetail?.phone && (
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-400">연락처</span>
-            <span className="text-gray-700">{formatPhone(customerDetail.phone)}</span>
-          </div>
-        )}
-        {customerDetail?.email && (
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-400">이메일</span>
-            <span className="text-gray-700 truncate ml-4">{customerDetail.email}</span>
-          </div>
-        )}
-        {customerDetail?.address && (
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-400 shrink-0">주소</span>
-            <span className="text-gray-700 truncate ml-4">{customerDetail.address}</span>
-          </div>
-        )}
-        {!customerDetail?.contact_name && !customerDetail?.phone && (
-          <p className="text-xs text-gray-300">상세 정보 미등록</p>
-        )}
+        ))}
       </div>
-    </div>
+    </section>
   )
 }
