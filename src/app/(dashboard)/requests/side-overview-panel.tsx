@@ -1,6 +1,6 @@
 "use client"
 
-// ----- 고객 정보 패널 (심플 플랫) -----
+// ----- 고객 정보 패널 (컴팩트) -----
 
 import { formatPhone } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -41,14 +41,11 @@ export function SideOverviewPanel({
   // 미연결 상태
   if (!selectedItem.customer) {
     return (
-      <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">고객 정보</p>
-            <h3 className="mt-2 text-lg font-semibold text-slate-900">고객을 연결해주세요</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-500">
-              영업 진행 전 고객사를 먼저 연결하면 견적, 계약, 정산 정보가 한 흐름으로 묶입니다.
-            </p>
+      <section className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="text-xs font-semibold text-slate-400">고객</p>
+            <p className="text-sm font-medium text-slate-500">미연결</p>
           </div>
           <CustomerPanel
             customer={null}
@@ -67,14 +64,11 @@ export function SideOverviewPanel({
   // 삭제된 고객
   if (selectedItem.customer.deleted_at) {
     return (
-      <section className="rounded-2xl border border-red-200 bg-red-50/70 p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-red-400">고객 정보</p>
-            <h3 className="mt-2 text-lg font-semibold text-slate-900">삭제된 고객이 연결되어 있습니다</h3>
-            <p className="mt-1 text-sm leading-6 text-slate-500">
-              다른 고객으로 교체하거나 연결을 해제해야 현재 현장 정보가 정확하게 유지됩니다.
-            </p>
+      <section className="rounded-xl border border-red-200 bg-red-50/70 px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="text-xs font-semibold text-red-400">고객</p>
+            <p className="text-sm font-medium text-slate-600 line-through">삭제된 고객</p>
           </div>
           <CustomerPanel
             customer={selectedItem.customer}
@@ -90,51 +84,33 @@ export function SideOverviewPanel({
     )
   }
 
+  // 고객 정보 인라인 항목
   const infoItems = [
-    {
-      label: "담당자",
-      value: customerDetail?.contact_name || "미등록",
-      muted: !customerDetail?.contact_name,
-    },
-    {
-      label: "연락처",
-      value: customerDetail?.phone ? formatPhone(customerDetail.phone) : "미등록",
-      muted: !customerDetail?.phone,
-    },
-    {
-      label: "이메일",
-      value: customerDetail?.email || "미등록",
-      muted: !customerDetail?.email,
-    },
-    {
-      label: "주소",
-      value: customerDetail?.address || "미등록",
-      muted: !customerDetail?.address,
-    },
+    { label: "담당자", value: customerDetail?.contact_name, },
+    { label: "연락처", value: customerDetail?.phone ? formatPhone(customerDetail.phone) : null, },
+    { label: "이메일", value: customerDetail?.email, },
   ]
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">고객 정보</p>
+    <section className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      {/* 1행: 고객명 + 액션 버튼 */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <p className="shrink-0 text-xs font-semibold text-slate-400">고객</p>
           <button
             onClick={onOpenCustomerDetail}
-            className="mt-2 block min-w-0 text-left text-lg font-semibold text-slate-900 transition-colors hover:text-slate-700"
+            className="min-w-0 truncate text-sm font-semibold text-slate-900 transition-colors hover:text-slate-600"
           >
-            <span className="block truncate">{selectedItem.customer.company_name}</span>
+            {selectedItem.customer.company_name}
           </button>
-          <p className="mt-1 text-sm text-slate-500">
-            현장과 연결된 고객 기본 정보를 빠르게 확인하고 수정할 수 있습니다.
-          </p>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={onOpenCustomerDetail}
             title="고객 상세"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-700"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition-colors hover:border-slate-300 hover:text-slate-700"
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-3 w-3" />
           </button>
           <CustomerPanel
             customer={selectedItem.customer}
@@ -148,15 +124,20 @@ export function SideOverviewPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      {/* 2행: 핵심 정보 인라인 */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         {infoItems.map((item) => (
-          <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
-            <p className={cn("mt-2 text-sm leading-6", item.muted ? "text-slate-400" : "text-slate-700")}>
-              {item.value}
-            </p>
-          </div>
+          item.value ? (
+            <span key={item.label} className="inline-flex items-center gap-1">
+              <span className="text-slate-400">{item.label}</span>
+              <span className="text-slate-600">{item.value}</span>
+            </span>
+          ) : null
         ))}
+        {/* 아무 정보도 없으면 안내 */}
+        {infoItems.every((item) => !item.value) && (
+          <span className="text-slate-400">상세 정보 미등록</span>
+        )}
       </div>
     </section>
   )

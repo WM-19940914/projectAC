@@ -89,6 +89,7 @@ export type SettlementStage = "선금" | "중도금" | "잔금"
 export const SETTLEMENT_STAGE_ORDER: SettlementStage[] = ["선금", "중도금", "잔금"]
 export const EMPTY_STAGE_RATIOS: Record<SettlementStage, number> = { 선금: 0, 중도금: 0, 잔금: 0 }
 export const EMPTY_STAGE_SCHEDULED_DATES: Record<SettlementStage, string> = { 선금: "", 중도금: "", 잔금: "" }
+export const EMPTY_STAGE_CONDITIONS: Record<SettlementStage, string> = { 선금: "", 중도금: "", 잔금: "" }
 export const DEFAULT_MIDDLE_INSTALLMENTS = 1
 
 export interface ContractDraft {
@@ -106,6 +107,7 @@ export interface PendingContractDraftSnapshot {
   stageRatios: Record<SettlementStage, number>
   middleInstallments: number
   stageScheduledDates: Record<SettlementStage, string>
+  stageConditions: Record<SettlementStage, string>
   settlementStatusMap: Record<string, SettlementStatusInput>
 }
 

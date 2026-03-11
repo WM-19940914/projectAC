@@ -1510,94 +1510,93 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                 {/* 영업 관리 뷰 */}
                 {sheetView === "영업" && (
                 <div className="flex-1 overflow-y-auto bg-slate-50 px-5 pb-8 pt-4 scrollbar-hidden">
-                  <div className="grid gap-4 xl:grid-cols-[minmax(320px,360px)_minmax(0,1fr)]">
-                    <div className="space-y-4">
-                      <SideOverviewPanel
-                        selectedItem={selectedItem}
-                        localCustomers={localCustomers}
-                        onCustomerLink={(id: string) => updateRequestField("customer_id", id)}
-                        onCustomerUnlink={() => updateRequestField("customer_id", null)}
-                        onCustomerCreateAndLink={async (form: { company_name: string; contact_name?: string; phone?: string }) => {
-                          const res = await fetch("/api/customers", {
-                            method: "POST",
+                  <div className="space-y-4">
+                    {/* 고객정보 — 풀 너비 상단 */}
+                    <SideOverviewPanel
+                      selectedItem={selectedItem}
+                      localCustomers={localCustomers}
+                      onCustomerLink={(id: string) => updateRequestField("customer_id", id)}
+                      onCustomerUnlink={() => updateRequestField("customer_id", null)}
+                      onCustomerCreateAndLink={async (form: { company_name: string; contact_name?: string; phone?: string }) => {
+                        const res = await fetch("/api/customers", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify(form),
+                        })
+                        const result = await res.json()
+                        if (!res.ok) throw new Error(result.error)
+                        const nc = result.data
+                        setLocalCustomers((prev) => [...prev, {
+                          id: nc.id,
+                          company_name: nc.company_name,
+                          contact_name: nc.contact_name ?? null,
+                          phone: nc.phone ?? null,
+                          email: nc.email ?? null,
+                          address: nc.address ?? null,
+                          representative: nc.representative ?? null,
+                          business_number: nc.business_number ?? null,
+                          memo: nc.memo ?? null,
+                        }])
+                        const updatedItem = {
+                          ...selectedItem,
+                          customer: { id: nc.id, company_name: nc.company_name, deleted_at: null },
+                        }
+                        setSelectedItem((prev) => prev ? updatedItem : null)
+                        setColumns((prev) => prev.map((col) => ({
+                          ...col,
+                          items: col.items.map((i) => i.id === selectedItem.id ? updatedItem : i),
+                        })))
+                        setSaveMessage("저장 중...")
+                        try {
+                          const linkRes = await fetch("/api/requests", {
+                            method: "PATCH",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(form),
+                            body: JSON.stringify({ id: selectedItem.id, customer_id: nc.id }),
                           })
-                          const result = await res.json()
-                          if (!res.ok) throw new Error(result.error)
-                          const nc = result.data
-                          setLocalCustomers((prev) => [...prev, {
-                            id: nc.id,
-                            company_name: nc.company_name,
-                            contact_name: nc.contact_name ?? null,
-                            phone: nc.phone ?? null,
-                            email: nc.email ?? null,
-                            address: nc.address ?? null,
-                            representative: nc.representative ?? null,
-                            business_number: nc.business_number ?? null,
-                            memo: nc.memo ?? null,
-                          }])
-                          const updatedItem = {
-                            ...selectedItem,
-                            customer: { id: nc.id, company_name: nc.company_name, deleted_at: null },
-                          }
-                          setSelectedItem((prev) => prev ? updatedItem : null)
-                          setColumns((prev) => prev.map((col) => ({
-                            ...col,
-                            items: col.items.map((i) => i.id === selectedItem.id ? updatedItem : i),
-                          })))
-                          setSaveMessage("저장 중...")
-                          try {
-                            const linkRes = await fetch("/api/requests", {
-                              method: "PATCH",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ id: selectedItem.id, customer_id: nc.id }),
-                            })
-                            if (!linkRes.ok) {
-                              setSaveMessage("저장 실패")
-                              setTimeout(() => setSaveMessage(""), 2000)
-                            } else {
-                              setSaveMessage("자동 저장됨")
-                              setTimeout(() => setSaveMessage(""), 1500)
-                            }
-                          } catch {
+                          if (!linkRes.ok) {
                             setSaveMessage("저장 실패")
                             setTimeout(() => setSaveMessage(""), 2000)
+                          } else {
+                            setSaveMessage("자동 저장됨")
+                            setTimeout(() => setSaveMessage(""), 1500)
                           }
-                        }}
-                        onOpenCustomerDetail={() => {
-                          if (selectedItem.customer?.id) setCustomerDetailId(selectedItem.customer.id)
-                        }}
-                        onUpdateField={(field, value) => updateRequestField(field, value)}
-                      />
+                        } catch {
+                          setSaveMessage("저장 실패")
+                          setTimeout(() => setSaveMessage(""), 2000)
+                        }
+                      }}
+                      onOpenCustomerDetail={() => {
+                        if (selectedItem.customer?.id) setCustomerDetailId(selectedItem.customer.id)
+                      }}
+                      onUpdateField={(field, value) => updateRequestField(field, value)}
+                    />
 
-                      <QuotationsTab
-                        quotations={quotations}
-                        onAddQuote={handleAddQuote}
-                        onEditQuote={handleEditQuote}
-                        confirmedQuoteId={confirmedQuoteId}
-                        onToggleConfirm={handleToggleConfirmedQuote}
-                      />
-                    </div>
-
-                    <div className="min-w-0">
-                      <SalesFlowPanel
-                        quotations={quotations}
-                        confirmedQuoteId={confirmedQuoteId}
-                        requestId={selectedItem.id}
-                        requestTitle={selectedItem.title}
-                        requestCustomer={selectedItem.customer}
-                        requestContractId={selectedItem.contract_id}
-                        onLinkContract={async (contractId) => {
-                          await updateRequestField("contract_id", contractId)
-                        }}
-                        onSavedContract={(contractId) => {
-                          void loadContractSummaryById(contractId, selectedItem.id)
-                        }}
-                        onSummaryChange={handleSummaryChange}
-                        contractSummary={contractSummary}
-                      />
-                    </div>
+                    {/* 견적정보 | 계약정보 | 정산현황 — 3컬럼 + 지출 */}
+                    <SalesFlowPanel
+                      quotationsSlot={
+                        <QuotationsTab
+                          quotations={quotations}
+                          onAddQuote={handleAddQuote}
+                          onEditQuote={handleEditQuote}
+                          confirmedQuoteId={confirmedQuoteId}
+                          onToggleConfirm={handleToggleConfirmedQuote}
+                        />
+                      }
+                      quotations={quotations}
+                      confirmedQuoteId={confirmedQuoteId}
+                      requestId={selectedItem.id}
+                      requestTitle={selectedItem.title}
+                      requestCustomer={selectedItem.customer}
+                      requestContractId={selectedItem.contract_id}
+                      onLinkContract={async (contractId) => {
+                        await updateRequestField("contract_id", contractId)
+                      }}
+                      onSavedContract={(contractId) => {
+                        void loadContractSummaryById(contractId, selectedItem.id)
+                      }}
+                      onSummaryChange={handleSummaryChange}
+                      contractSummary={contractSummary}
+                    />
                   </div>
                 </div>
                 )}

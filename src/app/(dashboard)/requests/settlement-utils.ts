@@ -9,6 +9,7 @@ import {
   SETTLEMENT_STAGE_ORDER,
   EMPTY_STAGE_RATIOS,
   EMPTY_STAGE_SCHEDULED_DATES,
+  EMPTY_STAGE_CONDITIONS,
   DEFAULT_MIDDLE_INSTALLMENTS,
 } from "./kanban-types"
 
@@ -177,6 +178,17 @@ export function normalizeStageScheduledDates(raw: unknown): Record<SettlementSta
   }
 }
 
+// ----- 조건 정규화 -----
+export function normalizeStageConditions(raw: unknown): Record<SettlementStage, string> {
+  if (!raw || typeof raw !== "object") return { ...EMPTY_STAGE_CONDITIONS }
+  const obj = raw as Record<string, unknown>
+  return {
+    선금: typeof obj.선금 === "string" ? obj.선금 : "",
+    중도금: typeof obj.중도금 === "string" ? obj.중도금 : "",
+    잔금: typeof obj.잔금 === "string" ? obj.잔금 : "",
+  }
+}
+
 // ----- 비율 포맷 -----
 export function formatStagePercent(value: number): string {
   return Number.isFinite(value) ? String(Math.round(value)) : "0"
@@ -197,10 +209,11 @@ export function buildContractSnapshot(params: {
   stageRatios: Record<SettlementStage, number>
   middleInstallments: number
   stageScheduledDates: Record<SettlementStage, string>
+  stageConditions?: Record<SettlementStage, string>
   settlementStatusMap: Record<string, SettlementStatusInput>
   customerId: string | null
 }): string {
-  const { draft, selectedStages, stageRatios, middleInstallments, stageScheduledDates, settlementStatusMap, customerId } = params
+  const { draft, selectedStages, stageRatios, middleInstallments, stageScheduledDates, stageConditions, settlementStatusMap, customerId } = params
   return JSON.stringify({
     id: draft.id,
     title: draft.title.trim(),
@@ -215,6 +228,10 @@ export function buildContractSnapshot(params: {
       ...acc,
       [stage]: stageScheduledDates[stage] || "",
     }), {}),
+    stage_conditions: stageConditions ? selectedStages.reduce((acc, stage) => ({
+      ...acc,
+      [stage]: stageConditions[stage] || "",
+    }), {}) : {},
     settlement_status_map: Object.fromEntries(
       Object.entries(settlementStatusMap).map(([key, value]) => [
         normalizeSettlementStatusKey(key),
