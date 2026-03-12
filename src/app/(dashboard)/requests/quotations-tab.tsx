@@ -4,7 +4,7 @@
 
 import { cn } from "@/lib/utils"
 import { formatShortDate, formatCurrency } from "@/lib/format"
-import { CheckCircle2, Circle, FileText, Plus } from "lucide-react"
+import { CheckCircle2, Circle, ClipboardList, FileText, Plus } from "lucide-react"
 import type { QuotationListItem } from "./kanban-types"
 
 interface QuotationsTabProps {
@@ -22,18 +22,16 @@ export function QuotationsTab({
   confirmedQuoteId,
   onToggleConfirm,
 }: QuotationsTabProps) {
-  // 확정 견적 맨 위, 나머지는 오래된순 (최근 만든 게 아래로)
+  // 오래된순 정렬 (확정 여부 관계없이 위치 유지)
   const sorted = [...quotations].sort((a, b) => {
-    if (a.id === confirmedQuoteId) return -1
-    if (b.id === confirmedQuoteId) return 1
     return a.quotation_date.localeCompare(b.quotation_date)
   })
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between gap-2 mb-3">
-        <p className="text-sm font-semibold text-slate-900">견적 정보</p>
+    <section className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col">
+      {/* 헤더 — 고정 */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 shrink-0">
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><ClipboardList className="h-3.5 w-3.5 text-slate-400" />견적 정보</p>
         <button
           onClick={onAddQuote}
           className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-900 px-3 text-xs font-medium text-white transition-colors hover:bg-slate-800"
@@ -43,13 +41,15 @@ export function QuotationsTab({
         </button>
       </div>
 
+      {/* 스크롤 가능한 콘텐츠 영역 */}
+      <div className="flex-1 overflow-y-auto px-4 pb-4" style={{ scrollbarWidth: "thin", scrollbarColor: "#e2e8f0 transparent" }}>
       {/* 확정 견적 없으면 안내 */}
       {quotations.length > 0 && !confirmedQuoteId && (
         <p className="mb-2 text-[11px] text-slate-400">견적을 확정하면 계약·정산에 반영됩니다</p>
       )}
 
-      {/* 통합 리스트 — 고정 영역, 4개 이하면 빈 슬롯 표시 */}
-      <div className="min-h-[200px] max-h-[400px] flex-1 space-y-1.5 overflow-y-auto scrollbar-thin pr-0.5" style={{ scrollbarWidth: "thin", scrollbarColor: "#e2e8f0 transparent" }}>
+      {/* 통합 리스트 */}
+      <div className="min-h-[200px] flex-1 space-y-1.5">
         {sorted.length > 0 ? (
           <>
           {sorted.map((quote, idx) => {
@@ -161,6 +161,7 @@ export function QuotationsTab({
           ))}
           </>
         )}
+      </div>
       </div>
     </section>
   )

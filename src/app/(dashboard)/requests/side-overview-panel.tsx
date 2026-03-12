@@ -4,7 +4,7 @@
 
 import { formatPhone } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { Pencil } from "lucide-react"
+import { Pencil, UserRound } from "lucide-react"
 import type { CustomerOption } from "./kanban-types"
 import { CustomerPanel } from "./customer-panel"
 
@@ -44,7 +44,7 @@ export function SideOverviewPanel({
       <section className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <p className="text-xs font-semibold text-slate-400">고객</p>
+            <p className="flex items-center gap-1 text-xs font-semibold text-slate-400"><UserRound className="h-3 w-3" />고객</p>
             <p className="text-sm font-medium text-slate-500">미연결</p>
           </div>
           <CustomerPanel
@@ -67,7 +67,7 @@ export function SideOverviewPanel({
       <section className="rounded-xl border border-red-200 bg-red-50/70 px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <p className="text-xs font-semibold text-red-400">고객</p>
+            <p className="flex items-center gap-1 text-xs font-semibold text-red-400"><UserRound className="h-3 w-3" />고객</p>
             <p className="text-sm font-medium text-slate-600 line-through">삭제된 고객</p>
           </div>
           <CustomerPanel
@@ -96,7 +96,7 @@ export function SideOverviewPanel({
       {/* 1행: 고객명 + 액션 버튼 */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <p className="shrink-0 text-xs font-semibold text-slate-400">고객</p>
+          <p className="shrink-0 flex items-center gap-1 text-xs font-semibold text-slate-400"><UserRound className="h-3 w-3" />고객</p>
           <button
             onClick={onOpenCustomerDetail}
             className="min-w-0 truncate text-sm font-semibold text-slate-900 transition-colors hover:text-slate-600"

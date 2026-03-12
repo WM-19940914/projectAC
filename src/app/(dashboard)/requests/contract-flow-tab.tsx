@@ -12,7 +12,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatCurrency } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { AlertCircle, Banknote, CheckCircle2, Plus, Unlink, X } from "lucide-react"
+import { AlertCircle, Banknote, CheckCircle2, Circle, CircleDollarSign, FileSignature, Plus, Unlink, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type {
@@ -472,6 +472,7 @@ export function ContractFlowTab({
     return {
       key: row.key,
       label: row.label,
+      ratio: row.ratio,
       paymentConfirmed,
       paymentStatusLabel,
       paymentEntries: status.payment_entries,
@@ -493,8 +494,8 @@ export function ContractFlowTab({
     ? Math.min(100, Math.round((clampedPaid / totalWithVat) * 100))
     : 0
   const allEntries = settlementStatusRows.flatMap((row) => row.paymentEntries)
-  const confirmedEntryCount = allEntries.filter((entry) => entry.confirmed).length
-  const allConfirmed = allEntries.length > 0 && confirmedEntryCount === allEntries.length
+  const confirmedEntryCount = allEntries.length
+  const allConfirmed = allEntries.length > 0
   const stageCount = settlementStatusRows.length
   const issuedCount = settlementStatusRows.filter((row) => row.taxInvoiceIssued).length
   const taxInvoiceAllIssued = stageCount > 0 && issuedCount === stageCount
@@ -519,7 +520,7 @@ export function ContractFlowTab({
 
     // 단계별 입금완료 요약
     const stageSummariesForCard = settlementStatusRows.map((row) => {
-      const rowPaid = row.paymentEntries.reduce((sum, e) => sum + (e.confirmed ? e.amount : 0), 0)
+      const rowPaid = row.paymentEntries.reduce((sum, e) => sum + e.amount, 0)
       const plannedAmount = row.plannedAmount
       const stageStatus: "paid" | "partial" | "unpaid" =
         rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
@@ -731,7 +732,7 @@ export function ContractFlowTab({
       amount: 0,
       paid_at: getTodayDateString(),
       note: "",
-      confirmed: false,
+      confirmed: true,
     }
     setSettlementStatusMap((prev) => {
       const current = normalizeSettlementStatusInput(prev[normalizedRowKey])
@@ -1372,7 +1373,7 @@ export function ContractFlowTab({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <p className="truncate text-[11px] font-semibold text-gray-700">{row.label}</p>
+                    <p className="truncate text-[11px] font-semibold text-gray-700">{row.label} <span className="font-normal text-slate-400">{row.ratio}%</span></p>
                     <span className={cn(
                       "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold",
                       row.paymentConfirmed
@@ -1396,6 +1397,41 @@ export function ContractFlowTab({
                     <p className="text-[11px] font-bold tabular-nums text-gray-700">{formatCurrency(row.plannedAmount)}</p>
                     <p className="text-[9px] text-gray-400">VAT포함</p>
                   </div>
+                </div>
+
+                {/* 계산서 발행 여부 + 발행일 (입금내역 위에 배치) */}
+                <div className="flex items-center justify-between gap-2 rounded-lg bg-slate-50/80 px-2.5 py-1.5">
+                  <div className="inline-flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextIssued = !row.taxInvoiceIssued
+                        const updates: Partial<SettlementStatusInput> = { tax_invoice_issued: nextIssued }
+                        if (nextIssued && !row.taxInvoiceDate) {
+                          updates.tax_invoice_date = new Date().toISOString().split("T")[0]
+                        }
+                        if (!nextIssued) updates.tax_invoice_date = ""
+                        updateSettlementStatus(row.key, updates)
+                      }}
+                      className={cn(
+                        "inline-flex h-6 w-6 items-center justify-center rounded-lg border transition-colors",
+                        row.taxInvoiceIssued
+                          ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+                          : "border-slate-200 text-slate-300 hover:border-slate-300 hover:text-slate-600"
+                      )}
+                    >
+                      {row.taxInvoiceIssued ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+                    </button>
+                    <span className="text-[10px] text-gray-500">계산서 {row.taxInvoiceIssued ? "발행완료" : "미발행"}</span>
+                  </div>
+                  {row.taxInvoiceIssued && (
+                    <input
+                      type="date"
+                      value={row.taxInvoiceDate || ""}
+                      onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_date: e.target.value })}
+                      className="h-6 rounded border border-gray-200 bg-white px-1.5 text-[10px] tabular-nums text-gray-600 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-300"
+                    />
+                  )}
                 </div>
 
                 {/* 정산금액 / 정산완료일 — 입금내역에서 자동 계산 (읽기전용 요약) */}
@@ -1454,25 +1490,8 @@ export function ContractFlowTab({
                     <div className="space-y-1.5">
                       {row.paymentEntries.map((entry, index) => (
                         <div key={entry.id} className="flex items-center gap-2">
-                          {/* 입금 확인: "입완" 라벨 + 체크박스 */}
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <span className="text-[9px] font-bold text-gray-500">입완</span>
-                            <button
-                              type="button"
-                              onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { confirmed: !entry.confirmed })}
-                              className={cn(
-                                "h-4 w-4 rounded border flex items-center justify-center transition-colors",
-                                entry.confirmed
-                                  ? "border-slate-400 bg-slate-700"
-                                  : "border-gray-300 bg-white hover:border-gray-400"
-                              )}
-                              title={entry.confirmed ? "입금 확인됨 (클릭하면 취소)" : "입금 미확인 (클릭하면 확인)"}
-                            >
-                              {entry.confirmed && (
-                                <CheckCircle2 className="h-3 w-3 text-white" />
-                              )}
-                            </button>
-                          </div>
+                          {/* 입금 아이콘 */}
+                          <span className="shrink-0 text-[11px] font-bold text-slate-400">￦</span>
                           <input
                             type="text"
                             inputMode="numeric"
@@ -1517,37 +1536,6 @@ export function ContractFlowTab({
                   )}
                 </div>
 
-                {/* 세금계산서 발행 여부 + 발행일 */}
-                <div className="flex items-center justify-between gap-2">
-                  <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-[10px] text-gray-500">
-                    <input
-                      type="checkbox"
-                      checked={row.taxInvoiceIssued}
-                      onChange={(e) => {
-                        const issued = e.target.checked
-                        // 발행 체크 시 발행일이 비어있으면 오늘 날짜 자동 입력
-                        const updates: Partial<SettlementStatusInput> = { tax_invoice_issued: issued }
-                        if (issued && !row.taxInvoiceDate) {
-                          updates.tax_invoice_date = new Date().toISOString().split("T")[0]
-                        }
-                        if (!issued) {
-                          updates.tax_invoice_date = ""
-                        }
-                        updateSettlementStatus(row.key, updates)
-                      }}
-                      className="h-3.5 w-3.5 rounded border-slate-400 accent-slate-700 focus:ring-2 focus:ring-slate-300/60"
-                    />
-                    {row.taxInvoiceIssued ? "계산서 발행" : "계산서 미발행"}
-                  </label>
-                  {row.taxInvoiceIssued && (
-                    <input
-                      type="date"
-                      value={row.taxInvoiceDate || ""}
-                      onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_date: e.target.value })}
-                      className="h-6 rounded border border-gray-200 bg-white px-1.5 text-[10px] tabular-nums text-gray-600 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-300"
-                    />
-                  )}
-                </div>
               </div>
             ))}
           </div>
@@ -1568,9 +1556,9 @@ export function ContractFlowTab({
       {showIntegrated && !isLoading && (
         <>
             {/* ── 계약 정보 ── */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold text-slate-900">계약 정보</p>
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col">
+              <div className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><FileSignature className="h-3.5 w-3.5 text-slate-400" />계약 정보</p>
                 {isPersistedContract && (
                   <button
                     type="button"
@@ -1583,6 +1571,7 @@ export function ContractFlowTab({
                   </button>
                 )}
               </div>
+              <div className="flex-1 overflow-y-auto px-4 pb-4" style={{ scrollbarWidth: "thin", scrollbarColor: "#e2e8f0 transparent" }}>
               {!isContractFormVisible ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-center">
                   <p className="text-sm text-slate-500">계약 정보 없음</p>
@@ -1797,18 +1786,20 @@ export function ContractFlowTab({
                   )}
                 </div>
               )}
+              </div>
             </div>
 
             {/* ── 정산 현황 ── */}
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <p className="text-sm font-semibold text-slate-900">정산 현황</p>
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col">
+              <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 shrink-0">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><CircleDollarSign className="h-3.5 w-3.5 text-slate-400" />정산 현황</p>
                 {overdueCount > 0 && (
                   <span className="inline-flex h-6 items-center rounded-full bg-red-100 px-2 text-[10px] font-medium text-red-700">
                     지연 {overdueCount}건
                   </span>
                 )}
               </div>
+              <div className="flex-1 overflow-y-auto px-4 pb-4" style={{ scrollbarWidth: "thin", scrollbarColor: "#e2e8f0 transparent" }}>
               {!isContractFormVisible ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-center">
                   <p className="text-xs text-slate-400">계약 생성 후 표시됩니다</p>
@@ -1823,7 +1814,7 @@ export function ContractFlowTab({
                   <div>
                     <div className="flex items-center justify-between mb-1 text-[11px]">
                       <span className="font-semibold text-slate-900">{progressPercent}%</span>
-                      <span className="text-slate-400 tabular-nums">{formatCurrency(clampedPaid)} / {formatCurrency(totalWithVat)}원</span>
+                      <span className="text-slate-400 tabular-nums">{formatCurrency(clampedPaid)} / {formatCurrency(totalWithVat)}원 <span className="text-[9px]">(VAT포함)</span></span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                       <div className="h-full rounded-full bg-slate-900 transition-all" style={{ width: `${progressPercent}%` }} />
@@ -1833,172 +1824,179 @@ export function ContractFlowTab({
                     )}
                   </div>
 
-                  {/* 세금계산서 테이블 */}
-                  <div className="rounded-lg border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-400 border-b border-slate-200">
-                      세금계산서
-                    </div>
-                    <table className="w-full text-[11px]">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-[10px] text-slate-400">
-                          <th className="py-1.5 pl-3 text-left font-medium">단계</th>
-                          <th className="py-1.5 text-right font-medium">발행금액</th>
-                          <th className="py-1.5 text-center font-medium">발행일</th>
-                          <th className="py-1.5 pr-3 text-center font-medium w-[52px]">발행</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {settlementStatusRows.map((row) => {
-                          const issued = row.taxInvoiceIssued
-                          return (
-                            <tr key={row.key} className="border-b border-slate-50 last:border-b-0">
-                              <td className="py-2 pl-3">
-                                <span className="font-medium text-slate-700">{row.label}</span>
-                              </td>
-                              <td className="py-2 text-right tabular-nums font-medium text-slate-700">
-                                {formatCurrency(row.plannedAmount)}
-                              </td>
-                              <td className="py-2 text-center">
-                                {issued ? (
-                                  <input
-                                    type="date"
-                                    value={row.taxInvoiceDate || ""}
-                                    onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_date: e.target.value })}
-                                    className="h-5 w-full border-0 bg-transparent px-0 text-center text-[10px] tabular-nums text-slate-600 outline-none"
-                                  />
-                                ) : (
-                                  <span className="text-slate-300">—</span>
-                                )}
-                              </td>
-                              <td className="py-2 pr-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextIssued = !issued
-                                    const updates: Partial<SettlementStatusInput> = { tax_invoice_issued: nextIssued }
-                                    if (nextIssued && !row.taxInvoiceDate) {
-                                      updates.tax_invoice_date = new Date().toISOString().split("T")[0]
-                                    }
-                                    if (!nextIssued) updates.tax_invoice_date = ""
-                                    updateSettlementStatus(row.key, updates)
-                                  }}
-                                  className={cn(
-                                    "inline-flex h-6 w-6 items-center justify-center rounded-md border transition-colors",
-                                    issued
-                                      ? "border-emerald-300 bg-emerald-50 text-emerald-600"
-                                      : "border-slate-200 bg-white text-slate-300 hover:border-slate-300 hover:text-slate-500"
-                                  )}
-                                >
-                                  {issued ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Banknote className="h-3.5 w-3.5" />}
-                                </button>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* 입금내역 — 총 계약금액 기준, 단계 구분 없음 */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] font-semibold text-slate-700">입금내역</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const targetStage = nextPendingStage?.key || settlementStatusRows[settlementStatusRows.length - 1]?.key
-                          if (targetStage) addSettlementPaymentEntry(targetStage)
-                        }}
-                        className="inline-flex h-6 items-center gap-0.5 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors"
+                  {/* 단계별 정산 카드 */}
+                  {settlementStatusRows.map((row) => {
+                    const issued = row.taxInvoiceIssued
+                    return (
+                      <div
+                        key={row.key}
+                        className={cn(
+                          "rounded-lg border overflow-hidden transition-colors",
+                          row.overdueDays > 0
+                            ? "border-soft-blush/40 bg-soft-blush/5"
+                            : row.paymentConfirmed
+                              ? "border-muted-teal/30 bg-muted-teal/5"
+                              : "border-slate-200"
+                        )}
                       >
-                        <Plus className="h-3 w-3" />
-                        추가
-                      </button>
-                    </div>
-
-                    {allPaymentEntriesFlat.length === 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const targetStage = nextPendingStage?.key || settlementStatusRows[settlementStatusRows.length - 1]?.key
-                          if (targetStage) addSettlementPaymentEntry(targetStage)
-                        }}
-                        className="w-full rounded-lg border border-dashed border-slate-200 bg-slate-50/50 py-4 text-center text-[11px] text-slate-400 hover:border-slate-300 hover:text-slate-600 transition-colors"
-                      >
-                        <Banknote className="mx-auto mb-1 h-4 w-4" />
-                        첫 입금을 기록하세요
-                      </button>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {allPaymentEntriesFlat.map((entry, index) => (
-                          <div
-                            key={entry.id}
-                            className={cn(
-                              "flex items-center gap-2 rounded-lg border px-2.5 py-2 transition-colors",
-                              entry.confirmed
-                                ? "border-emerald-200 bg-emerald-50/30"
-                                : "border-slate-200 bg-white"
+                        {/* 헤더: 단계명 비율% + 금액(VAT포함) + 상태 */}
+                        <div className={cn(
+                          "flex items-center justify-between gap-2 px-3 py-2",
+                          row.paymentConfirmed ? "bg-muted-teal/5" : "bg-slate-50/70"
+                        )}>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-[11px] font-bold text-slate-800">{row.label} <span className="font-normal text-slate-400">{row.ratio}%</span></span>
+                            <span className={cn(
+                              "inline-flex h-[18px] shrink-0 items-center rounded-full px-1.5 text-[9px] font-semibold",
+                              row.paymentConfirmed
+                                ? "bg-muted-teal/15 text-muted-teal"
+                                : row.actualAmount > 0
+                                  ? "bg-vanilla-custard/20 text-vanilla-custard"
+                                  : "bg-slate-100 text-slate-400"
+                            )}>
+                              {row.paymentStatusLabel}
+                            </span>
+                            {row.overdueDays > 0 && (
+                              <span className="text-[9px] font-bold text-soft-blush">D+{row.overdueDays}</span>
                             )}
-                          >
-                            {/* 입금 확인 토글 */}
-                            <button
-                              type="button"
-                              onClick={() => updateSettlementPaymentEntry(entry.stageKey, entry.id, { confirmed: !entry.confirmed })}
-                              className={cn(
-                                "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all",
-                                entry.confirmed
-                                  ? "border-emerald-500 bg-emerald-500"
-                                  : "border-slate-300 bg-white hover:border-slate-400"
-                              )}
-                              title={entry.confirmed ? "입금 확인됨" : "입금 미확인"}
-                            >
-                              {entry.confirmed && <CheckCircle2 className="h-3 w-3 text-white" />}
-                            </button>
-
-                            {/* 금액 입력 */}
-                            <div className="flex-1 min-w-0">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={entry.amount > 0 ? entry.amount.toLocaleString("ko-KR") : ""}
-                                onChange={(e) => {
-                                  const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
-                                  updateSettlementPaymentEntry(entry.stageKey, entry.id, {
-                                    amount: digitsOnly ? Math.max(0, Math.round(Number(digitsOnly))) : 0,
-                                  })
-                                }}
-                                placeholder="금액 입력"
-                                className={cn(
-                                  "w-full border-0 bg-transparent px-0 text-sm font-semibold tabular-nums outline-none placeholder:text-slate-300",
-                                  entry.confirmed ? "text-emerald-800" : "text-slate-900"
-                                )}
-                              />
-                            </div>
-
-                            {/* 입금일 */}
-                            <input
-                              type="date"
-                              value={entry.paid_at}
-                              onChange={(e) => updateSettlementPaymentEntry(entry.stageKey, entry.id, { paid_at: e.target.value })}
-                              className="h-6 w-[110px] shrink-0 border-0 bg-transparent px-0 text-right text-[11px] tabular-nums text-slate-500 outline-none"
-                            />
-
-                            {/* 삭제 */}
-                            <button
-                              type="button"
-                              onClick={() => removeSettlementPaymentEntry(entry.stageKey, entry.id)}
-                              className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-300 hover:bg-red-500/10 hover:text-red-500 transition-colors"
-                              aria-label={`입금내역 ${index + 1} 삭제`}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
                           </div>
-                        ))}
+                          <span className="shrink-0 text-[11px] font-bold tabular-nums text-slate-700">
+                            {formatCurrency(row.plannedAmount)}
+                          </span>
+                        </div>
+
+                        <div className="px-3 py-2 space-y-2">
+                          {/* 계산서 발행 여부 + 발행일 */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="inline-flex shrink-0 items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextIssued = !issued
+                                  const updates: Partial<SettlementStatusInput> = { tax_invoice_issued: nextIssued }
+                                  if (nextIssued && !row.taxInvoiceDate) {
+                                    updates.tax_invoice_date = new Date().toISOString().split("T")[0]
+                                  }
+                                  if (!nextIssued) updates.tax_invoice_date = ""
+                                  updateSettlementStatus(row.key, updates)
+                                }}
+                                className={cn(
+                                  "inline-flex h-6 w-6 items-center justify-center rounded-lg border transition-colors",
+                                  issued
+                                    ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+                                    : "border-slate-200 text-slate-300 hover:border-slate-300 hover:text-slate-600"
+                                )}
+                              >
+                                {issued ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />}
+                              </button>
+                              <span className="text-[10px] text-slate-500">계산서 {issued ? "발행완료" : "미발행"}</span>
+                            </div>
+                            {issued && (
+                              <input
+                                type="date"
+                                value={row.taxInvoiceDate || ""}
+                                onChange={(e) => updateSettlementStatus(row.key, { tax_invoice_date: e.target.value })}
+                                className="h-6 rounded border border-slate-200 bg-white px-1.5 text-[10px] tabular-nums text-slate-600 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-300"
+                              />
+                            )}
+                          </div>
+
+                          {/* 구분선 */}
+                          <div className="border-t border-dashed border-slate-100" />
+
+                          {/* 입금내역 (VAT포함) */}
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[10px] font-medium text-slate-500">입금내역 <span className="text-slate-400 font-normal">(VAT포함)</span></span>
+                              <button
+                                type="button"
+                                onClick={() => addSettlementPaymentEntry(row.key)}
+                                className="inline-flex h-5 items-center gap-0.5 rounded-md border border-slate-200 bg-white px-1.5 text-[9px] font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700 transition-colors"
+                              >
+                                <Plus className="h-2.5 w-2.5" />
+                                추가
+                              </button>
+                            </div>
+                            {row.paymentEntries.length === 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => addSettlementPaymentEntry(row.key)}
+                                className="w-full rounded-md border border-dashed border-slate-200 bg-slate-50/50 py-2.5 text-center text-[10px] text-slate-400 hover:border-slate-300 hover:text-slate-600 transition-colors"
+                              >
+                                입금내역을 추가하세요
+                              </button>
+                            ) : (
+                              <div className="space-y-1">
+                                {row.paymentEntries.map((entry, index) => (
+                                  <div key={entry.id} className="flex items-center gap-1.5">
+                                    {/* 입금 아이콘 */}
+                                    <span className="shrink-0 text-[11px] font-bold text-slate-400">￦</span>
+                                    {/* 금액 입력 */}
+                                    <input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={entry.amount > 0 ? entry.amount.toLocaleString("ko-KR") : ""}
+                                      onChange={(e) => {
+                                        const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                                        updateSettlementPaymentEntry(row.key, entry.id, {
+                                          amount: digitsOnly ? Math.max(0, Math.round(Number(digitsOnly))) : 0,
+                                        })
+                                      }}
+                                      placeholder="금액"
+                                      className={cn(
+                                        "min-w-0 flex-1 border-0 bg-transparent px-0 text-[11px] font-semibold tabular-nums text-slate-900 outline-none placeholder:text-slate-300"
+                                      )}
+                                    />
+                                    {/* 자동입력 버튼 */}
+                                    <button
+                                      type="button"
+                                      onClick={() => updateSettlementPaymentEntry(row.key, entry.id, { amount: row.plannedAmount })}
+                                      className="shrink-0 rounded px-1 py-0.5 text-[8px] font-bold text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50 hover:text-slate-700"
+                                      title={`${formatCurrency(row.plannedAmount)}원 자동입력`}
+                                    >
+                                      자동
+                                    </button>
+                                    {/* 입금일 */}
+                                    <input
+                                      type="date"
+                                      value={entry.paid_at}
+                                      onChange={(e) => updateSettlementPaymentEntry(row.key, entry.id, { paid_at: e.target.value })}
+                                      className="h-5 w-[100px] shrink-0 border-0 bg-transparent px-0 text-right text-[10px] tabular-nums text-slate-500 outline-none"
+                                    />
+                                    {/* 삭제 */}
+                                    <button
+                                      type="button"
+                                      onClick={() => removeSettlementPaymentEntry(row.key, entry.id)}
+                                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-slate-300 hover:bg-soft-blush/10 hover:text-soft-blush transition-colors"
+                                      aria-label={`입금내역 ${index + 1} 삭제`}
+                                    >
+                                      <X className="h-2.5 w-2.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {/* 정산 요약 */}
+                            {row.paymentEntries.length > 0 && (
+                              <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-slate-100 text-[10px]">
+                                <span className="text-slate-400">
+                                  정산 <span className="font-medium tabular-nums text-slate-600">{formatCurrency(row.actualAmount)}원</span>
+                                </span>
+                                {row.shortfallAmount > 0 && (
+                                  <span className="font-medium text-soft-blush">
+                                    미수금 {formatCurrency(row.shortfallAmount)}원
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    )}
-                  </div>
+                    )
+                  })}
                 </div>
               )}
+              </div>
             </div>
         </>
       )}

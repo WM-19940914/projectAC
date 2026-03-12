@@ -65,8 +65,8 @@ export function InlineTitle({
         }}
         autoFocus
         className={cn(
-          "font-sans font-semibold text-left w-full bg-transparent border-b-2 border-slate-400 focus:outline-none",
-          compact ? "text-base py-0.5" : "text-2xl py-1"
+          "text-left w-full bg-transparent border-b-2 border-slate-400 focus:outline-none",
+          compact ? "font-heading text-lg font-bold tracking-tight py-0.5" : "font-sans text-2xl font-semibold py-1"
         )}
       />
     )
@@ -76,8 +76,8 @@ export function InlineTitle({
     <h2
       onClick={() => setIsEditing(true)}
       className={cn(
-        "font-sans font-semibold text-left cursor-pointer rounded px-1 -mx-1 hover:bg-slate-50 transition-colors truncate",
-        compact ? "text-base py-0.5" : "text-2xl py-1"
+        "text-left cursor-pointer rounded px-1 -mx-1 hover:bg-slate-50 transition-colors truncate",
+        compact ? "font-heading text-lg font-bold tracking-tight py-0.5" : "font-sans text-2xl font-semibold py-1"
       )}
       title={value}
     >

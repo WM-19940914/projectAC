@@ -23,7 +23,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet"
-import { AlertCircle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CalendarRange, CheckCircle2, EyeOff, Hash, Plus, Receipt, Search, SmilePlus, Trash2, Truck, X, XCircle } from "lucide-react"
+import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CalendarRange, CheckCircle2, EyeOff, Hash, Plus, Receipt, Search, Send, SmilePlus, Trash2, Truck, X, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/providers/auth-provider"
 import { Input } from "@/components/ui/input"
@@ -1414,14 +1414,60 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
               <>
                 {/* 통합 헤더: ← 닫기 + 상태배지 + 제목 + 메타칩 + 액션 */}
                 <div className="border-b border-slate-200/60 bg-gradient-to-r from-slate-50/80 to-white">
-                  {/* 1행: 뒤로가기 + 상태 + 제목(편집 가능) + 우측 액션 */}
-                  <div className="flex items-center gap-3 px-5 pt-3 pb-1.5">
+                  {/* 1행: 종이비행기 + 현장명(강조) + 우측 액션 */}
+                  <div className="flex items-center gap-2.5 px-5 pt-3 pb-1.5">
+                    <Send className="h-4.5 w-4.5 text-slate-900 shrink-0" strokeWidth={2.5} />
+                    <SheetHeader className="shrink min-w-0 max-w-[50%]">
+                      <SheetTitle className="sr-only">의뢰 상세</SheetTitle>
+                      <SheetDescription className="sr-only">의뢰 상세 정보</SheetDescription>
+                      <InlineTitle
+                        value={selectedItem.title}
+                        compact
+                        onConfirm={(v) => {
+                          if (v.trim()) updateRequestField("title", v.trim())
+                        }}
+                      />
+                    </SheetHeader>
                     <button
-                      onClick={() => setSelectedItem(null)}
-                      className="p-1 rounded-full hover:bg-gray-100 transition-colors shrink-0"
+                      onClick={() => {
+                        setDeleteTarget(selectedItem)
+                        setSelectedItem(null)
+                      }}
+                      className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-500/10 transition-colors shrink-0"
+                      title="삭제"
                     >
-                      <ArrowLeft className="h-4.5 w-4.5 text-gray-500" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                      {saveMessage && (
+                        <span className={cn(
+                          "text-xs",
+                          saveMessage.includes("실패") ? "text-red-500" : "text-muted-teal"
+                        )}>
+                          {saveMessage}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setSelectedItem(null)}
+                        className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+                      >
+                        <X className="h-4.5 w-4.5 text-gray-500" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* 2행: 메타 칩 (날짜 · 고객 · 생성일) */}
+                  <div className="flex items-center gap-1.5 px-5 pb-2.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100/80 text-[11px] text-slate-500">
+                      <Calendar className="h-2.5 w-2.5" />
+                      {selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : "문의일 미지정"}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100/80 text-[11px] text-slate-500">
+                      <Building2 className="h-2.5 w-2.5" />
+                      {selectedItem.customer?.company_name || "고객 미연결"}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-50/80 text-[11px] text-slate-400">
+                      {formatDateTime(selectedItem.created_at).replace(/^\d{2}/, '')} 생성
+                    </span>
                     <InlineSelect
                       value={selectedItem.status}
                       displayValue={selectedItem.status}
@@ -1436,56 +1482,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                       }}
                       align="left"
                     />
-                    <SheetHeader className="flex-1 min-w-0">
-                      <SheetTitle className="sr-only">의뢰 상세</SheetTitle>
-                      <SheetDescription className="sr-only">의뢰 상세 정보</SheetDescription>
-                      <InlineTitle
-                        value={selectedItem.title}
-                        compact
-                        onConfirm={(v) => {
-                          if (v.trim()) updateRequestField("title", v.trim())
-                        }}
-                      />
-                    </SheetHeader>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {saveMessage && (
-                        <span className={cn(
-                          "text-xs",
-                          saveMessage.includes("실패") ? "text-red-500" : "text-muted-teal"
-                        )}>
-                          {saveMessage}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => {
-                          setDeleteTarget(selectedItem)
-                          setSelectedItem(null)
-                        }}
-                        className="px-2.5 py-1 text-xs rounded-md text-red-400 hover:bg-red-500/10 transition-colors"
-                      >
-                        삭제
-                      </button>
-                      <button
-                        onClick={() => setSelectedItem(null)}
-                        className="p-1 rounded-full hover:bg-gray-100 transition-colors"
-                      >
-                        <X className="h-4.5 w-4.5 text-gray-500" />
-                      </button>
-                    </div>
-                  </div>
-                  {/* 2행: 메타 칩 (날짜 · 고객 · 생성일) — 좌측 여백 맞춤 */}
-                  <div className="flex items-center gap-1.5 px-5 pb-2.5 pl-[52px]">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100/80 text-[11px] text-slate-500">
-                      <Calendar className="h-2.5 w-2.5" />
-                      {selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : "문의일 미지정"}
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100/80 text-[11px] text-slate-500">
-                      <Building2 className="h-2.5 w-2.5" />
-                      {selectedItem.customer?.company_name || "고객 미연결"}
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-50/80 text-[11px] text-slate-400">
-                      {formatDateTime(selectedItem.created_at).replace(/^\d{2}/, '')} 생성
-                    </span>
                   </div>
                 </div>
 
@@ -1511,7 +1507,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                 {sheetView === "영업" && (
                 <div className="flex-1 overflow-y-auto bg-slate-50 px-5 pb-8 pt-4 scrollbar-hidden">
                   <div className="space-y-4">
-                    {/* 고객정보 — 풀 너비 상단 */}
+                    {/* 고객정보 — 견적 정보 1컬럼 폭 */}
+                    <div className="xl:w-1/3">
                     <SideOverviewPanel
                       selectedItem={selectedItem}
                       localCustomers={localCustomers}
@@ -1570,6 +1567,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                       }}
                       onUpdateField={(field, value) => updateRequestField(field, value)}
                     />
+                    </div>
 
                     {/* 견적정보 | 계약정보 | 정산현황 — 3컬럼 + 지출 */}
                     <SalesFlowPanel

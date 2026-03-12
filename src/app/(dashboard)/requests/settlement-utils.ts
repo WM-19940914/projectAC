@@ -61,15 +61,13 @@ export function normalizeSettlementStatusInput(raw: unknown): SettlementStatusIn
       confirmed: typeof e.confirmed === "boolean" ? e.confirmed : false,
     }))
 
-  // actual_amount: payment_entries의 confirmed=true 합산 (있으면), 없으면 raw
-  const confirmedSum = entries.reduce((sum, e) => sum + (e.confirmed ? e.amount : 0), 0)
+  // actual_amount: payment_entries 전체 합산 (confirmed 구분 없음)
+  const entrySum = entries.reduce((sum, e) => sum + e.amount, 0)
   const rawActual = Number.isFinite(Number(obj.actual_amount)) ? Math.max(0, Math.round(Number(obj.actual_amount))) : 0
-  const actualAmount = entries.length > 0 ? confirmedSum : rawActual
+  const actualAmount = entries.length > 0 ? entrySum : rawActual
 
-  // has_upcoming: 미래 날짜 입금내역이 있는지 확인
-  const now = new Date()
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
-  const hasUpcoming = entries.some((e) => !e.confirmed && e.paid_at > todayStr)
+  // has_upcoming 제거 — confirmed 개념 없으므로 항상 false
+  const hasUpcoming = false
 
   return {
     payment_confirmed: typeof obj.payment_confirmed === "boolean" ? obj.payment_confirmed : false,
@@ -247,10 +245,10 @@ export function buildSettlementRows(
   selectedStages: SettlementStage[],
   stageRatios: Record<SettlementStage, number>,
   middleInstallments: number
-): Array<{ key: string; label: string; supply: number; vat: number; total: number }> {
+): Array<{ key: string; label: string; ratio: number; supply: number; vat: number; total: number }> {
   if (selectedStages.length === 0) return []
 
-  const rows: Array<{ key: string; label: string; supply: number; vat: number; total: number }> = []
+  const rows: Array<{ key: string; label: string; ratio: number; supply: number; vat: number; total: number }> = []
 
   selectedStages.forEach((stage) => {
     const ratio = stageRatios[stage] || 0
@@ -261,13 +259,16 @@ export function buildSettlementRows(
       // 중도금을 회차별로 분할
       const perSupply = Math.floor(stageSupply / middleInstallments)
       const perVat = Math.floor(perSupply * 0.1)
+      const perRatio = Math.floor(ratio / middleInstallments)
       for (let i = 1; i <= middleInstallments; i++) {
         const isLast = i === middleInstallments
         const thisSupply = isLast ? stageSupply - perSupply * (middleInstallments - 1) : perSupply
         const thisVat = isLast ? Math.floor(thisSupply * 0.1) : perVat
+        const thisRatio = isLast ? ratio - perRatio * (middleInstallments - 1) : perRatio
         rows.push({
           key: `middle-${i}`,
           label: `중도금 ${i}차`,
+          ratio: thisRatio,
           supply: thisSupply,
           vat: thisVat,
           total: thisSupply + thisVat,
@@ -277,6 +278,7 @@ export function buildSettlementRows(
       rows.push({
         key: stage,
         label: stage,
+        ratio,
         supply: stageSupply,
         vat: stageVat,
         total: stageSupply + stageVat,
@@ -318,7 +320,7 @@ export function computeStageSummaries(
   return rows.map((row) => {
     const status = normalizeSettlementStatusInput(statusMap[row.key])
     const entries = status.payment_entries
-    const paid = entries.reduce((sum, e) => sum + (e.confirmed ? e.amount : 0), 0)
+    const paid = entries.reduce((sum, e) => sum + e.amount, 0)
     const plannedAmount = Math.max(0, Math.round(Number(row.total || 0)))
     const stageStatus: "paid" | "partial" | "unpaid" =
       paid >= plannedAmount && plannedAmount > 0 ? "paid"
