@@ -73,6 +73,61 @@ npm run import:prices      # 가격표 데이터 임포트
 
 의뢰 상태 칸반: `견적 문의` → `영업중` → `계약 성공` / `수주 실패` / `숨김` (`src/lib/constants.ts`의 `REQUEST_STATUSES`)
 
+### 의뢰 칸반보드 (핵심 모듈)
+
+`src/app/(dashboard)/requests/` — 9개 파일로 역할별 분리:
+
+| 파일 | 역할 |
+|------|------|
+| `page.tsx` | 서버 컴포넌트. requests+customers 병렬 조회, stage_summaries 사전 계산 |
+| `kanban-board.tsx` | 메인 오케스트레이터. DnD + 모든 하위 모듈 통합 |
+| `kanban-types.ts` | 공유 타입 (`RequestItem`, `ContractSummary`, `SettlementStage` 등) |
+| `sales-flow-panel.tsx` | 3컬럼 레이아웃 래퍼 (견적/계약/지출 탭 호스팅) |
+| `contract-flow-tab.tsx` | 계약 생성·연결 + 정산 단계 관리 + 세금계산서 |
+| `quotations-tab.tsx` | 확정 견적 표시 (마진/인센티브) |
+| `settlement-utils.ts` | 정산 계산 유틸 14개+ (비율·VAT·상태 정규화) |
+| `inline-editors.tsx` | 인라인 편집 컴포넌트 5종 (blur 시 자동 저장) |
+| `order-delivery-tab.tsx` / `expense-tab.tsx` | 주문배송 / 지출·수익성 탭 |
+
+**의뢰 4가지 표시 상태:**
+- 일반 → 칸반 컬럼에 카드로 표시
+- `hidden=true` → 하단 "숨김" 접기 패널
+- `status="수주 실패"` → 하단 "수주 실패" 접기 패널
+- `status="숨김"` → DB 조회 자체에서 제외 (`neq("status", "숨김")`)
+
+### 정산 시스템 (3단계 모델)
+
+**단계:** `선금` → `중도금` (1~5차 분할 가능) → `잔금`
+- DB: `contracts.settlement_type` (텍스트, 예: "선금,중도금,잔금")
+- DB: `contract_settlement_meta` 테이블 → `stage_ratios`, `settlement_status_map`, `middle_installments`
+
+**계산 흐름:**
+```
+공급가액(contract_amount) × stage_ratio% → stageSupply
+stageSupply × 10% → VAT
+stageSupply + VAT → 단계별 예정 금액
+sum(confirmed payment_entries) → 실제 입금액
+→ "paid" / "partial" / "unpaid" 상태 판정
+```
+
+**입금 엔트리:** 단계별로 복수 부분 입금 가능. `confirmed=true`만 합산. 미확인+미래일자 = `has_upcoming`.
+
+핵심 유틸: `settlement-utils.ts`의 `normalizeSettlementStatusKey()`, `buildSettlementRows()`, `computeStageSummaries()`
+
+### 견적 에디터
+
+`src/app/(dashboard)/quotes/quote-editor-sheet.tsx` — Sheet(사이드 패널) 기반 스프레드시트형 에디터.
+
+**구조:** 장비탭(에어컨 10행) + 설치비탭(10행) + 갑지(요약) + 사용자 정의 탭(최대 5개)
+
+**자동 계산:** 행 편집 시 `recalcPricing()` → 매입단가, 제안가, 마진, 이익 자동 산출. 1000원 단위 반올림 옵션.
+
+**자동 저장:** useRef 기반 스냅샷 비교 → 변경 감지 시만 저장. 초기 로드 중에는 저장 방지.
+
+### 미들웨어
+
+`src/middleware.ts` — `/api/` 경로에 UTF-8 헤더 자동 설정, `Content-Language: ko-KR`, `Cache-Control: no-cache`. 인증은 현재 개발 모드로 우회 중.
+
 ## 디자인 시스템 (필수 준수)
 
 ### 컬러 팔레트 — 이 5색만 사용. Tailwind 기본 색상(blue, red, green 등) 사용 금지.
