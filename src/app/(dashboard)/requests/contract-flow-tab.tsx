@@ -526,7 +526,9 @@ export function ContractFlowTab({
         rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
         : rowPaid > 0 ? "partial"
         : "unpaid"
-      return { name: row.label, status: stageStatus }
+      // 비율(%) 포함 — page.tsx 초기 렌더와 동일하게 "선금 50%" 형태로 표시
+      const ratioStr = Number.isInteger(row.ratio) ? `${row.ratio}` : row.ratio.toFixed(1)
+      return { name: `${row.label} ${ratioStr}%`, status: stageStatus }
     })
     const stagesKey = stageSummariesForCard.map((s) => `${s.name}:${s.status}`).join(",")
 
@@ -1556,9 +1558,9 @@ export function ContractFlowTab({
       {showIntegrated && !isLoading && (
         <>
             {/* ── 계약 정보 ── */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col">
-              <div className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0">
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><FileSignature className="h-3.5 w-3.5 text-slate-400" />계약 정보</p>
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 shrink-0 bg-slate-50 border-b border-slate-100">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><FileSignature className="h-3.5 w-3.5 text-slate-500" />계약 정보</p>
                 {isPersistedContract && (
                   <button
                     type="button"
@@ -1790,9 +1792,9 @@ export function ContractFlowTab({
             </div>
 
             {/* ── 정산 현황 ── */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col">
-              <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 shrink-0">
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><CircleDollarSign className="h-3.5 w-3.5 text-slate-400" />정산 현황</p>
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-4 py-3 shrink-0 bg-slate-50 border-b border-slate-100">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><CircleDollarSign className="h-3.5 w-3.5 text-slate-500" />정산 현황</p>
                 {overdueCount > 0 && (
                   <span className="inline-flex h-6 items-center rounded-full bg-red-100 px-2 text-[10px] font-medium text-red-700">
                     지연 {overdueCount}건

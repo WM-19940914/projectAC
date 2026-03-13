@@ -326,7 +326,9 @@ export function computeStageSummaries(
       paid >= plannedAmount && plannedAmount > 0 ? "paid"
       : paid > 0 ? "partial"
       : "unpaid"
-    return { name: row.label, status: stageStatus }
+    // 비율(%) 포함 — page.tsx 초기 렌더와 동일하게 "선금 50%" 형태로 표시
+    const ratioStr = Number.isInteger(row.ratio) ? `${row.ratio}` : row.ratio.toFixed(1)
+    return { name: `${row.label} ${ratioStr}%`, status: stageStatus }
   })
 }
 

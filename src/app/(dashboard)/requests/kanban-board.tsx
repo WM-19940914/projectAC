@@ -288,7 +288,9 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
           rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
           : rowPaid > 0 ? "partial"
           : "unpaid"
-        return { name: row.label, status: stageStatus }
+        // 비율(%) 포함 — page.tsx 초기 렌더와 동일하게 "선금 50%" 형태로 표시
+        const ratioStr = Number.isInteger(row.ratio) ? `${row.ratio}` : row.ratio.toFixed(1)
+        return { name: `${row.label} ${ratioStr}%`, status: stageStatus }
       })
 
       const clampedPaid = Math.min(Math.max(0, paidAmount), totalWithVat)
@@ -1485,22 +1487,32 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                   </div>
                 </div>
 
-                {/* 뷰 전환 탭 */}
-                <div className="flex items-center gap-1 px-5 py-1.5 border-b border-gray-200">
-                  {(["영업", "주문배송"] as const).map((view) => (
-                    <button
-                      key={view}
-                      onClick={() => setSheetView(view)}
-                      className={cn(
-                        "px-3 py-1 text-xs font-medium rounded-md transition-colors",
-                        sheetView === view
-                          ? "bg-slate-700 text-white"
-                          : "text-gray-500 hover:bg-gray-100"
-                      )}
-                    >
-                      {view === "영업" ? "영업 관리" : "주문·배송"}
-                    </button>
-                  ))}
+                {/* 뷰 전환 탭 — 아이콘 + 언더라인 인디케이터 */}
+                <div className="flex items-center gap-1 px-5 border-b border-gray-200">
+                  {(["영업", "주문배송"] as const).map((view) => {
+                    const isActive = sheetView === view
+                    const Icon = view === "영업" ? Briefcase : Truck
+                    return (
+                      <button
+                        key={view}
+                        onClick={() => setSheetView(view)}
+                        className={cn(
+                          "relative flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold transition-colors",
+                          isActive
+                            ? "text-slate-900"
+                            : "text-gray-400 hover:text-gray-600"
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {view === "영업" ? "영업 관리" : "주문·배송"}
+                        {/* 활성 탭: 진한 언더라인 / 비활성 탭: 투명 언더라인 (어포던스) */}
+                        <span className={cn(
+                          "absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-colors",
+                          isActive ? "bg-slate-900" : "bg-transparent"
+                        )} />
+                      </button>
+                    )
+                  })}
                 </div>
 
                 {/* 영업 관리 뷰 */}
@@ -1601,7 +1613,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
                 {/* 주문·배송 뷰 */}
                 {sheetView === "주문배송" && (
-                <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6 scrollbar-hidden">
+                <div className="flex-1 overflow-y-auto bg-slate-50 px-5 pb-8 pt-4 scrollbar-hidden">
                   <OrderDeliveryTab
                     requestId={selectedItem.id}
                     defaultSiteName={selectedItem.title}

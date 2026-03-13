@@ -28,10 +28,10 @@ export function QuotationsTab({
   })
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col">
-      {/* 헤더 — 고정 */}
-      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 shrink-0">
-        <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><ClipboardList className="h-3.5 w-3.5 text-slate-400" />견적 정보</p>
+    <section className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col overflow-hidden">
+      {/* 헤더 — 고정, 배경 띠로 섹션 구분 */}
+      <div className="flex items-center justify-between gap-2 px-4 py-3 shrink-0 bg-slate-50 border-b border-slate-100">
+        <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900"><ClipboardList className="h-3.5 w-3.5 text-slate-500" />견적 정보</p>
         <button
           onClick={onAddQuote}
           className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-900 px-3 text-xs font-medium text-white transition-colors hover:bg-slate-800"

@@ -653,7 +653,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
   }
 
   useEffect(() => {
-    if (!isEditorOpen || !draft?.id || isSaving || isFieldEditing) return
+    if (!draft?.id || isSaving || isFieldEditing) return
 
     const nextSnapshot = getDraftSnapshot(draft)
     if (nextSnapshot === lastSavedSnapshotRef.current) return
@@ -673,7 +673,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
         autosaveTimerRef.current = null
       }
     }
-  }, [draft, isEditorOpen, isSaving, isFieldEditing, performSave])
+  }, [draft, isSaving, isFieldEditing, performSave])
 
   // 삭제 확인 Dialog 열기
   const openDeleteConfirm = (cardId: string, fromEditor = false) => {
@@ -698,10 +698,16 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
         throw new Error(result.error || "삭제에 실패했습니다.")
       }
 
-      setItems((prev) => prev.filter((item) => item.id !== cardId))
-      if (deleteFromEditorRef.current || draft?.id === cardId) {
-        setIsEditorOpen(false)
-        setDraft(null)
+      const remaining = items.filter((item) => item.id !== cardId)
+      setItems(remaining)
+      // 삭제된 주문이 현재 편집 중이면 → 다음 주문 자동 선택
+      if (draft?.id === cardId) {
+        if (remaining.length > 0) {
+          const sorted = [...remaining].sort((a, b) => toSortableTimestamp(a.created_at) - toSortableTimestamp(b.created_at))
+          openEditor(sorted[0])
+        } else {
+          setDraft(null)
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "삭제에 실패했습니다."
@@ -920,410 +926,382 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
     })
   }
 
-  const cardCount = useMemo(() => items.length, [items.length])
+  // 아이템 로드 후 첫 번째 주문 자동 선택 (draft가 없을 때만)
+  const autoSelectedRef = useRef(false)
+  useEffect(() => {
+    if (isLoading || autoSelectedRef.current) return
+    if (sortedItems.length > 0 && !draft) {
+      openEditor(sortedItems[0])
+      autoSelectedRef.current = true
+    }
+  }, [isLoading, sortedItems, draft])
+  // items 변경 시 autoSelectedRef 리셋
+  useEffect(() => { autoSelectedRef.current = false }, [requestId])
+
+  // 주문 전환 — 현재 draft 저장 후 다른 주문 열기
+  const switchToItem = async (item: OrderDeliveryItem) => {
+    if (draft?.id === item.id) return
+    if (draft) await performSave(draft)
+    openEditor(item)
+  }
+
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl border border-gray-200 bg-white p-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold text-gray-700">주문 내역</p>
-            <p className="mt-0.5 text-xs text-gray-400">총 {cardCount}개</p>
+    <div className="flex flex-col gap-3">
+      {/* 상단: 주문 선택 탭 + 생성 버튼 */}
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <div className="flex items-center justify-between bg-slate-50 border-b border-slate-100 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+              <Truck className="h-3.5 w-3.5 text-slate-500" />주문 내역
+            </p>
+            {saveMessage && (
+              <span className={`text-[10px] ${saveMessage.includes("실패") ? "text-red-500" : "text-gray-400"}`}>
+                {isSaving ? "저장 중..." : saveMessage}
+              </span>
+            )}
+            {isSaving && !saveMessage && (
+              <span className="text-[10px] text-gray-400">저장 중...</span>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              void handleCreate()
-            }}
-            disabled={isCreating}
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-slate-700 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {isCreating ? "생성 중..." : "+주문 생성"}
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 현재 주문 삭제 버튼 */}
+            {draft?.id && (
+              <button
+                type="button"
+                onClick={() => openDeleteConfirm(draft.id, true)}
+                disabled={isDeleting}
+                className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-red-200 px-2.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 disabled:opacity-40"
+              >
+                <Trash2 className="h-3 w-3" />
+                삭제
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { void handleCreate() }}
+              disabled={isCreating}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-slate-700 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {isCreating ? "생성 중..." : "+주문 생성"}
+            </button>
+          </div>
         </div>
+
+        {/* 주문이 2개 이상이면 탭으로 전환 */}
+        {sortedItems.length > 1 && (
+          <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-100 overflow-x-auto">
+            {sortedItems.map((item, idx) => {
+              const isActive = draft?.id === item.id
+              const summary = getDeliveryCardSummary(item)
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => { void switchToItem(item) }}
+                  className={`relative shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                    isActive
+                      ? "bg-slate-700 text-white"
+                      : "text-gray-500 hover:bg-gray-100"
+                  }`}
+                >
+                  주문 {idx + 1}
+                  <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+                    isActive ? "bg-white/20 text-white" : summary.progressBadgeClassName
+                  }`}>
+                    {summary.completedCount}/{summary.totalCount}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
+      {/* 인라인 에디터 영역 */}
       {isLoading ? (
         <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
           <p className="text-sm font-medium text-gray-500">주문 내역을 불러오는 중입니다.</p>
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
-          <p className="text-sm font-medium text-gray-500">등록된 주문 내역 카드가 없습니다.</p>
+          <p className="text-sm font-medium text-gray-500">등록된 주문 내역이 없습니다.</p>
+          <p className="mt-1 text-xs text-gray-400">위의 +주문 생성 버튼으로 추가하세요.</p>
         </div>
-      ) : (
-        <div className="space-y-2.5">
-          {sortedItems.map((item, index) => {
-            const summary = getDeliveryCardSummary(item)
-
-            return (
-              <div key={item.id} className="relative">
-                <button
-                  type="button"
-                  onClick={() => openEditor(item)}
-                  className="w-full rounded-2xl border border-gray-200 bg-white px-3.5 py-3 text-left transition-colors hover:border-slate-400 hover:bg-slate-50"
-                >
-                  <div className="grid gap-3 pr-9 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
-                    <span className="relative inline-flex h-8 w-10 shrink-0 items-center justify-center self-start rounded-xl border border-slate-200 bg-slate-50 text-slate-700 sm:self-center">
-                      <Truck className="h-4.5 w-4.5" />
-                      <span className="absolute -right-1 -top-1 inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-slate-700 px-1 text-[9px] font-semibold leading-none text-white">
-                        {index + 1}
-                      </span>
-                    </span>
-
-                    <div className="min-w-0">
-                      <p className="line-clamp-2 break-all text-[16px] font-semibold leading-5 text-gray-800">
-                        {item.site_name?.trim() || "현장명 미입력"}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <span className="inline-flex rounded-full bg-gray-100 px-2 py-1 text-[10px] font-medium text-gray-500">
-                          주문생성일
-                        </span>
-                        <span className="text-[11px] font-medium text-gray-400">
-                          {formatCardCreatedDate(item.created_at)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-start sm:justify-end">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${summary.progressBadgeClassName}`}
-                      >
-                        완료 {summary.completedCount}/{summary.totalCount}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openDeleteConfirm(item.id)}
-                  disabled={isDeleting}
-                  aria-label="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
-                  title="\uC8FC\uBB38 \uCE74\uB4DC \uC0AD\uC81C"
-                  className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-red-500 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+      ) : draft ? (
+        <div className="flex flex-col gap-2">
+          {/* 헤더 필드 (현장명, 옵티명, 옵티번호, 계약번호) */}
+          <section className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-4">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-500">현장명</p>
+                <Input
+                  value={draft.site_name}
+                  onChange={(event) => handleHeaderChange("site_name", event.target.value)}
+                  onFocus={handleFieldFocus}
+                  onBlur={handleFieldBlur}
+                  placeholder="현장명을 입력하세요"
+                  className="h-9 bg-white text-sm"
+                />
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      <Dialog open={isEditorOpen} onOpenChange={(open) => { void handleEditorOpenChange(open) }}>
-        <DialogContent className="w-[97vw] max-w-[1620px] overflow-hidden p-0">
-          {draft && (
-            <div className="flex h-[88vh] min-h-0 flex-col bg-white">
-              <DialogHeader className="border-b border-gray-200 bg-gradient-to-r from-white via-slate-50 to-white px-4 py-3">
-                <div>
-                  <DialogTitle className="font-sans text-base">주문/배송 관리</DialogTitle>
-                  <DialogDescription className="mt-1 text-xs text-gray-500">
-                    상단 정보와 하단 목록을 확인하고 필요한 값만 수정하세요.
-                  </DialogDescription>
-                </div>
-              </DialogHeader>
-
-              <div className="flex min-h-0 flex-1 flex-col gap-2 px-4 py-3">
-                <section className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
-                  <div className="grid grid-cols-1 gap-2 lg:grid-cols-4">
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500">현장명</p>
-                      <Input
-                        value={draft.site_name}
-                        onChange={(event) => handleHeaderChange("site_name", event.target.value)}
-                        onFocus={handleFieldFocus}
-                        onBlur={handleFieldBlur}
-                        placeholder="현장명을 입력하세요"
-                        className="h-9 bg-white text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500">옵티명</p>
-                      <Input
-                        value={draft.opti_name}
-                        onChange={(event) => handleHeaderChange("opti_name", event.target.value)}
-                        onFocus={handleFieldFocus}
-                        onBlur={handleFieldBlur}
-                        placeholder="옵티명을 입력하세요"
-                        className="h-9 bg-white text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500">옵티번호</p>
-                      <Input
-                        value={draft.opti_number}
-                        onChange={(event) => handleHeaderChange("opti_number", event.target.value)}
-                        onFocus={handleFieldFocus}
-                        onBlur={handleFieldBlur}
-                        placeholder="옵티번호를 입력하세요"
-                        className="h-9 bg-white text-sm"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs font-medium text-gray-500">계약번호</p>
-                      <Input
-                        value={draft.contract_number}
-                        onChange={(event) => handleHeaderChange("contract_number", event.target.value)}
-                        onFocus={handleFieldFocus}
-                        onBlur={handleFieldBlur}
-                        placeholder="계약번호를 입력하세요"
-                        className="h-9 bg-white text-sm"
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-gray-200 bg-white">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white/95 px-3 py-2">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => handleAddRows(1)}
-                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        행 추가
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleAddRows(5)}
-                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
-                      >
-                        +5행
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleTrimEmptyRows}
-                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
-                      >
-                        빈 행 정리
-                      </button>
-                    </div>
-                    {/* 확정 견적서 보기 */}
-                    {confirmedQuoteId && onEditQuote && (
-                      <button
-                        type="button"
-                        onClick={() => onEditQuote(confirmedQuoteId)}
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-                      >
-                        <ClipboardList className="h-3.5 w-3.5" />
-                        확정 견적서 보기
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="min-h-0 flex-1 overflow-y-auto">
-                    <div className="relative pl-9">
-                      <div className="absolute left-0 top-[35px] z-10">
-                        {draft.lines.map((line, rowIndex) => (
-                          <div
-                            key={`row-actions-${line.id ?? "new"}-${rowIndex}`}
-                            className="flex h-[33px] w-8 items-center justify-center gap-0.5"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleClearRow(rowIndex)}
-                              className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                              aria-label={`${rowIndex + 1}행 비우기`}
-                              title="행 비우기"
-                            >
-                              <Eraser className="h-3 w-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteRow(rowIndex)}
-                              className="inline-flex h-5 w-5 items-center justify-center rounded text-red-500 transition-colors hover:bg-red-50"
-                              aria-label={`${rowIndex + 1}행 삭제`}
-                              title="행 삭제"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="w-full">
-                        <table className="w-full table-fixed border-separate border-spacing-0">
-                        <thead className="sticky top-0 z-20">
-                          <tr className="bg-gray-100">
-                            {ORDER_DELIVERY_LINE_COLUMNS.map((column) => (
-                              <th
-                                key={column.key}
-                                className={`border-b border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-500 ${
-                                  column.key === "quantity" || column.key === "order_amount"
-                                    ? "text-center"
-                                    : "text-left"
-                                }`}
-                                style={{ width: column.width }}
-                              >
-                                {column.label}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {draft.lines.map((line, rowIndex) => (
-                            <tr
-                              key={`${line.id ?? "new"}-${rowIndex}`}
-                              className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/40"}
-                            >
-                              {ORDER_DELIVERY_LINE_COLUMNS.map((column) => {
-                                const value =
-                                  column.type === "number"
-                                    ? column.key === "order_amount"
-                                      ? formatNumberWithCommas(line.order_amount)
-                                      : typeof line[column.key] === "number"
-                                        ? String(line[column.key])
-                                        : ""
-                                    : String(line[column.key] ?? "")
-
-                                return (
-                                  <td key={column.key} className="border-b border-r border-gray-200 p-0 align-middle">
-                                    <div className="relative">
-                                      <Input
-                                        type={
-                                          column.type === "number" && column.key !== "order_amount"
-                                            ? "number"
-                                            : "text"
-                                        }
-                                      min={column.type === "number" && column.key !== "order_amount" ? 0 : undefined}
-                                      inputMode={column.type === "number" ? "numeric" : undefined}
-                                      value={value}
-                                      onFocus={handleFieldFocus}
-                                      onChange={(event) => handleLineChange(rowIndex, column.key, event.target.value)}
-                                      onBlur={() => {
-                                        handleLineBlur(rowIndex, column.key)
-                                        handleFieldBlur()
-                                      }}
-                                        onPaste={(event) => {
-                                          event.preventDefault()
-                                          handleLinePaste(
-                                            rowIndex,
-                                            column.key,
-                                            event.clipboardData.getData("text/plain")
-                                          )
-                                        }}
-                                        placeholder={column.placeholder}
-                                        className={`h-8 rounded-none border-0 bg-transparent px-1.5 text-[11px] placeholder:text-[10px] placeholder:font-normal placeholder:text-gray-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-300 ${
-                                          column.type === "number"
-                                            ? column.key === "quantity"
-                                              ? "text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                              : "text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                            : ""
-                                        } ${
-                                          column.type === "date"
-                                            ? value
-                                              ? "pr-7 text-gray-700"
-                                              : "pr-7 text-gray-300"
-                                            : "text-gray-700"
-                                        }`}
-                                      />
-                                      {column.type === "date" && (
-                                        <Popover>
-                                          <PopoverTrigger asChild>
-                                            <button
-                                              type="button"
-                                              aria-label={`${column.label} 달력 열기`}
-                                              className="absolute right-1 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-500"
-                                              onMouseDown={(event) => event.preventDefault()}
-                                            >
-                                              <Calendar className="h-3.5 w-3.5" />
-                                            </button>
-                                          </PopoverTrigger>
-                                          <PopoverContent align="end" className="w-auto p-0">
-                                            <CalendarPicker
-                                              mode="single"
-                                              selected={parseIsoDateToDate(value)}
-                                              onSelect={(date) => handleDateSelect(rowIndex, column.key, date)}
-                                              initialFocus
-                                            />
-                                          </PopoverContent>
-                                        </Popover>
-                                      )}
-                                    </div>
-                                  </td>
-                                )
-                              })}
-                            </tr>
-                          ))}
-                          {/* 행 추가 버튼 행 - 합계 위에 배치 */}
-                          <tr>
-                            <td colSpan={10} className="p-0">
-                              <button
-                                type="button"
-                                onClick={() => handleAddRows(1)}
-                                className="flex w-full items-center justify-center gap-1 bg-gray-50 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-slate-50 hover:text-slate-700"
-                              >
-                                <Plus className="h-3 w-3" />
-                                행 추가
-                              </button>
-                            </td>
-                          </tr>
-                        </tbody>
-                        {/* 주문금액 합계 행 */}
-                        <tfoot className="sticky bottom-0 z-10">
-                          <tr className="bg-gray-100 border-t-2 border-gray-300">
-                            <td colSpan={5} className="border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-600">
-                              합계
-                            </td>
-                            <td className="border-r border-gray-200 px-1.5 py-1.5 text-right text-[11px] font-bold tabular-nums text-slate-700">
-                              {formatNumberWithCommas(
-                                draft.lines.reduce((sum, line) => {
-                                  const v = typeof line.order_amount === "number" ? line.order_amount : 0
-                                  return sum + v
-                                }, 0)
-                              )}
-                            </td>
-                            <td colSpan={4} className="px-1.5 py-1.5" />
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                  </div>
-                </section>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-500">옵티명</p>
+                <Input
+                  value={draft.opti_name}
+                  onChange={(event) => handleHeaderChange("opti_name", event.target.value)}
+                  onFocus={handleFieldFocus}
+                  onBlur={handleFieldBlur}
+                  placeholder="옵티명을 입력하세요"
+                  className="h-9 bg-white text-sm"
+                />
               </div>
-
-              <DialogFooter className="border-t border-gray-200 bg-white px-5 py-3 sm:justify-between">
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={!draft.id || isDeleting}
-                  className="rounded-md border border-red-300 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 disabled:opacity-40"
-                >
-                  {isDeleting ? "삭제 중..." : "카드 삭제"}
-                </button>
-                <div className="flex items-center gap-3">
-                  {/* 자동저장 상태 메시지 */}
-                  {saveMessage && (
-                    <p className={`text-[10px] ${saveMessage.includes("실패") ? "text-red-500" : "text-gray-400"}`}>
-                      {isSaving ? "저장 중..." : saveMessage}
-                    </p>
-                  )}
-                  {isSaving && !saveMessage && (
-                    <p className="text-[10px] text-gray-400">저장 중...</p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => { void handleEditorOpenChange(false) }}
-                    className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
-                  >
-                    닫기
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { void handleSave() }}
-                    disabled={!draft.id || isSaving}
-                    className="rounded-md bg-slate-700 px-3 py-1.5 text-xs text-white hover:bg-slate-800 disabled:opacity-40"
-                  >
-                    즉시 저장
-                  </button>
-                </div>
-              </DialogFooter>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-500">옵티번호</p>
+                <Input
+                  value={draft.opti_number}
+                  onChange={(event) => handleHeaderChange("opti_number", event.target.value)}
+                  onFocus={handleFieldFocus}
+                  onBlur={handleFieldBlur}
+                  placeholder="옵티번호를 입력하세요"
+                  className="h-9 bg-white text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-gray-500">계약번호</p>
+                <Input
+                  value={draft.contract_number}
+                  onChange={(event) => handleHeaderChange("contract_number", event.target.value)}
+                  onFocus={handleFieldFocus}
+                  onBlur={handleFieldBlur}
+                  placeholder="계약번호를 입력하세요"
+                  className="h-9 bg-white text-sm"
+                />
+              </div>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+          </section>
+
+          {/* 테이블 + 행 액션 */}
+          <section className="flex flex-col rounded-xl border border-gray-200 bg-white" style={{ maxHeight: "60vh" }}>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white/95 px-3 py-2 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleAddRows(1)}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  행 추가
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddRows(5)}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  +5행
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTrimEmptyRows}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  빈 행 정리
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {/* 확정 견적서 보기 */}
+                {confirmedQuoteId && onEditQuote && (
+                  <button
+                    type="button"
+                    onClick={() => onEditQuote(confirmedQuoteId)}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                  >
+                    <ClipboardList className="h-3.5 w-3.5" />
+                    확정 견적서 보기
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { void handleSave() }}
+                  disabled={!draft.id || isSaving}
+                  className="rounded-md bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+                >
+                  즉시 저장
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="relative pl-9">
+                <div className="absolute left-0 top-[35px] z-10">
+                  {draft.lines.map((line, rowIndex) => (
+                    <div
+                      key={`row-actions-${line.id ?? "new"}-${rowIndex}`}
+                      className="flex h-[33px] w-8 items-center justify-center gap-0.5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleClearRow(rowIndex)}
+                        className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                        aria-label={`${rowIndex + 1}행 비우기`}
+                        title="행 비우기"
+                      >
+                        <Eraser className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteRow(rowIndex)}
+                        className="inline-flex h-5 w-5 items-center justify-center rounded text-red-500 transition-colors hover:bg-red-50"
+                        aria-label={`${rowIndex + 1}행 삭제`}
+                        title="행 삭제"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="w-full">
+                  <table className="w-full table-fixed border-separate border-spacing-0">
+                    <thead className="sticky top-0 z-20">
+                      <tr className="bg-gray-100">
+                        {ORDER_DELIVERY_LINE_COLUMNS.map((column) => (
+                          <th
+                            key={column.key}
+                            className={`border-b border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-500 ${
+                              column.key === "quantity" || column.key === "order_amount"
+                                ? "text-center"
+                                : "text-left"
+                            }`}
+                            style={{ width: column.width }}
+                          >
+                            {column.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {draft.lines.map((line, rowIndex) => (
+                        <tr
+                          key={`${line.id ?? "new"}-${rowIndex}`}
+                          className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/40"}
+                        >
+                          {ORDER_DELIVERY_LINE_COLUMNS.map((column) => {
+                            const value =
+                              column.type === "number"
+                                ? column.key === "order_amount"
+                                  ? formatNumberWithCommas(line.order_amount)
+                                  : typeof line[column.key] === "number"
+                                    ? String(line[column.key])
+                                    : ""
+                                : String(line[column.key] ?? "")
+
+                            return (
+                              <td key={column.key} className="border-b border-r border-gray-200 p-0 align-middle">
+                                <div className="relative">
+                                  <Input
+                                    type={
+                                      column.type === "number" && column.key !== "order_amount"
+                                        ? "number"
+                                        : "text"
+                                    }
+                                    min={column.type === "number" && column.key !== "order_amount" ? 0 : undefined}
+                                    inputMode={column.type === "number" ? "numeric" : undefined}
+                                    value={value}
+                                    onFocus={handleFieldFocus}
+                                    onChange={(event) => handleLineChange(rowIndex, column.key, event.target.value)}
+                                    onBlur={() => {
+                                      handleLineBlur(rowIndex, column.key)
+                                      handleFieldBlur()
+                                    }}
+                                    onPaste={(event) => {
+                                      event.preventDefault()
+                                      handleLinePaste(
+                                        rowIndex,
+                                        column.key,
+                                        event.clipboardData.getData("text/plain")
+                                      )
+                                    }}
+                                    placeholder={column.placeholder}
+                                    className={`h-8 rounded-none border-0 bg-transparent px-1.5 text-[11px] placeholder:text-[10px] placeholder:font-normal placeholder:text-gray-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-300 ${
+                                      column.type === "number"
+                                        ? column.key === "quantity"
+                                          ? "text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                          : "text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                        : ""
+                                    } ${
+                                      column.type === "date"
+                                        ? value
+                                          ? "pr-7 text-gray-700"
+                                          : "pr-7 text-gray-300"
+                                        : "text-gray-700"
+                                    }`}
+                                  />
+                                  {column.type === "date" && (
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <button
+                                          type="button"
+                                          aria-label={`${column.label} 달력 열기`}
+                                          className="absolute right-1 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-500"
+                                          onMouseDown={(event) => event.preventDefault()}
+                                        >
+                                          <Calendar className="h-3.5 w-3.5" />
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent align="end" className="w-auto p-0">
+                                        <CalendarPicker
+                                          mode="single"
+                                          selected={parseIsoDateToDate(value)}
+                                          onSelect={(date) => handleDateSelect(rowIndex, column.key, date)}
+                                          initialFocus
+                                        />
+                                      </PopoverContent>
+                                    </Popover>
+                                  )}
+                                </div>
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                      {/* 행 추가 버튼 행 */}
+                      <tr>
+                        <td colSpan={10} className="p-0">
+                          <button
+                            type="button"
+                            onClick={() => handleAddRows(1)}
+                            className="flex w-full items-center justify-center gap-1 bg-gray-50 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                          >
+                            <Plus className="h-3 w-3" />
+                            행 추가
+                          </button>
+                        </td>
+                      </tr>
+                    </tbody>
+                    {/* 주문금액 합계 행 */}
+                    <tfoot className="sticky bottom-0 z-10">
+                      <tr className="bg-gray-100 border-t-2 border-gray-300">
+                        <td colSpan={5} className="border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-600">
+                          합계
+                        </td>
+                        <td className="border-r border-gray-200 px-1.5 py-1.5 text-right text-[11px] font-bold tabular-nums text-slate-700">
+                          {formatNumberWithCommas(
+                            draft.lines.reduce((sum, line) => {
+                              const v = typeof line.order_amount === "number" ? line.order_amount : 0
+                              return sum + v
+                            }, 0)
+                          )}
+                        </td>
+                        <td colSpan={4} className="px-1.5 py-1.5" />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
 
       {/* 카드 삭제 확인 Dialog */}
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
