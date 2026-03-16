@@ -29,7 +29,7 @@ import { useAuth } from "@/providers/auth-provider"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { REQUEST_STATUSES } from "@/lib/constants"
 import SalesTabNav from "@/components/layout/sales-tab-nav"
 import QuoteEditorSheet from "../quotes/quote-editor-sheet"
@@ -143,6 +143,21 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
   // 고객 상세 패널 열기용 state
   const [customerDetailId, setCustomerDetailId] = useState<string | null>(null)
+
+  // ----- 딥링크: ?open=requestId 로 카드 자동 열기 -----
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    const openId = searchParams.get("open")
+    if (!openId) return
+    // 모든 아이템에서 해당 ID 찾기
+    const allItems = [
+      ...columns.flatMap((c) => c.items),
+      ...hiddenItems,
+      ...failedItems,
+    ]
+    const target = allItems.find((item) => item.id === openId)
+    if (target) setSelectedItem(target)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 견적서 관련 state
   const [quotations, setQuotations] = useState<QuotationListItem[]>([])
@@ -288,9 +303,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
           rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
           : rowPaid > 0 ? "partial"
           : "unpaid"
-        // 비율(%) 포함 — page.tsx 초기 렌더와 동일하게 "선금 50%" 형태로 표시
-        const ratioStr = Number.isInteger(row.ratio) ? `${row.ratio}` : row.ratio.toFixed(1)
-        return { name: `${row.label} ${ratioStr}%`, status: stageStatus }
+        return { name: row.label, status: stageStatus }
       })
 
       const clampedPaid = Math.min(Math.max(0, paidAmount), totalWithVat)
@@ -373,7 +386,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     try {
       const payload = {
         title: `${selectedItem.title} 견적서`,
-        quotation_date: new Date().toISOString().split("T")[0],
+        quotation_date: new Date().toLocaleDateString("sv-SE"),
         request_id: selectedItem.id,
         customer_id: selectedItem.customer?.id || null,
         items: [],
@@ -584,7 +597,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [createForm, setCreateForm] = useState({
     title: "",
     customer_id: "",
-    inquiry_date: new Date().toISOString().split("T")[0],
+    inquiry_date: new Date().toLocaleDateString("sv-SE"),
     memo: "",
   })
   // 의뢰 생성용 고객 연결 모달
@@ -776,7 +789,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         alert("생성 실패: " + (result.error || "알 수 없는 오류"))
       } else {
         // 폼 초기화 & 다이얼로그 닫기
-        setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "" })
+        setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toLocaleDateString("sv-SE"), memo: "" })
         setIsCreateOpen(false)
         router.refresh()
       }
@@ -1306,7 +1319,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         open={isCreateOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "" })
+            setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toLocaleDateString("sv-SE"), memo: "" })
           }
           setIsCreateOpen(open)
         }}
@@ -1388,7 +1401,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
           <DialogFooter className="gap-2 sm:gap-0">
             <button
               onClick={() => {
-                setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "" })
+                setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toLocaleDateString("sv-SE"), memo: "" })
                 setIsCreateOpen(false)
               }}
               className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"

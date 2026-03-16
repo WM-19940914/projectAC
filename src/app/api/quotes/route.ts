@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 견적번호 생성: Q-YYYYMMDD-NNN 형식
-    const today = new Date().toISOString().split("T")[0].replace(/-/g, "")
+    const today = new Date().toLocaleDateString("sv-SE").replace(/-/g, "")
     const { count } = await supabase
       .from("quotations")
       .select("*", { count: "exact", head: true })
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
         title: header.title.trim(),
         request_id: requestId,
         customer_id: customerId,
-        quotation_date: header.quotation_date || new Date().toISOString().split("T")[0],
+        quotation_date: header.quotation_date || new Date().toLocaleDateString("sv-SE"),
         valid_until: header.valid_until || null,
         total_amount: totalAmount,
         tax_amount: taxAmount,

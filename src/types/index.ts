@@ -228,7 +228,6 @@ export interface OrderDeliveryLine {
   order_number?: string | null;
   model_name?: string | null;
   quantity?: number | null;
-  order_amount?: number | null;
   delivery_request_date?: string | null;
   delivery_expected_date?: string | null;
   delivery_confirmed_date?: string | null;

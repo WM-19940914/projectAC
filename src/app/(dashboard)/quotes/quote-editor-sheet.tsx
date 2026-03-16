@@ -109,7 +109,7 @@ export default function QuoteEditorSheet({
   open, onClose, requestId, customerId, customerName, customerData, initialTitle, quotation, onSaved,
 }: QuoteEditorSheetProps) {
   const [title, setTitle] = useState("")
-  const [quotationDate, setQuotationDate] = useState(new Date().toISOString().split("T")[0])
+  const [quotationDate, setQuotationDate] = useState(new Date().toLocaleDateString("sv-SE"))
   const [notes, setNotes] = useState("")
   // 기본 10행씩 (A4 1페이지 기준, 행 추가로 최대 20행까지 가능)
   const [equipItems, setEquipItems] = useState<ItemRow[]>(Array.from({ length: 10 }, () => emptyRow()))
@@ -348,7 +348,7 @@ export default function QuoteEditorSheet({
           initialLoadRef.current = true
         } else {
           savedIdRef.current = null
-          setTitle(initialTitle || ""); setQuotationDate(new Date().toISOString().split("T")[0])
+          setTitle(initialTitle || ""); setQuotationDate(new Date().toLocaleDateString("sv-SE"))
           setNotes(""); setEquipItems(Array.from({ length: 10 }, () => emptyRow())); setInstallItems(Array.from({ length: 10 }, () => emptyRow())); setCoverItems([]); setCustomSheets([])
           setPricingOpen(false)
           setQuoteType("simple")

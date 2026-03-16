@@ -39,21 +39,25 @@ function calcVatIncluded(amount: number): number {
   return Math.floor(amount * 1.1)
 }
 
-// 오늘 날짜를 YYYY-MM-DD 포맷으로
+// 오늘 날짜를 YYYY-MM-DD 포맷으로 (로컬 시간 기준)
 function todayString(): string {
-  return new Date().toISOString().split("T")[0]
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
-// Date → YYYY-MM-DD
+// Date → YYYY-MM-DD (로컬 시간 기준 — toISOString()은 UTC라 날짜가 밀림!)
 function formatDate(date: Date): string {
-  return date.toISOString().split("T")[0]
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
 }
 
-// YYYY-MM-DD → Date
+// YYYY-MM-DD → Date (로컬 시간 기준으로 파싱)
 function parseDate(str: string): Date | undefined {
   if (!str) return undefined
-  const d = new Date(str)
-  return isNaN(d.getTime()) ? undefined : d
+  // "2026-03-04" → 로컬 시간 2026년 3월 4일 00:00:00으로 생성
+  const [y, m, d] = str.split("-").map(Number)
+  if (!y || !m || !d) return undefined
+  const date = new Date(y, m - 1, d)
+  return isNaN(date.getTime()) ? undefined : date
 }
 
 function formatCurrency(value: number): string {

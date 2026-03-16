@@ -50,10 +50,6 @@ function parseSettlementType(raw: unknown): Stage[] {
   return []
 }
 
-function formatPercent(v: number): string {
-  return Number.isInteger(v) ? `${v}` : v.toFixed(1)
-}
-
 // ----- 단계별 입금내역에서 rowPaid 계산 -----
 function getRowPaid(raw: unknown): number {
   if (!raw || typeof raw !== "object") return 0
@@ -88,13 +84,22 @@ function calcStageSummaries(
   const stages = parseSettlementType(settlementType)
   if (stages.length === 0 || supplyAmount <= 0) return []
 
-  // 비율 결정 — DB에 저장된 비율 우선, 없으면 균등 분배
+  // 금액 모드 감지: _mode === "amount"이면 값이 공급가액(원)
+  const amMode = stageRatios && typeof stageRatios === "object" && (stageRatios as Record<string, unknown>)._mode === "amount"
+
+  // 비율/금액 결정
   const ratios: Record<string, number> = {}
   for (const stage of stages) {
     const fromMeta = Number(stageRatios?.[stage] ?? 0)
-    ratios[stage] = (fromMeta > 0 && Number.isFinite(fromMeta))
-      ? Math.max(0, Math.min(100, fromMeta))
-      : (100 / stages.length)
+    if (amMode) {
+      // 금액 모드: 값 그대로 사용 (공급가액)
+      ratios[stage] = Math.max(0, Math.round(fromMeta))
+    } else {
+      // 비율 모드: 0~100% 클리핑
+      ratios[stage] = (fromMeta > 0 && Number.isFinite(fromMeta))
+        ? Math.max(0, Math.min(100, fromMeta))
+        : (100 / stages.length)
+    }
   }
 
   const safeMiddle = Math.max(1, Math.min(5, Math.round(middleInstallments || 1)))
@@ -108,7 +113,6 @@ function calcStageSummaries(
     }
   }
 
-  // buildSettlementRows와 동일한 금액 분배 로직
   const safeSupply = Math.max(0, Math.round(supplyAmount))
   const totalVat = Math.floor(safeSupply * 0.1)
   let usedSupply = 0
@@ -116,11 +120,20 @@ function calcStageSummaries(
   const results: { name: string; status: "paid" | "partial" | "unpaid" }[] = []
 
   stages.forEach((stage, idx) => {
-    const ratio = Math.max(0, Math.min(100, Number(ratios[stage] || 0)))
     const isLast = idx === stages.length - 1
-    const stageSupply = isLast ? safeSupply - usedSupply : Math.round((safeSupply * ratio) / 100)
+    let stageSupply: number
+    let stageVat: number
+    if (amMode) {
+      // 금액 모드: 저장된 값이 VAT 포함 총액 → 역산
+      const stageTotal = ratios[stage]
+      stageSupply = Math.round(stageTotal / 1.1)
+      stageVat = stageTotal - stageSupply
+    } else {
+      const ratio = Math.max(0, Math.min(100, Number(ratios[stage] || 0)))
+      stageSupply = isLast ? safeSupply - usedSupply : Math.round((safeSupply * ratio) / 100)
+      stageVat = isLast ? totalVat - usedVat : Math.floor(stageSupply * 0.1)
+    }
     usedSupply += stageSupply
-    const stageVat = isLast ? totalVat - usedVat : Math.floor(stageSupply * 0.1)
     usedVat += stageVat
 
     // 중도금 분할 처리
@@ -140,7 +153,7 @@ function calcStageSummaries(
           rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
           : rowPaid > 0 ? "partial"
           : "unpaid"
-        results.push({ name: `중도금 ${i}차 ${formatPercent(ratio / safeMiddle)}%`, status })
+        results.push({ name: `중도금 ${i}차`, status })
       }
       return
     }
@@ -152,7 +165,7 @@ function calcStageSummaries(
       rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
       : rowPaid > 0 ? "partial"
       : "unpaid"
-    results.push({ name: `${stage} ${formatPercent(ratio)}%`, status })
+    results.push({ name: stage, status })
   })
 
   return results

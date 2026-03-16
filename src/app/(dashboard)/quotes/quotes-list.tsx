@@ -83,7 +83,7 @@ export default function QuotesList({ quotations, customers }: Props) {
   const [isCreateRequestOpen, setIsCreateRequestOpen] = useState(false)
   const [isCreatingRequest, setIsCreatingRequest] = useState(false)
   const [createRequestForm, setCreateRequestForm] = useState({
-    title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "",
+    title: "", customer_id: "", inquiry_date: new Date().toLocaleDateString("sv-SE"), memo: "",
   })
   // 의뢰 생성용 고객 연결 모달
   const [localCustomers, setLocalCustomers] = useState<CustomerRow[]>(customers)
@@ -172,7 +172,7 @@ export default function QuotesList({ quotations, customers }: Props) {
     try {
       const payload = {
         title: `${selected.title} 견적서`,
-        quotation_date: new Date().toISOString().split("T")[0],
+        quotation_date: new Date().toLocaleDateString("sv-SE"),
         request_id: selected.id,
         customer_id: selected.customer?.id || null,
         items: [],
@@ -223,7 +223,7 @@ export default function QuotesList({ quotations, customers }: Props) {
       // 2. 견적서 즉시 생성 (의뢰에 연결)
       const quotePayload = {
         title: `${createRequestForm.title.trim()} 견적서`,
-        quotation_date: new Date().toISOString().split("T")[0],
+        quotation_date: new Date().toLocaleDateString("sv-SE"),
         request_id: reqResult.data.id,
         customer_id: createRequestForm.customer_id || null,
         items: [],
@@ -249,7 +249,7 @@ export default function QuotesList({ quotations, customers }: Props) {
         setNewCustomerId(null)
         setNewCustomerName("")
         setNewInitialTitle("")
-        setCreateRequestForm({ title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "" })
+        setCreateRequestForm({ title: "", customer_id: "", inquiry_date: new Date().toLocaleDateString("sv-SE"), memo: "" })
         setIsCreateRequestOpen(false)
         setRequestDialogOpen(false)
         setIsSheetOpen(true)
@@ -467,7 +467,7 @@ export default function QuotesList({ quotations, customers }: Props) {
         open={isCreateRequestOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setCreateRequestForm({ title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "" })
+            setCreateRequestForm({ title: "", customer_id: "", inquiry_date: new Date().toLocaleDateString("sv-SE"), memo: "" })
           }
           setIsCreateRequestOpen(open)
         }}
@@ -549,7 +549,7 @@ export default function QuotesList({ quotations, customers }: Props) {
           <DialogFooter className="gap-2 sm:gap-0">
             <button
               onClick={() => {
-                setCreateRequestForm({ title: "", customer_id: "", inquiry_date: new Date().toISOString().split("T")[0], memo: "" })
+                setCreateRequestForm({ title: "", customer_id: "", inquiry_date: new Date().toLocaleDateString("sv-SE"), memo: "" })
                 setIsCreateRequestOpen(false)
               }}
               className="px-4 py-2 text-sm rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"

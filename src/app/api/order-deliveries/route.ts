@@ -9,7 +9,6 @@ const LINE_FIELDS = [
   "order_number",
   "model_name",
   "quantity",
-  "order_amount",
   "delivery_request_date",
   "delivery_expected_date",
   "delivery_confirmed_date",
@@ -58,7 +57,7 @@ function buildLinePayload(input: Record<string, unknown>) {
   for (const key of LINE_FIELDS) {
     if (!(key in input)) continue
 
-    if (key === "quantity" || key === "order_amount") {
+    if (key === "quantity") {
       payload[key] = asNullableInteger(input[key])
       continue
     }

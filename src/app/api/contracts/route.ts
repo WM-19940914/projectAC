@@ -24,6 +24,9 @@ function sanitizeContractMeta(input: unknown) {
     if (src.settlement_status_map && typeof src.settlement_status_map === 'object') {
         next.settlement_status_map = src.settlement_status_map;
     }
+    if (src.stage_conditions && typeof src.stage_conditions === 'object') {
+        next.stage_conditions = src.stage_conditions;
+    }
 
     return Object.keys(next).length > 0 ? next : null;
 }

@@ -24,7 +24,6 @@ type LineField =
   | "order_number"
   | "model_name"
   | "quantity"
-  | "order_amount"
   | "delivery_request_date"
   | "delivery_expected_date"
   | "delivery_confirmed_date"
@@ -37,7 +36,6 @@ type OrderDeliveryLineDraft = {
   order_number: string
   model_name: string
   quantity: number | ""
-  order_amount: number | ""
   delivery_request_date: string
   delivery_expected_date: string
   delivery_confirmed_date: string
@@ -62,16 +60,15 @@ const ORDER_DELIVERY_LINE_COLUMNS: Array<{
   width: string
   placeholder?: string
 }> = [
-  { key: "supplier", label: "매입처", type: "text", width: "7.5%", placeholder: "매입처" },
-  { key: "order_date", label: "주문일", type: "date", width: "7.5%", placeholder: "YYYY-MM-DD" },
-  { key: "order_number", label: "주문번호", type: "text", width: "8.5%", placeholder: "주문번호" },
+  { key: "supplier", label: "매입처", type: "text", width: "8%", placeholder: "매입처" },
+  { key: "order_date", label: "주문일", type: "date", width: "9%", placeholder: "YYYY-MM-DD" },
+  { key: "order_number", label: "주문번호", type: "text", width: "9%", placeholder: "주문번호" },
   { key: "model_name", label: "모델명", type: "text", width: "11%", placeholder: "모델명" },
-  { key: "quantity", label: "수량", type: "number", width: "3.2%" },
-  { key: "order_amount", label: "주문금액(VAT포함)", type: "number", width: "8%" },
-  { key: "delivery_request_date", label: "배송요청일", type: "date", width: "7%", placeholder: "YYYY-MM-DD" },
-  { key: "delivery_expected_date", label: "배송예정일", type: "date", width: "7%", placeholder: "YYYY-MM-DD" },
-  { key: "delivery_confirmed_date", label: "배송확정일", type: "date", width: "7%", placeholder: "YYYY-MM-DD" },
-  { key: "delivery_place", label: "인도처", type: "text", width: "8%", placeholder: "인도처" },
+  { key: "quantity", label: "수량", type: "number", width: "3.5%" },
+  { key: "delivery_request_date", label: "배송요청일", type: "date", width: "12%", placeholder: "YYYY-MM-DD" },
+  { key: "delivery_expected_date", label: "배송예정일", type: "date", width: "12%", placeholder: "YYYY-MM-DD" },
+  { key: "delivery_confirmed_date", label: "배송확정일", type: "date", width: "12%", placeholder: "YYYY-MM-DD" },
+  { key: "delivery_place", label: "인도처", type: "text", width: "12%", placeholder: "인도처" },
 ]
 
 const MIN_VISIBLE_ROWS = 5
@@ -93,11 +90,6 @@ function toNumberValue(value: unknown): number {
     return Number.isFinite(parsed) ? parsed : 0
   }
   return 0
-}
-
-function formatNumberWithCommas(value: number | ""): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return ""
-  return value.toLocaleString("ko-KR")
 }
 
 function toNullableIntegerString(value: string): number | "" {
@@ -209,11 +201,6 @@ function normalizePastedLineValue(key: LineField, value: string): string {
     return typeof normalized === "number" ? String(normalized) : ""
   }
 
-  if (key === "order_amount") {
-    const normalized = toNullableIntegerString(value)
-    return typeof normalized === "number" ? String(normalized) : ""
-  }
-
   if (DATE_LINE_FIELDS.has(key)) {
     return normalizeFlexibleDateInput(value)
   }
@@ -238,7 +225,6 @@ function createEmptyLine(rowOrder: number): OrderDeliveryLineDraft {
     order_number: "",
     model_name: "",
     quantity: "",
-    order_amount: "",
     delivery_request_date: "",
     delivery_expected_date: "",
     delivery_confirmed_date: "",
@@ -257,7 +243,6 @@ function isLineEmpty(line: OrderDeliveryLineDraft): boolean {
     !line.order_number.trim() &&
     !line.model_name.trim() &&
     (Number(line.quantity) || 0) <= 0 &&
-    (Number(line.order_amount) || 0) <= 0 &&
     !line.delivery_request_date.trim() &&
     !line.delivery_expected_date.trim() &&
     !line.delivery_confirmed_date.trim() &&
@@ -273,7 +258,6 @@ function toLineDraft(line: OrderDeliveryLine, rowOrder: number): OrderDeliveryLi
     order_number: toInputValue(line.order_number),
     model_name: toInputValue(line.model_name),
     quantity: toNumberValue(line.quantity) > 0 ? toNumberValue(line.quantity) : "",
-    order_amount: toNumberValue(line.order_amount) > 0 ? toNumberValue(line.order_amount) : "",
     delivery_request_date: toInputValue(line.delivery_request_date),
     delivery_expected_date: toInputValue(line.delivery_expected_date),
     delivery_confirmed_date: toInputValue(line.delivery_confirmed_date),
@@ -307,7 +291,6 @@ function isMeaningfulOrderDeliveryLine(line: OrderDeliveryLine): boolean {
     order_number: toInputValue(line.order_number),
     model_name: toInputValue(line.model_name),
     quantity: toNumberValue(line.quantity) > 0 ? toNumberValue(line.quantity) : "",
-    order_amount: toNumberValue(line.order_amount) > 0 ? toNumberValue(line.order_amount) : "",
     delivery_request_date: toInputValue(line.delivery_request_date),
     delivery_expected_date: toInputValue(line.delivery_expected_date),
     delivery_confirmed_date: toInputValue(line.delivery_confirmed_date),
@@ -454,6 +437,8 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 언마운트 시 최신 draft를 참조하기 위한 ref
+  const draftRef = useRef<OrderDeliveryDraft | null>(null)
 
   const effectiveSiteName = defaultSiteName.trim() || resolvedSiteName.trim()
   const sortedItems = useMemo(
@@ -628,10 +613,29 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
     }
   }, [effectiveSiteName, isSaving])
 
-  const handleSave = async () => {
-    if (!draft) return
-    await performSave(draft)
-  }
+  // draft 변경 시 ref 동기화 (언마운트 시 최신 값 참조용)
+  useEffect(() => {
+    draftRef.current = draft
+  }, [draft])
+
+  // 컴포넌트 언마운트 또는 탭 전환 시 미저장 데이터 즉시 저장
+  useEffect(() => {
+    return () => {
+      const currentDraft = draftRef.current
+      if (!currentDraft?.id) return
+      const snap = getDraftSnapshot(currentDraft)
+      if (snap === lastSavedSnapshotRef.current) return
+      // 언마운트 시점이므로 동기적으로 fetch (navigator.sendBeacon 대신 keepalive fetch)
+      const normalized = normalizeDraftForSave(currentDraft)
+      fetch("/api/order-deliveries", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(normalized),
+        keepalive: true, // 페이지 이탈 시에도 요청 완료 보장
+      }).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleEditorOpenChange = async (open: boolean) => {
     if (open) {
@@ -751,7 +755,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
       const nextLines = prev.lines.map((line, index) => {
         if (index !== rowIndex) return line
 
-        if (key === "quantity" || key === "order_amount") {
+        if (key === "quantity") {
           const normalized = toNullableIntegerString(value)
           return {
             ...line,
@@ -879,7 +883,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
 
           const normalizedValue = normalizePastedLineValue(targetColumn.key, cellValue)
 
-          if (targetColumn.key === "quantity" || targetColumn.key === "order_amount") {
+          if (targetColumn.key === "quantity") {
             if (!normalizedValue) {
               nextLine = {
                 ...nextLine,
@@ -988,8 +992,8 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
           </div>
         </div>
 
-        {/* 주문이 2개 이상이면 탭으로 전환 */}
-        {sortedItems.length > 1 && (
+        {/* 주문이 1개 이상이면 탭으로 표시 */}
+        {sortedItems.length > 0 && (
           <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-100 overflow-x-auto">
             {sortedItems.map((item, idx) => {
               const isActive = draft?.id === item.id
@@ -1119,47 +1123,11 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                     확정 견적서 보기
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => { void handleSave() }}
-                  disabled={!draft.id || isSaving}
-                  className="rounded-md bg-slate-700 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-40"
-                >
-                  즉시 저장
-                </button>
               </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="relative pl-9">
-                <div className="absolute left-0 top-[35px] z-10">
-                  {draft.lines.map((line, rowIndex) => (
-                    <div
-                      key={`row-actions-${line.id ?? "new"}-${rowIndex}`}
-                      className="flex h-[33px] w-8 items-center justify-center gap-0.5"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => handleClearRow(rowIndex)}
-                        className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                        aria-label={`${rowIndex + 1}행 비우기`}
-                        title="행 비우기"
-                      >
-                        <Eraser className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteRow(rowIndex)}
-                        className="inline-flex h-5 w-5 items-center justify-center rounded text-red-500 transition-colors hover:bg-red-50"
-                        aria-label={`${rowIndex + 1}행 삭제`}
-                        title="행 삭제"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
+              <div>
                 <div className="w-full">
                   <table className="w-full table-fixed border-separate border-spacing-0">
                     <thead className="sticky top-0 z-20">
@@ -1168,7 +1136,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                           <th
                             key={column.key}
                             className={`border-b border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-500 ${
-                              column.key === "quantity" || column.key === "order_amount"
+                              column.key === "quantity"
                                 ? "text-center"
                                 : "text-left"
                             }`}
@@ -1183,28 +1151,23 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                       {draft.lines.map((line, rowIndex) => (
                         <tr
                           key={`${line.id ?? "new"}-${rowIndex}`}
-                          className={rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/40"}
+                          className={`group/row relative ${rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}
                         >
                           {ORDER_DELIVERY_LINE_COLUMNS.map((column) => {
                             const value =
                               column.type === "number"
-                                ? column.key === "order_amount"
-                                  ? formatNumberWithCommas(line.order_amount)
-                                  : typeof line[column.key] === "number"
-                                    ? String(line[column.key])
-                                    : ""
+                                ? typeof line[column.key] === "number"
+                                  ? String(line[column.key])
+                                  : ""
                                 : String(line[column.key] ?? "")
 
+                            const isLastColumn = column.key === "delivery_place"
                             return (
-                              <td key={column.key} className="border-b border-r border-gray-200 p-0 align-middle">
+                              <td key={column.key} className={`border-b ${isLastColumn ? "" : "border-r"} border-gray-200 p-0 align-middle ${isLastColumn ? "relative" : ""}`}>
                                 <div className="relative">
                                   <Input
-                                    type={
-                                      column.type === "number" && column.key !== "order_amount"
-                                        ? "number"
-                                        : "text"
-                                    }
-                                    min={column.type === "number" && column.key !== "order_amount" ? 0 : undefined}
+                                    type={column.type === "number" ? "number" : "text"}
+                                    min={column.type === "number" ? 0 : undefined}
                                     inputMode={column.type === "number" ? "numeric" : undefined}
                                     value={value}
                                     onFocus={handleFieldFocus}
@@ -1259,6 +1222,29 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                                     </Popover>
                                   )}
                                 </div>
+                                {/* 마지막 컬럼 오른쪽에 hover 시 떠오르는 액션 버튼 */}
+                                {isLastColumn && (
+                                  <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 z-10">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleClearRow(rowIndex)}
+                                      className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/90 text-gray-400 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-vanilla-custard/40 hover:text-yellow-700 hover:ring-vanilla-custard/60"
+                                      aria-label={`${rowIndex + 1}행 비우기`}
+                                      title="행 비우기"
+                                    >
+                                      <Eraser className="h-3 w-3" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteRow(rowIndex)}
+                                      className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/90 text-gray-400 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-soft-blush/40 hover:text-red-400 hover:ring-soft-blush/60"
+                                      aria-label={`${rowIndex + 1}행 삭제`}
+                                      title="행 삭제"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                )}
                               </td>
                             )
                           })}
@@ -1266,7 +1252,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                       ))}
                       {/* 행 추가 버튼 행 */}
                       <tr>
-                        <td colSpan={10} className="p-0">
+                        <td colSpan={9} className="p-0">
                           <button
                             type="button"
                             onClick={() => handleAddRows(1)}
@@ -1278,23 +1264,6 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
                         </td>
                       </tr>
                     </tbody>
-                    {/* 주문금액 합계 행 */}
-                    <tfoot className="sticky bottom-0 z-10">
-                      <tr className="bg-gray-100 border-t-2 border-gray-300">
-                        <td colSpan={5} className="border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-600">
-                          합계
-                        </td>
-                        <td className="border-r border-gray-200 px-1.5 py-1.5 text-right text-[11px] font-bold tabular-nums text-slate-700">
-                          {formatNumberWithCommas(
-                            draft.lines.reduce((sum, line) => {
-                              const v = typeof line.order_amount === "number" ? line.order_amount : 0
-                              return sum + v
-                            }, 0)
-                          )}
-                        </td>
-                        <td colSpan={4} className="px-1.5 py-1.5" />
-                      </tr>
-                    </tfoot>
                   </table>
                 </div>
               </div>

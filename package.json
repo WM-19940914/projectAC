@@ -15,6 +15,7 @@
     "lint": "next lint",
     "import:customers": "node --input-type=commonjs scripts/import-customers.js",
     "import:prices": "node --input-type=commonjs scripts/import-price-list.js",
+    "export:data": "node --input-type=commonjs scripts/export-data.js",
     "utf8:enable": "powershell -ExecutionPolicy Bypass -File scripts/enable-utf8.ps1"
   },
   "dependencies": {

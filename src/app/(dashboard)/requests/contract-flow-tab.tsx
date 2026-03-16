@@ -41,11 +41,12 @@ import {
   normalizeMiddleInstallments,
   normalizeStageScheduledDates,
   normalizeStageConditions,
-  formatStagePercent,
   buildContractSnapshot,
   buildSettlementRows,
   getTodayDateString,
   getOverdueDays,
+  isAmountMode,
+  getStageAmounts,
 } from "./settlement-utils"
 
 export function ContractFlowTab({
@@ -85,6 +86,8 @@ export function ContractFlowTab({
   const [modalScheduledDates, setModalScheduledDates] = useState<Record<SettlementStage, string>>({ ...EMPTY_STAGE_SCHEDULED_DATES })
   const [modalConditions, setModalConditions] = useState<Record<SettlementStage, string>>({ ...EMPTY_STAGE_CONDITIONS })
   const [modalMiddleInstallments, setModalMiddleInstallments] = useState(DEFAULT_MIDDLE_INSTALLMENTS)
+  // 항상 금액 모드 (VAT 포함 원 단위)
+  const ratioAmountMode = true
   const [stageRatios, setStageRatios] = useState<Record<SettlementStage, number>>({ ...EMPTY_STAGE_RATIOS, 잔금: 100 })
   const [stageScheduledDates, setStageScheduledDates] = useState<Record<SettlementStage, string>>({ ...EMPTY_STAGE_SCHEDULED_DATES })
   const [stageConditions, setStageConditions] = useState<Record<SettlementStage, string>>({ ...EMPTY_STAGE_CONDITIONS })
@@ -321,13 +324,41 @@ export function ContractFlowTab({
             : null
         )
         const hasMetaRatios = !!(contractMeta && contractMeta.stage_ratios && typeof contractMeta.stage_ratios === "object")
-        const nextRatios = hasMetaRatios
-          ? normalizeRatios(contractMeta?.stage_ratios, nextDraft.settlement_type)
-          : (
-            storedConfig.ratios
-              ? normalizeRatios(storedConfig.ratios, nextDraft.settlement_type)
-              : createEvenRatios(nextDraft.settlement_type)
-          )
+        // 항상 금액 모드로 전환 — 기존 비율 데이터도 금액으로 자동 변환
+        const dbAmountMode = hasMetaRatios && isAmountMode(contractMeta?.stage_ratios)
+        // 항상 금액 모드 (VAT 포함)
+        const contractAmt = Math.max(0, Math.round(Number(nextDraft.contract_amount || 0)))
+        // VAT 포함 총액: round(supply * 1.1)로 역산 오차 방지
+        const totalWithVat = Math.round(contractAmt * 1.1)
+        let nextRatios: Record<SettlementStage, number>
+        if (hasMetaRatios && dbAmountMode) {
+          // 이미 금액 모드 → 그대로 사용
+          nextRatios = getStageAmounts(contractMeta?.stage_ratios, nextDraft.settlement_type)
+        } else if (hasMetaRatios) {
+          // 기존 비율(%) 데이터 → VAT 포함 금액으로 자동 변환
+          const pctRatios = normalizeRatios(contractMeta?.stage_ratios, nextDraft.settlement_type)
+          nextRatios = { ...EMPTY_STAGE_RATIOS }
+          nextDraft.settlement_type.forEach((stage) => {
+            nextRatios[stage] = Math.round(totalWithVat * (pctRatios[stage] || 0) / 100)
+          })
+        } else if (storedConfig.ratios) {
+          const pctRatios = normalizeRatios(storedConfig.ratios, nextDraft.settlement_type)
+          nextRatios = { ...EMPTY_STAGE_RATIOS }
+          nextDraft.settlement_type.forEach((stage) => {
+            nextRatios[stage] = Math.round(totalWithVat * (pctRatios[stage] || 0) / 100)
+          })
+        } else {
+          // 아예 새로 만드는 경우 → VAT 포함 총액 균등 분배
+          nextRatios = { ...EMPTY_STAGE_RATIOS }
+          if (nextDraft.settlement_type.length > 0) {
+            const perStage = Math.floor(totalWithVat / nextDraft.settlement_type.length)
+            nextDraft.settlement_type.forEach((stage, i) => {
+              nextRatios[stage] = i === nextDraft.settlement_type.length - 1
+                ? totalWithVat - perStage * (nextDraft.settlement_type.length - 1)
+                : perStage
+            })
+          }
+        }
         const nextMiddleInstallments = hasMetaRatios
           ? normalizeMiddleInstallments(contractMeta?.middle_installments)
           : normalizeMiddleInstallments(storedConfig.middleInstallments)
@@ -354,8 +385,9 @@ export function ContractFlowTab({
           ...pendingDraft,
           settlement_type: pendingStages.length > 0 ? pendingStages : nextDraft.settlement_type,
         } : nextDraft
+        // 항상 금액 모드 → getStageAmounts 사용 (normalizeRatios는 0~100 클리핑이라 금액을 망가뜨림)
         const resolvedRatios = canApplyPending && pending
-          ? normalizeRatios(pending.stageRatios, resolvedDraft.settlement_type)
+          ? getStageAmounts(pending.stageRatios, resolvedDraft.settlement_type)
           : nextRatios
         const resolvedMiddleInstallments = canApplyPending && pending
           ? normalizeMiddleInstallments(pending.middleInstallments)
@@ -410,7 +442,7 @@ export function ContractFlowTab({
       } catch {
         if (cancelled) return
         setDraft(defaultDraft)
-        setStageRatios({ ...EMPTY_STAGE_RATIOS, 잔금: 100 })
+        setStageRatios({ ...EMPTY_STAGE_RATIOS })
         setMiddleInstallments(DEFAULT_MIDDLE_INSTALLMENTS)
         setStageScheduledDates({ ...EMPTY_STAGE_SCHEDULED_DATES })
         setStageConditions({ ...EMPTY_STAGE_CONDITIONS })
@@ -418,7 +450,7 @@ export function ContractFlowTab({
         const initialSnapshot = buildContractSnapshot({
           draft: defaultDraft,
           selectedStages: defaultDraft.settlement_type,
-          stageRatios: { ...EMPTY_STAGE_RATIOS, 잔금: 100 },
+          stageRatios: { ...EMPTY_STAGE_RATIOS },
           middleInstallments: DEFAULT_MIDDLE_INSTALLMENTS,
           stageScheduledDates: { ...EMPTY_STAGE_SCHEDULED_DATES },
           settlementStatusMap: {},
@@ -441,8 +473,9 @@ export function ContractFlowTab({
 
   const selectedStages = SETTLEMENT_STAGE_ORDER.filter((stage) => draft.settlement_type.includes(stage))
   const supplyAmount = Math.max(0, Math.round(Number(draft.contract_amount || 0)))
-  const totalWithVat = supplyAmount + Math.floor(supplyAmount * 0.1)
-  const settlementRows = buildSettlementRows(supplyAmount, selectedStages, stageRatios, middleInstallments)
+  // VAT 포함 총액: round(supply * 1.1)로 계산해야 ÷1.1 역산 시 1원 오차 방지
+  const totalWithVat = Math.round(supplyAmount * 1.1)
+  const settlementRows = buildSettlementRows(supplyAmount, selectedStages, stageRatios, middleInstallments, ratioAmountMode)
   const settlementRowsWithScheduledDate = settlementRows.map((row) => {
     let scheduledDate = ""
     if (row.key === "선금") scheduledDate = stageScheduledDates.선금
@@ -526,9 +559,7 @@ export function ContractFlowTab({
         rowPaid >= plannedAmount && plannedAmount > 0 ? "paid"
         : rowPaid > 0 ? "partial"
         : "unpaid"
-      // 비율(%) 포함 — page.tsx 초기 렌더와 동일하게 "선금 50%" 형태로 표시
-      const ratioStr = Number.isInteger(row.ratio) ? `${row.ratio}` : row.ratio.toFixed(1)
-      return { name: `${row.label} ${ratioStr}%`, status: stageStatus }
+      return { name: row.label, status: stageStatus }
     })
     const stagesKey = stageSummariesForCard.map((s) => `${s.name}:${s.status}`).join(",")
 
@@ -561,11 +592,10 @@ export function ContractFlowTab({
     progressPercent,
   ])
   const stageSummary = selectedStages.length > 0
-    ? selectedStages.map((stage) => (
-      stage === "중도금"
-        ? `${stage} ${formatStagePercent(stageRatios[stage])}% (${middleInstallments}회)`
-        : `${stage} ${formatStagePercent(stageRatios[stage])}%`
-    )).join(" · ")
+    ? selectedStages.map((stage) => {
+      const suffix = stage === "중도금" && middleInstallments > 1 ? `(${middleInstallments}회)` : ""
+      return `${stage}${suffix}`
+    }).join(" / ")
     : "정산 형태를 설정해주세요."
   const modalSelectedRatioSum = modalStages.reduce((sum, stage) => {
     const value = Number(modalRatios[stage] ?? 0)
@@ -832,7 +862,8 @@ export function ContractFlowTab({
   const openSettlementModal = () => {
     const normalized: SettlementStage[] = selectedStages.length > 0 ? selectedStages : ["잔금"]
     setModalStages(normalized)
-    setModalRatios(normalizeRatios(stageRatios, normalized))
+    // 금액(원) 그대로 전달
+    setModalRatios({ ...stageRatios })
     setModalScheduledDates(normalizeStageScheduledDates(stageScheduledDates))
     setModalConditions(normalizeStageConditions(stageConditions))
     setModalMiddleInstallments(middleInstallments)
@@ -879,13 +910,17 @@ export function ContractFlowTab({
   }
 
   const handleApplySettlement = () => {
-    if (modalStages.length === 0 || modalSelectedRatioSum > 100) return
+    // 금액 모드: 합계가 계약금액 이하인지 체크 / 비율 모드: 합계가 100% 이하인지
+    if (modalStages.length === 0) return
+    // 합계가 VAT포함 총액을 초과하면 저장 차단
+    if (modalSelectedRatioSum > totalWithVat && totalWithVat > 0) return
     const normalized = SETTLEMENT_STAGE_ORDER.filter((stage) => modalStages.includes(stage))
     const hasSettlementTypeChanged =
       normalized.length !== selectedStages.length ||
       normalized.some((stage, idx) => stage !== selectedStages[idx])
     setDraft((prev) => ({ ...prev, settlement_type: normalized }))
-    setStageRatios(normalizeRatios(modalRatios, normalized))
+    // 금액(원) 그대로 저장
+    setStageRatios(getStageAmounts(modalRatios, normalized))
     setStageScheduledDates(() => {
       const base = { ...EMPTY_STAGE_SCHEDULED_DATES }
       normalized.forEach((stage) => {
@@ -930,7 +965,8 @@ export function ContractFlowTab({
     setIsSaving(true)
     setSaveMessage(mode === "manual" ? "즉시 저장 중..." : "자동 저장 중...")
     try {
-      const selectedStageRatios = normalizeRatios(stageRatios, selectedStages)
+      // 금액(원) + _mode 마커로 저장
+      const selectedStageRatios = { ...getStageAmounts(stageRatios, selectedStages), _mode: "amount" as const }
       const selectedStageScheduledDates = selectedStages.reduce((acc, stage) => ({
         ...acc,
         [stage]: stageScheduledDates[stage] || "",
@@ -1294,15 +1330,9 @@ export function ContractFlowTab({
         {settlementRows.length > 0 && (
           <div className="text-[11px]">
             {settlementRowsWithScheduledDate.map((row) => {
-              // 단계별 비율 표시: "선금" → "선금30%", "중도금 1차" → "중도금 1차 (40%)"
-              const stageKey = row.key === "선금" ? "선금" : row.key === "잔금" ? "잔금" : "중도금"
-              const ratio = stageRatios[stageKey as keyof typeof stageRatios] ?? 0
-              const labelWithRatio = row.key.startsWith("middle-")
-                ? `${row.label} (${formatStagePercent(ratio)}%)`
-                : `${row.label} ${formatStagePercent(ratio)}%`
               return (
               <div key={row.key} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-b-0">
-                <span className="text-gray-600">{labelWithRatio}</span>
+                <span className="text-gray-600">{row.label}</span>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400">{row.scheduledDate || ""}</span>
                   <span className="font-medium tabular-nums text-gray-700">{formatCurrency(row.total)}</span>
@@ -1375,7 +1405,7 @@ export function ContractFlowTab({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <p className="truncate text-[11px] font-semibold text-gray-700">{row.label} <span className="font-normal text-slate-400">{row.ratio}%</span></p>
+                    <p className="truncate text-[11px] font-semibold text-gray-700">{row.label}</p>
                     <span className={cn(
                       "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold",
                       row.paymentConfirmed
@@ -1410,7 +1440,7 @@ export function ContractFlowTab({
                         const nextIssued = !row.taxInvoiceIssued
                         const updates: Partial<SettlementStatusInput> = { tax_invoice_issued: nextIssued }
                         if (nextIssued && !row.taxInvoiceDate) {
-                          updates.tax_invoice_date = new Date().toISOString().split("T")[0]
+                          updates.tax_invoice_date = new Date().toLocaleDateString("sv-SE")
                         }
                         if (!nextIssued) updates.tax_invoice_date = ""
                         updateSettlementStatus(row.key, updates)
@@ -1722,16 +1752,11 @@ export function ContractFlowTab({
                       {settlementRowsWithScheduledDate.map((row) => {
                         const stageKey = row.key === "선금" ? "선금" : row.key === "잔금" ? "잔금" : "중도금"
                         const conditionKey = stageKey as SettlementStage
-                        const ratio = stageRatios[stageKey as keyof typeof stageRatios] ?? 0
-                        // row.total = supply + vat (이미 VAT 포함)
-                        const labelWithRatio = row.key.startsWith("middle-")
-                          ? `${row.label} (${formatStagePercent(ratio)}%)`
-                          : `${row.label} ${formatStagePercent(ratio)}%`
                         const conditionText = stageConditions[conditionKey] || ""
                         const hasDate = !!row.scheduledDate
                         return (
                           <div key={row.key} className="grid grid-cols-[1fr_90px_24px_120px] items-center px-3 py-1.5 border-t border-slate-100 text-[11px]">
-                            <span className="text-slate-600">{labelWithRatio}</span>
+                            <span className="text-slate-600">{row.label}</span>
                             <span className="font-medium tabular-nums text-slate-700 text-right pr-1">{formatCurrency(row.total)}원</span>
                             <span className="flex justify-center"><span className="h-4 w-px bg-slate-200" /></span>
                             {/* 입금예정일 — 미입력 시 연한 핑크, 조건 hover 시 툴팁 */}
@@ -1841,13 +1866,13 @@ export function ContractFlowTab({
                               : "border-slate-200"
                         )}
                       >
-                        {/* 헤더: 단계명 비율% + 금액(VAT포함) + 상태 */}
+                        {/* 헤더: 단계명 + 금액(VAT포함) + 상태 */}
                         <div className={cn(
                           "flex items-center justify-between gap-2 px-3 py-2",
                           row.paymentConfirmed ? "bg-muted-teal/5" : "bg-slate-50/70"
                         )}>
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-[11px] font-bold text-slate-800">{row.label} <span className="font-normal text-slate-400">{row.ratio}%</span></span>
+                            <span className="text-[11px] font-bold text-slate-800">{row.label}</span>
                             <span className={cn(
                               "inline-flex h-[18px] shrink-0 items-center rounded-full px-1.5 text-[9px] font-semibold",
                               row.paymentConfirmed
@@ -1877,7 +1902,7 @@ export function ContractFlowTab({
                                   const nextIssued = !issued
                                   const updates: Partial<SettlementStatusInput> = { tax_invoice_issued: nextIssued }
                                   if (nextIssued && !row.taxInvoiceDate) {
-                                    updates.tax_invoice_date = new Date().toISOString().split("T")[0]
+                                    updates.tax_invoice_date = new Date().toLocaleDateString("sv-SE")
                                   }
                                   if (!nextIssued) updates.tax_invoice_date = ""
                                   updateSettlementStatus(row.key, updates)
@@ -2039,7 +2064,7 @@ export function ContractFlowTab({
           <DialogHeader>
             <DialogTitle className="font-sans text-base">정산 형태 설정</DialogTitle>
             <DialogDescription className="text-xs text-gray-500">
-              체크박스로 단계를 선택하고 비율(%)과 정산예정일을 설정하세요.
+              체크박스로 단계를 선택하고 금액과 정산예정일을 설정하세요.
             </DialogDescription>
           </DialogHeader>
 
@@ -2060,31 +2085,36 @@ export function ContractFlowTab({
 
                   <div className="flex flex-col items-end gap-1">
                     <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={checked ? (modalRatios[stage] === 0 ? "" : String(modalRatios[stage])) : ""}
-                        placeholder="0"
-                        disabled={!checked}
-                        onFocus={(e) => e.currentTarget.select()}
-                        onChange={(e) => {
-                          if (!checked) return
-                          const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
-                          const nextValue = digitsOnly ? Number(digitsOnly) : 0
-                          setModalRatios((prev) => ({
-                            ...prev,
-                            [stage]: Number.isFinite(nextValue) ? Math.max(0, Math.min(100, Math.round(nextValue))) : 0,
-                          }))
-                        }}
-                        className={cn(
-                          "h-7 w-16 rounded-md border px-2 text-right text-xs tabular-nums focus:outline-none",
-                          checked
-                            ? "border-gray-300 bg-white focus:ring-2 focus:ring-slate-300/50"
-                            : "border-gray-200 bg-gray-100 text-gray-300"
-                        )}
-                      />
-                      <span className={cn("text-[10px]", checked ? "text-gray-500" : "text-gray-300")}>%</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={checked ? (modalRatios[stage] === 0 ? "" : modalRatios[stage].toLocaleString("ko-KR")) : ""}
+                            placeholder="0"
+                            disabled={!checked}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onChange={(e) => {
+                              if (!checked) return
+                              const digitsOnly = e.target.value.replace(/[^0-9]/g, "")
+                              const nextValue = digitsOnly ? Number(digitsOnly) : 0
+                              setModalRatios((prev) => ({
+                                ...prev,
+                                [stage]: Math.max(0, Math.round(nextValue)),
+                              }))
+                            }}
+                            className={cn(
+                              "h-7 w-28 rounded-md border px-2 text-right text-xs tabular-nums focus:outline-none",
+                              checked
+                                ? "border-gray-300 bg-white focus:ring-2 focus:ring-slate-300/50"
+                                : "border-gray-200 bg-gray-100 text-gray-300"
+                            )}
+                          />
+                          <span className={cn("text-[10px] whitespace-nowrap", checked ? "text-gray-500" : "text-gray-300")}>원 (VAT포함)</span>
+                          {/* 참고용 % 가이드 */}
+                          {checked && totalWithVat > 0 && (
+                            <span className="text-[10px] text-gray-300 tabular-nums min-w-[32px] text-right">
+                              {Math.round((modalRatios[stage] || 0) / totalWithVat * 100)}%
+                            </span>
+                          )}
                       {stage === "중도금" && checked && (
                         <div className="flex items-center gap-1">
                           <span className="text-[10px] text-gray-500">회차</span>
@@ -2152,6 +2182,20 @@ export function ContractFlowTab({
 
           </div>
 
+          {/* 합계 표시 */}
+          {modalStages.length > 0 && (
+            <div className="text-xs text-right text-gray-500 -mt-1">
+                <span>
+                  합계: <span className={modalSelectedRatioSum === totalWithVat ? "text-muted-teal font-medium" : modalSelectedRatioSum > totalWithVat ? "text-soft-blush font-medium" : "text-gray-600 font-medium"}>
+                    {modalSelectedRatioSum.toLocaleString("ko-KR")}원
+                  </span>
+                  {" / "}
+                  {totalWithVat.toLocaleString("ko-KR")}원 (VAT포함)
+                  {modalSelectedRatioSum === totalWithVat && " ✓"}
+                </span>
+            </div>
+          )}
+
           <DialogFooter className="gap-2 sm:gap-2">
             <button
               type="button"
@@ -2163,7 +2207,7 @@ export function ContractFlowTab({
             <button
               type="button"
               onClick={handleApplySettlement}
-              disabled={modalStages.length === 0 || modalSelectedRatioSum > 100}
+              disabled={modalStages.length === 0 || (modalSelectedRatioSum > totalWithVat && totalWithVat > 0)}
               className="px-3 py-1.5 text-xs rounded-md bg-slate-700 text-white hover:bg-slate-700/90 disabled:opacity-40"
             >
               적용

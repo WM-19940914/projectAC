@@ -239,39 +239,80 @@ export function buildContractSnapshot(params: {
   })
 }
 
+// ----- stage_ratios가 금액 모드인지 확인 -----
+// DB의 stage_ratios JSONB에 _mode: "amount"가 있으면 금액 모드
+export function isAmountMode(rawRatios: unknown): boolean {
+  if (!rawRatios || typeof rawRatios !== "object") return false
+  return (rawRatios as Record<string, unknown>)._mode === "amount"
+}
+
+// ----- 금액 모드에서 stage_ratios 값 추출 (금액 그대로 반환) -----
+export function getStageAmounts(rawRatios: unknown, stages: SettlementStage[]): Record<SettlementStage, number> {
+  const result: Record<SettlementStage, number> = { 선금: 0, 중도금: 0, 잔금: 0 }
+  if (!rawRatios || typeof rawRatios !== "object") return result
+  const obj = rawRatios as Record<string, unknown>
+  for (const stage of stages) {
+    result[stage] = Math.max(0, Math.round(Number(obj[stage]) || 0))
+  }
+  return result
+}
+
 // ----- 정산 행 생성 (VAT 포함 금액 계산) -----
+// amountMode=true면 stageRatios 값을 공급가액(원) 금액으로 직접 사용
 export function buildSettlementRows(
   supplyAmount: number,
   selectedStages: SettlementStage[],
   stageRatios: Record<SettlementStage, number>,
-  middleInstallments: number
+  middleInstallments: number,
+  amountMode?: boolean,
 ): Array<{ key: string; label: string; ratio: number; supply: number; vat: number; total: number }> {
   if (selectedStages.length === 0) return []
 
   const rows: Array<{ key: string; label: string; ratio: number; supply: number; vat: number; total: number }> = []
 
+  // VAT 포함 총액: round(supply * 1.1)로 역산 오차 방지
+  const totalWithVat = Math.round(supplyAmount * 1.1)
+
   selectedStages.forEach((stage) => {
-    const ratio = stageRatios[stage] || 0
-    const stageSupply = Math.round(supplyAmount * ratio / 100)
-    const stageVat = Math.floor(stageSupply * 0.1)
+    // 금액 모드: stageRatios 값이 VAT 포함 금액
+    // 비율 모드: stageRatios 값이 비율(%)
+    const rawValue = stageRatios[stage] || 0
+    let stageSupply: number
+    let stageVat: number
+    let stageTotal: number
+
+    if (amountMode) {
+      // 금액 모드: 저장된 값 = VAT 포함 금액 → 역산
+      stageTotal = Math.max(0, Math.round(rawValue))
+      stageSupply = Math.round(stageTotal / 1.1)
+      stageVat = stageTotal - stageSupply
+    } else {
+      stageSupply = Math.round(supplyAmount * rawValue / 100)
+      stageVat = Math.floor(stageSupply * 0.1)
+      stageTotal = stageSupply + stageVat
+    }
+    // 표시용 비율 계산
+    const ratio = amountMode
+      ? (totalWithVat > 0 ? Math.round(stageTotal / totalWithVat * 100) : 0)
+      : rawValue
 
     if (stage === "중도금" && middleInstallments > 1) {
       // 중도금을 회차별로 분할
-      const perSupply = Math.floor(stageSupply / middleInstallments)
-      const perVat = Math.floor(perSupply * 0.1)
+      const perTotal = Math.floor(stageTotal / middleInstallments)
       const perRatio = Math.floor(ratio / middleInstallments)
       for (let i = 1; i <= middleInstallments; i++) {
         const isLast = i === middleInstallments
-        const thisSupply = isLast ? stageSupply - perSupply * (middleInstallments - 1) : perSupply
-        const thisVat = isLast ? Math.floor(thisSupply * 0.1) : perVat
+        const thisTotal = isLast ? stageTotal - perTotal * (middleInstallments - 1) : perTotal
+        const thisSupply = Math.round(thisTotal / 1.1)
+        const thisVat = thisTotal - thisSupply
         const thisRatio = isLast ? ratio - perRatio * (middleInstallments - 1) : perRatio
         rows.push({
           key: `middle-${i}`,
           label: `중도금 ${i}차`,
           ratio: thisRatio,
-          supply: thisSupply,
-          vat: thisVat,
-          total: thisSupply + thisVat,
+          supply: amountMode ? thisSupply : (isLast ? stageSupply - Math.floor(stageSupply / middleInstallments) * (middleInstallments - 1) : Math.floor(stageSupply / middleInstallments)),
+          vat: amountMode ? thisVat : Math.floor((isLast ? stageSupply - Math.floor(stageSupply / middleInstallments) * (middleInstallments - 1) : Math.floor(stageSupply / middleInstallments)) * 0.1),
+          total: thisTotal,
         })
       }
     } else {
@@ -281,7 +322,7 @@ export function buildSettlementRows(
         ratio,
         supply: stageSupply,
         vat: stageVat,
-        total: stageSupply + stageVat,
+        total: stageTotal,
       })
     }
   })
@@ -313,9 +354,10 @@ export function computeStageSummaries(
   })
   if (stages.length === 0) return []
 
-  const normalizedRatios = normalizeRatios(rawRatios, stages)
+  const amMode = isAmountMode(rawRatios)
+  const normalizedRatios = amMode ? getStageAmounts(rawRatios, stages) : normalizeRatios(rawRatios, stages)
   const middleCount = normalizeMiddleInstallments(settlementMeta.middle_installments)
-  const rows = buildSettlementRows(contractAmount, stages, normalizedRatios, middleCount)
+  const rows = buildSettlementRows(contractAmount, stages, normalizedRatios, middleCount, amMode)
 
   return rows.map((row) => {
     const status = normalizeSettlementStatusInput(statusMap[row.key])
