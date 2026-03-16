@@ -31,13 +31,15 @@ export function SalesFlowPanel({
   contractSummary?: ContractSummary | null
 }) {
   const confirmedQuote = confirmedQuoteId ? quotations.find((q) => q.id === confirmedQuoteId) ?? null : null
-  const confirmedIncentiveTotal = confirmedQuote?.items
+  // 장려금 (VAT포함): 견적서의 매입단가 × 장려율 → VAT 10% 가산
+  const confirmedIncentiveExclTax = confirmedQuote?.items
     ? confirmedQuote.items.reduce((sum, item) => {
       const purchaseAmount = Number(item.purchase_amount ?? 0)
       const incentiveRate = Number(item.incentive_rate ?? 0)
       return sum + Math.round(purchaseAmount * incentiveRate / 100)
     }, 0)
     : 0
+  const confirmedIncentiveTotal = Math.floor(confirmedIncentiveExclTax * 1.1)
 
   return (
     <div className="space-y-4">
@@ -65,8 +67,8 @@ export function SalesFlowPanel({
         <div className="xl:col-span-2">
           <ExpenseTab
             requestId={requestId}
-            totalSettlement={contractSummary ? Math.floor(contractSummary.paidAmount / 1.1) : 0}
-            totalContractAmount={contractSummary ? Math.floor(contractSummary.totalWithVat / 1.1) : 0}
+            totalSettlement={contractSummary ? contractSummary.paidAmount : 0}
+            totalContractAmount={contractSummary ? contractSummary.totalWithVat : 0}
             incentiveTotal={confirmedIncentiveTotal}
             layout="side-by-side"
           />

@@ -1,33 +1,41 @@
 "use client"
 
 // ----- 대시보드 클라이언트 오케스트레이터 -----
-// 4개 섹션을 세로로 나열하는 레이아웃 컴포넌트
+// 3개 섹션을 세로로 나열하는 레이아웃 컴포넌트
 
-import type { SettlementAlert, ExpenseAlert, MonthlyRevenue, ActiveSite, ContributionData } from "./dashboard-types"
+import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo } from "./dashboard-types"
 import { SettlementExpenseSection } from "./settlement-expense-section"
 import { RevenueChartSection } from "./revenue-chart-section"
-import { ActiveSitesSection } from "./active-sites-section"
 import { ContributionSection } from "./contribution-section"
 
 interface Props {
   settlementAlerts: SettlementAlert[]
   expenseAlerts: ExpenseAlert[]
-  monthlyRevenue: MonthlyRevenue[]
-  activeSites: ActiveSite[]
-  currentMonth: string
-  contribution: {
-    monthly: ContributionData
-    yearly: ContributionData
-  }
+  taxInvoiceAlerts: TaxInvoiceAlert[]
+  allRevenueData: Record<number, MonthlyRevenue[]>
+  revenueDetails: Record<string, RevenueDetail[]>
+  availableYears: number[]
+  currentYear: number
+  currentMonth: number
+  contractContributions: ContractContribution[]
+  requestInfoMap: Record<string, DashboardRequestInfo>
+  initialYear: number
+  initialMonth: number
 }
 
 export function DashboardClient({
   settlementAlerts,
   expenseAlerts,
-  monthlyRevenue,
-  activeSites,
+  taxInvoiceAlerts,
+  allRevenueData,
+  revenueDetails,
+  availableYears,
+  currentYear,
   currentMonth,
-  contribution,
+  contractContributions,
+  requestInfoMap,
+  initialYear,
+  initialMonth,
 }: Props) {
   return (
     <div className="space-y-6 p-6">
@@ -41,22 +49,25 @@ export function DashboardClient({
       <SettlementExpenseSection
         settlementAlerts={settlementAlerts}
         expenseAlerts={expenseAlerts}
+        taxInvoiceAlerts={taxInvoiceAlerts}
+        requestInfoMap={requestInfoMap}
       />
 
-      {/* 섹션2: 1년간 매출 그래프 */}
-      <RevenueChartSection data={monthlyRevenue} />
-
-      {/* 섹션3: 월별 진행 현장 */}
-      <ActiveSitesSection
-        sites={activeSites}
+      {/* 섹션2: 매출 추이 그래프 (계산서 발행일 기준) */}
+      <RevenueChartSection
+        allRevenueData={allRevenueData}
+        revenueDetails={revenueDetails}
+        availableYears={availableYears}
+        currentYear={currentYear}
         currentMonth={currentMonth}
       />
 
-      {/* 섹션4: 월간/연간 공헌이익 */}
+      {/* 섹션3: 계약별 공헌이익 */}
       <ContributionSection
-        monthly={contribution.monthly}
-        yearly={contribution.yearly}
-        currentMonth={currentMonth}
+        items={contractContributions}
+        requestInfoMap={requestInfoMap}
+        initialYear={initialYear}
+        initialMonth={initialMonth}
       />
     </div>
   )

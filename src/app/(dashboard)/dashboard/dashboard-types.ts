@@ -28,26 +28,67 @@ export interface ExpenseAlert {
   dueDate?: string
 }
 
-// 매출 월별 집계
-export interface MonthlyRevenue {
-  month: string      // "1월", "2월" 등
-  amount: number     // 계약금액 합계
-  yearMonth: string  // "2025-06" (정렬용)
-}
-
-// 진행 현장
-export interface ActiveSite {
+// 세금계산서 미발행 알림 항목
+export interface TaxInvoiceAlert {
   requestId: string
-  title: string
-  customerName: string
-  contractAmount: number
-  stageSummaries: { name: string; status: "paid" | "partial" | "unpaid" }[]
+  requestTitle: string
+  contractId: string
+  stageName: string
+  amount: number       // 해당 단계 금액 (VAT포함)
+  paidAmount: number   // 입금된 금액
 }
 
-// 공헌이익 데이터
+// 매출 월별 집계 (계산서 발행일 기준, 연도별 1~12월)
+export interface MonthlyRevenue {
+  month: number      // 1~12
+  label: string      // "1월", "2월" 등
+  amount: number     // 계산서 발행 금액 합계 (VAT포함)
+  count: number      // 발행 건수
+}
+
+// 매출 상세 항목 (막대 클릭 시 좌측 패널에 표시)
+export interface RevenueDetail {
+  contractId: string
+  requestId: string | null
+  title: string          // 계약 제목 또는 의뢰 제목
+  customerName: string
+  stageName: string      // "선금", "중도금 1차", "잔금" 등
+  amount: number         // 해당 단계 금액 (VAT포함)
+  invoiceDate: string    // 계산서 발행일
+}
+
+// 대시보드용 의뢰 요약 (Sheet 패널에서 사용)
+export interface DashboardRequestInfo {
+  id: string
+  title: string
+  status: string
+  contract_id: string | null
+  confirmed_quote_id: string | null
+  inquiry_date: string | null
+  memo: string | null
+  created_at: string
+  customer: { id: string; company_name: string; deleted_at: string | null } | null
+}
+
+// 공헌이익 데이터 (레거시)
 export interface ContributionData {
   revenue: number
   expense: number
   profit: number
   rate: number
+}
+
+// 계약별 공헌이익 항목
+export interface ContractContribution {
+  contractId: string
+  requestId: string | null // 연결된 의뢰 ID (딥링크용)
+  title: string
+  customerName: string     // 고객(업체)명
+  contractAmountVat: number // 계약금액 (VAT포함) — 이익률 분모
+  totalPaid: number        // 총 입금 금액 (confirmed payment_entries 합계, VAT포함)
+  totalExpense: number     // 총 지출 금액 (VAT포함)
+  incentiveTotal: number   // 장려금 (VAT포함)
+  netProfit: number        // 순이익 = 입금 - 지출
+  profitRate: number       // 이익률 % = 순이익 / 계약금액(VAT포함)
+  yearMonth: string        // "2026-01" 형태 — 계약 종료일(end_date) 기준
 }

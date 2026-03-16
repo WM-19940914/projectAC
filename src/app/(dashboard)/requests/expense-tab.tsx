@@ -128,17 +128,15 @@ function ExpenseDialog({
   // VAT 포함 금액 자동 계산
   const vatIncluded = rawAmount > 0 ? calcVatIncluded(rawAmount) : 0
 
-  // Dialog 닫힐 때 초기화
+  // Dialog 닫힐 때 자동 저장 — 금액이 입력되어 있으면 저장 후 닫기
   const handleOpenChange = (next: boolean) => {
     if (!next) {
+      const amount = Number.isFinite(rawAmount) ? Math.max(0, Math.round(rawAmount)) : 0
+      if (amount > 0) {
+        onSave({ ...form, category, amount }, editingItem?.id)
+      }
       onClose()
     }
-  }
-
-  const handleSubmit = () => {
-    const amount = Number.isFinite(rawAmount) ? Math.max(0, Math.round(rawAmount)) : 0
-    onSave({ ...form, category, amount }, editingItem?.id)
-    onClose()
   }
 
   const isEditMode = !!editingItem
@@ -357,16 +355,7 @@ function ExpenseDialog({
           </div>
         </div>
 
-        {/* 저장 버튼 */}
-        <div className="border-t border-gray-100 px-5 py-4">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="w-full rounded-lg bg-slate-700 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
-          >
-            {isEditMode ? "수정하기" : "추가하기"}
-          </button>
-        </div>
+        {/* 닫을 때 자동 저장됨 — 별도 버튼 불필요 */}
       </DialogContent>
     </Dialog>
   )
@@ -426,10 +415,10 @@ function ExpenseCard({
         {item.vendor || "거래처 미입력"}{item.description ? ` · ${item.description}` : ""}
       </p>
 
-      {/* 3행: 금액 */}
+      {/* 3행: 금액 (VAT포함) */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold tabular-nums text-slate-900">{formatCurrency(item.amount)}원</span>
-        <span className="text-[10px] text-slate-400">VAT별도</span>
+        <span className="text-xs font-semibold tabular-nums text-slate-900">{formatCurrency(vatIncluded)}원</span>
+        <span className="text-[10px] text-slate-400">VAT포함</span>
       </div>
     </div>
   )
@@ -455,8 +444,8 @@ function ExpenseSection({
   // 수정 중인 아이템 (없으면 추가 모드)
   const [editingItem, setEditingItem] = useState<ExpenseItem | undefined>(undefined)
 
-  // 해당 카테고리 합계
-  const total = items.reduce((sum, item) => sum + item.amount, 0)
+  // 해당 카테고리 합계 (VAT포함)
+  const total = items.reduce((sum, item) => sum + calcVatIncluded(item.amount), 0)
 
   const openAdd = () => {
     setEditingItem(undefined)
@@ -653,8 +642,8 @@ export default function ExpenseTab({
   const equipmentItems = expenses.filter((e) => e.category === "장비").sort(sortByDate)
   const installItems = expenses.filter((e) => e.category === "설치").sort(sortByDate)
 
-  // 전체 합계
-  const grandTotal = expenses.reduce((sum, e) => sum + e.amount, 0)
+  // 전체 합계 (VAT포함)
+  const grandTotal = expenses.reduce((sum, e) => sum + calcVatIncluded(e.amount), 0)
 
   if (isLoading) {
     return (
@@ -695,7 +684,7 @@ export default function ExpenseTab({
                   {formatCurrency(grandTotal)}
                   <span className="ml-0.5 text-[10px] font-normal text-slate-400">원</span>
                 </p>
-                <p className="text-[10px] text-slate-400">VAT 제외 기준</p>
+                <p className="text-[10px] text-slate-400">VAT 포함 기준</p>
               </div>
             </div>
 
@@ -712,7 +701,7 @@ export default function ExpenseTab({
                       </span>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" align="start" className="w-56 p-3 text-[11px] space-y-1 text-gray-600 bg-white border border-gray-200 shadow-lg">
-                      <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT별도)</p>
+                      <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT포함)</p>
                       <p>순이익 = 정산 입금액 − 총 지출금액</p>
                       <p className="text-gray-400 text-[10px]">
                         {formatCurrency(totalSettlement)}원 − {formatCurrency(grandTotal)}원 = {formatCurrency(netProfit)}원
@@ -769,7 +758,7 @@ export default function ExpenseTab({
                           </span>
                         </TooltipTrigger>
                         <TooltipContent side="bottom" align="start" className="w-56 p-3 text-[11px] space-y-1 text-gray-600 bg-white border border-gray-200 shadow-lg">
-                          <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT별도)</p>
+                          <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT포함)</p>
                           <p>총 이익 = 순이익 + 장려금</p>
                           <p className="text-gray-400 text-[10px]">
                             {formatCurrency(netProfit)}원 + {formatCurrency(incentiveTotal)}원 = {formatCurrency(totalProfit)}원
@@ -824,7 +813,7 @@ export default function ExpenseTab({
               <div className="flex flex-col items-end gap-2">
                 {/* 총 지출금액 */}
                 <div className="text-right">
-                  <p className="text-[10px] font-medium text-gray-400 mb-0.5">총 지출금액 <span className="text-gray-300">(VAT별도)</span></p>
+                  <p className="text-[10px] font-medium text-gray-400 mb-0.5">총 지출금액 <span className="text-gray-300">(VAT포함)</span></p>
                   <p className="text-lg font-bold tabular-nums text-gray-900 leading-none">
                     {formatCurrency(grandTotal)}
                     <span className="text-xs font-normal text-gray-400 ml-0.5">원</span>
@@ -846,7 +835,7 @@ export default function ExpenseTab({
                         </div>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" align="end" className="w-56 p-3 text-[11px] space-y-1 text-gray-600 bg-white border border-gray-200 shadow-lg">
-                        <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT별도)</p>
+                        <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT포함)</p>
                         <p>순이익 = 정산 입금액 − 총 지출금액</p>
                         <p className="text-gray-400 text-[10px]">
                           {formatCurrency(totalSettlement)}원 − {formatCurrency(grandTotal)}원 = {formatCurrency(netProfit)}원
@@ -899,7 +888,7 @@ export default function ExpenseTab({
                             </div>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" align="end" className="w-56 p-3 text-[11px] space-y-1 text-gray-600 bg-white border border-gray-200 shadow-lg">
-                            <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT별도)</p>
+                            <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT포함)</p>
                             <p>총 이익 = 순이익 + 장려금</p>
                             <p className="text-gray-400 text-[10px]">
                               {formatCurrency(netProfit)}원 + {formatCurrency(incentiveTotal)}원 = {formatCurrency(totalProfit)}원
