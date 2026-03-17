@@ -57,6 +57,7 @@ export async function PATCH(req: NextRequest) {
       "inquiry_date",
       "memo",
       "status",
+      "manual_incentive",
     ] as const
 
     const updateData: Record<string, unknown> = {}

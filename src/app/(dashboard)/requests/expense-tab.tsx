@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Calendar as CalendarPicker } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { AirVent, Calendar, ChartPie, Info, Plus, Trash2, Receipt, Wrench } from "lucide-react"
+import { AirVent, Calendar, ChartPie, Info, Pencil, Plus, Trash2, Receipt, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // ─────────────────────────────────────────
@@ -446,11 +446,16 @@ function ExpenseCard({
         {item.vendor || "거래처 미입력"}{item.description ? ` · ${item.description}` : ""}
       </p>
 
-      {/* 3행: 금액 (VAT별도 + VAT포함) */}
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] tabular-nums text-slate-400">{formatCurrency(item.amount)}원 <span className="text-[9px]">VAT별도</span></span>
-        <span className="text-[10px] text-slate-300">│</span>
-        <span className="text-xs font-semibold tabular-nums text-slate-900">{formatCurrency(vatIncluded)}원 <span className="text-[10px]">VAT포함</span></span>
+      {/* 3행: 금액 (VAT별도 + VAT포함) — 숫자 위, 라벨 아래 */}
+      <div className="flex items-start gap-3">
+        <div className="flex flex-col">
+          <span className="text-[11px] tabular-nums text-slate-400">{formatCurrency(item.amount)}원</span>
+          <span className="text-[9px] text-slate-300">VAT별도</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-xs font-semibold tabular-nums text-slate-900">{formatCurrency(vatIncluded)}원</span>
+          <span className="text-[9px] text-slate-400">VAT포함</span>
+        </div>
       </div>
     </div>
   )
@@ -607,21 +612,90 @@ function GaugeChart({ ratio }: { ratio: number }) {
 }
 
 // ─────────────────────────────────────────
+// 수기 장려금 인라인 입력 컴포넌트
+// ─────────────────────────────────────────
+function InlineIncentiveInput({ value, onConfirm }: { value: number; onConfirm: (v: number) => Promise<void> }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState("")
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // 편집 시작 시 현재 값을 텍스트로
+  const startEdit = () => {
+    setText(value > 0 ? String(value) : "")
+    setEditing(true)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  // blur 또는 Enter 시 저장
+  const handleSave = async () => {
+    setEditing(false)
+    const num = Math.max(0, Math.round(Number(text.replace(/,/g, "")) || 0))
+    if (num !== value) {
+      await onConfirm(num)
+    }
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        className="w-24 px-1.5 py-0.5 text-right text-xs border border-sky-aqua/50 rounded bg-white outline-none tabular-nums"
+        value={text}
+        onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, ""))}
+        onBlur={handleSave}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") inputRef.current?.blur()
+          if (e.key === "Escape") setEditing(false)
+        }}
+        placeholder="VAT별도 금액"
+      />
+    )
+  }
+
+  return (
+    <button
+      onClick={startEdit}
+      className="inline-flex items-center gap-1 text-xs font-medium tabular-nums text-slate-500 hover:text-sky-aqua transition-colors cursor-pointer"
+      title="클릭하여 장려금 수기 입력 (VAT별도)"
+    >
+      {value > 0 ? (
+        <>{formatCurrency(value + Math.floor(value * 0.1))}원</>
+      ) : (
+        <span className="text-slate-300">미입력</span>
+      )}
+      <Pencil className="h-2.5 w-2.5" />
+    </button>
+  )
+}
+
+// ─────────────────────────────────────────
 // 메인: ExpenseTab
 // ─────────────────────────────────────────
 export default function ExpenseTab({
   requestId,
   totalSettlement = 0,
   totalContractAmount = 0,
-  incentiveTotal = 0,
+  quoteIncentiveTotal = 0,
+  manualIncentiveTotal = 0,
+  manualIncentiveExclTax = 0,
+  hasConfirmedQuote = false,
+  onManualIncentiveChange,
   layout = "stacked",
 }: {
   requestId: string
   totalSettlement?: number
   totalContractAmount?: number
-  incentiveTotal?: number
+  quoteIncentiveTotal?: number          // 확정견적서 장려금 (VAT포함)
+  manualIncentiveTotal?: number         // 수동입력 장려금 (VAT포함)
+  manualIncentiveExclTax?: number       // 수동입력 장려금 (VAT별도, 입력용)
+  hasConfirmedQuote?: boolean           // 확정견적서 존재 여부
+  onManualIncentiveChange?: (v: number) => Promise<void>
   layout?: "stacked" | "side-by-side"
 }) {
+  // 확정견적서 있으면 견적서 장려금, 없으면 수동 장려금
+  const effectiveIncentive = hasConfirmedQuote ? quoteIncentiveTotal : manualIncentiveTotal
   const [expenses, setExpenses] = useState<ExpenseItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -755,31 +829,53 @@ export default function ExpenseTab({
                 </span>
               </div>
 
-              {/* 장려금 */}
-              {incentiveTotal > 0 && (
+              {/* 장려금 — 확정견적서 있으면 자동, 없으면 수동입력 */}
+              {hasConfirmedQuote ? (
+                quoteIncentiveTotal > 0 && (
+                  <div className="flex items-center justify-between">
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-flex items-center gap-1 text-xs text-slate-500 cursor-default">
+                            <Info className="h-3 w-3" />
+                            장려금
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="start" className="w-48 p-3 text-[11px] text-gray-600 bg-white border border-gray-200 shadow-lg">
+                          <p>확정 견적서의 장려금 합계입니다</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <span className="text-xs font-medium tabular-nums text-slate-600">
+                      {formatCurrency(quoteIncentiveTotal)}원
+                    </span>
+                  </div>
+                )
+              ) : (
                 <div className="flex items-center justify-between">
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 text-xs text-slate-500 cursor-default">
                           <Info className="h-3 w-3" />
-                          장려금
+                          장려금(수동)
                         </span>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" align="start" className="w-48 p-3 text-[11px] text-gray-600 bg-white border border-gray-200 shadow-lg">
-                        <p>확정 견적서의 장려금 합계입니다</p>
+                        <p>수동 입력 장려금입니다 (VAT별도 금액 입력)</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
-                  <span className="text-xs font-medium tabular-nums text-slate-600">
-                    {formatCurrency(incentiveTotal)}원
-                  </span>
+                  <InlineIncentiveInput
+                    value={manualIncentiveExclTax}
+                    onConfirm={async (v) => { if (onManualIncentiveChange) await onManualIncentiveChange(v) }}
+                  />
                 </div>
               )}
 
               {/* 총 이익 (장려금 있을 때만) */}
-              {incentiveTotal > 0 && (() => {
-                const totalProfit = netProfit + incentiveTotal
+              {effectiveIncentive > 0 && (() => {
+                const totalProfit = netProfit + effectiveIncentive
                 return (
                   <div className="flex items-center justify-between border-t border-slate-100 pt-2">
                     <TooltipProvider delayDuration={200}>
@@ -794,7 +890,7 @@ export default function ExpenseTab({
                           <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT포함)</p>
                           <p>총 이익 = 순이익 + 장려금</p>
                           <p className="text-gray-400 text-[10px]">
-                            {formatCurrency(netProfit)}원 + {formatCurrency(incentiveTotal)}원 = {formatCurrency(totalProfit)}원
+                            {formatCurrency(netProfit)}원 + {formatCurrency(effectiveIncentive)}원 = {formatCurrency(totalProfit)}원
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -885,29 +981,40 @@ export default function ExpenseTab({
                     </span>
                   </div>
 
-                  {/* 장려금 뱃지 — hover 시 설명 툴팁 */}
-                  {incentiveTotal > 0 && (
-                    <TooltipProvider delayDuration={200}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="inline-flex items-center gap-1 rounded-md px-2 py-1 cursor-default bg-slate-50 border border-slate-200">
-                            <Info className="h-2.5 w-2.5 shrink-0 text-gray-400" />
-                            <span className="text-[10px] text-gray-500">장려금</span>
-                            <span className="text-[11px] font-bold tabular-nums text-slate-700">
-                              {formatCurrency(incentiveTotal)}원
-                            </span>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" align="end" className="w-48 p-3 text-[11px] text-gray-600 bg-white border border-gray-200 shadow-lg">
-                          <p>확정 견적서의 장려금 합계입니다</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                  {/* 장려금 뱃지 — 확정견적서 있으면 자동, 없으면 수동 */}
+                  {hasConfirmedQuote ? (
+                    quoteIncentiveTotal > 0 && (
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="inline-flex items-center gap-1 rounded-md px-2 py-1 cursor-default bg-slate-50 border border-slate-200">
+                              <Info className="h-2.5 w-2.5 shrink-0 text-gray-400" />
+                              <span className="text-[10px] text-gray-500">장려금</span>
+                              <span className="text-[11px] font-bold tabular-nums text-slate-700">
+                                {formatCurrency(quoteIncentiveTotal)}원
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" align="end" className="w-48 p-3 text-[11px] text-gray-600 bg-white border border-gray-200 shadow-lg">
+                            <p>확정 견적서의 장려금 합계입니다</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )
+                  ) : (
+                    manualIncentiveTotal > 0 && (
+                      <div className="inline-flex items-center gap-1 rounded-md px-2 py-1 bg-slate-50 border border-slate-200">
+                        <span className="text-[10px] text-gray-500">장려금(수동)</span>
+                        <span className="text-[11px] font-bold tabular-nums text-slate-700">
+                          {formatCurrency(manualIncentiveTotal)}원
+                        </span>
+                      </div>
+                    )
                   )}
 
                   {/* 총 이익 뱃지 — hover 시 산출 기준 툴팁 */}
-                  {incentiveTotal > 0 && (() => {
-                    const totalProfit = netProfit + incentiveTotal
+                  {effectiveIncentive > 0 && (() => {
+                    const totalProfit = netProfit + effectiveIncentive
                     return (
                       <TooltipProvider delayDuration={200}>
                         <Tooltip>
@@ -924,7 +1031,7 @@ export default function ExpenseTab({
                             <p className="font-semibold text-gray-800 text-xs">산출 기준 (VAT포함)</p>
                             <p>총 이익 = 순이익 + 장려금</p>
                             <p className="text-gray-400 text-[10px]">
-                              {formatCurrency(netProfit)}원 + {formatCurrency(incentiveTotal)}원 = {formatCurrency(totalProfit)}원
+                              {formatCurrency(netProfit)}원 + {formatCurrency(effectiveIncentive)}원 = {formatCurrency(totalProfit)}원
                             </p>
                           </TooltipContent>
                         </Tooltip>

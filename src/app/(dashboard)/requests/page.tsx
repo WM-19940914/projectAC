@@ -230,6 +230,8 @@ type SettlementInfo = {
   tax_invoice_all_issued: boolean
   tax_invoice_some_issued: boolean
   stage_summaries: { name: string; status: "paid" | "partial" | "unpaid" }[]
+  start_date: string | null   // 계약 착수일
+  end_date: string | null     // 계약 종료일
 }
 
 function toRequestItem(
@@ -247,6 +249,7 @@ function toRequestItem(
     contract_id: contractId,
     confirmed_quote_id: (r.confirmed_quote_id as string | null) ?? null,
     memo: r.memo as string | null,
+    manual_incentive: Number(r.manual_incentive ?? 0),
     created_at: r.created_at as string,
     customer: Array.isArray(r.customer)
       ? (r.customer[0] as { id: string; company_name: string; deleted_at: string | null } | undefined) ?? null
@@ -260,6 +263,8 @@ function toRequestItem(
         all_confirmed: settlement.all_confirmed,
         tax_invoice_all_issued: settlement.tax_invoice_all_issued,
         tax_invoice_some_issued: settlement.tax_invoice_some_issued,
+        start_date: settlement.start_date,
+        end_date: settlement.end_date,
         stage_summaries: settlement.stage_summaries,
       }
       : null,
@@ -369,6 +374,8 @@ export default async function RequestsPage() {
         tax_invoice_all_issued: paid?.tax_invoice_all_issued || false,
         tax_invoice_some_issued: paid?.tax_invoice_some_issued || false,
         stage_summaries: stageSummaries,
+        start_date: (rc.start_date as string | null) ?? null,
+        end_date: (rc.end_date as string | null) ?? null,
       })
     }
   }

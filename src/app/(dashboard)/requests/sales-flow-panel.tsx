@@ -17,6 +17,8 @@ export function SalesFlowPanel({
   onSavedContract,
   onSummaryChange,
   contractSummary,
+  manualIncentive = 0,
+  onManualIncentiveChange,
 }: {
   quotationsSlot: ReactNode
   quotations: QuotationListItem[]
@@ -29,6 +31,8 @@ export function SalesFlowPanel({
   onSavedContract?: (contractId: string) => void
   onSummaryChange?: (summary: ContractSummary) => void
   contractSummary?: ContractSummary | null
+  manualIncentive?: number            // 수기 입력 장려금 (VAT별도)
+  onManualIncentiveChange?: (v: number) => Promise<void>  // 수기 장려금 저장 콜백
 }) {
   const confirmedQuote = confirmedQuoteId ? quotations.find((q) => q.id === confirmedQuoteId) ?? null : null
   // 장려금 (VAT포함): 견적서의 매입단가 × 장려율 → VAT 10% 가산
@@ -40,6 +44,9 @@ export function SalesFlowPanel({
     }, 0)
     : 0
   const confirmedIncentiveTotal = Math.floor(confirmedIncentiveExclTax * 1.1)
+
+  // 수기 장려금 (VAT 포함으로 변환)
+  const manualIncentiveWithVat = manualIncentive + Math.floor(manualIncentive * 0.1)
 
   return (
     <div className="space-y-4">
@@ -69,7 +76,11 @@ export function SalesFlowPanel({
             requestId={requestId}
             totalSettlement={contractSummary ? contractSummary.paidAmount : 0}
             totalContractAmount={contractSummary ? contractSummary.totalWithVat : 0}
-            incentiveTotal={confirmedIncentiveTotal}
+            quoteIncentiveTotal={confirmedIncentiveTotal}
+            manualIncentiveTotal={manualIncentiveWithVat}
+            manualIncentiveExclTax={manualIncentive}
+            hasConfirmedQuote={!!confirmedQuote}
+            onManualIncentiveChange={onManualIncentiveChange}
             layout="side-by-side"
           />
         </div>

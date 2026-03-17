@@ -27,6 +27,11 @@ function sanitizeContractMeta(input: unknown) {
     if (src.stage_conditions && typeof src.stage_conditions === 'object') {
         next.stage_conditions = src.stage_conditions;
     }
+    // VAT포함 금액 override (공급가액 × 1.1 로 딱 안 떨어질 때 사용자가 직접 입력한 VAT포함 금액)
+    if (src.vat_total_override !== undefined) {
+        const parsed = Number(src.vat_total_override);
+        next.vat_total_override = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    }
 
     return Object.keys(next).length > 0 ? next : null;
 }
@@ -192,7 +197,12 @@ async function loadContractMetaFromTable(
         }
         return fallbackMeta;
     }
-    return sanitizeContractMeta(data as Record<string, unknown>) ?? fallbackMeta;
+    const tableMeta = sanitizeContractMeta(data as Record<string, unknown>) ?? fallbackMeta;
+    // vat_total_override는 테이블 컬럼이 아닌 memo(JSON)에만 저장됨 → fallback에서 복원
+    if (tableMeta && fallbackMeta && typeof fallbackMeta.vat_total_override === 'number' && fallbackMeta.vat_total_override > 0) {
+        tableMeta.vat_total_override = fallbackMeta.vat_total_override;
+    }
+    return tableMeta;
 }
 
 async function saveContractMetaToTable(

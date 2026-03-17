@@ -11,6 +11,7 @@ export interface RequestItem {
   contract_id: string | null
   confirmed_quote_id: string | null
   memo: string | null
+  manual_incentive: number  // 확정견적서 없을 때 수기 입력한 장려금 (VAT별도)
   created_at: string
   customer: {
     id: string
@@ -26,6 +27,8 @@ export interface RequestItem {
     all_confirmed: boolean  // 모든 입금내역이 입완 체크되었는지
     tax_invoice_all_issued: boolean  // 모든 단계 계산서 발행
     tax_invoice_some_issued: boolean  // 일부 단계만 계산서 발행
+    start_date: string | null   // 계약 착수일
+    end_date: string | null     // 계약 종료일
     stage_summaries: { name: string; status: "paid" | "partial" | "unpaid" }[]  // 단계별 입금완료 요약
     settlement_meta?: {  // raw 메타 데이터 (초기 stage_summaries 계산용)
       settlement_status_map: Record<string, unknown> | null

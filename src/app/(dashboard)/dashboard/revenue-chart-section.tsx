@@ -215,6 +215,20 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
   const yearCount = activeData.reduce((s, d) => s + d.count, 0)
   const maxAmount = Math.max(...activeData.map(d => d.amount), 0)
 
+  // Y축 통일: 모든 연도의 최대 월 매출을 구해서 고정 → 연도 간 비교 가능
+  const globalMaxAmount = useMemo(() => {
+    let max = 0
+    for (const year of Object.keys(allRevenueData)) {
+      const months = allRevenueData[Number(year)]
+      if (months) {
+        for (const m of months) {
+          if (m.amount > max) max = m.amount
+        }
+      }
+    }
+    return max
+  }, [allRevenueData])
+
   // 전년 대비
   const prevYearData = allRevenueData[selectedYear - 1]
   const prevYearTotal = prevYearData ? prevYearData.reduce((s, d) => s + d.amount, 0) : 0
@@ -378,6 +392,7 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
                       tick={{ fontSize: 11, fill: "#94a3b8" }}
                       tickFormatter={formatAxisAmount}
                       width={60}
+                      domain={[0, globalMaxAmount > 0 ? globalMaxAmount : "auto"]}
                     />
                     <RechartsTooltip
                       content={<CustomChartTooltip selectedYear={selectedYear} />}

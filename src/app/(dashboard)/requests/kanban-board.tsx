@@ -127,6 +127,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [sheetView, setSheetView] = useState<"영업" | "주문배송">("영업")
   // 자동저장 상태 메시지
   const [saveMessage, setSaveMessage] = useState("")
+  // 문의일시 인라인 편집 모드
+  const [editingInquiryDate, setEditingInquiryDate] = useState(false)
   // 탭 전환 요청 (개요 카드 클릭 시 해당 탭으로 이동)
   // requestedFlow 제거됨 — 탭 없는 전체 보기 레이아웃
 
@@ -165,9 +167,13 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [editingQuotation, setEditingQuotation] = useState<QuotationWithItems | null>(null)
   const [contractSummary, setContractSummary] = useState<ContractSummary | null>(null)
   const contractSummaryFetchSeqRef = useRef(0)
+  // 카드 클릭만으로는 칸반 카드 상태를 건드리지 않음 — 실제 저장/변경 시에만 동기화
+  const shouldSyncToColumnsRef = useRef(false)
 
   // onSummaryChange 안정화 — inline 함수로 전달하면 매 렌더링마다 새 참조가 생겨 자식 useEffect 무한 루프 발생
   const handleSummaryChange = useCallback((summary: ContractSummary) => {
+    // 실시간 변경 → 칸반 카드에도 반영 허용
+    shouldSyncToColumnsRef.current = true
     setContractSummary((prev) => {
       if (
         prev &&
@@ -331,7 +337,15 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
   const selectedContractId = selectedItem?.contract_id ?? null
   const selectedItemId = selectedItem?.id ?? null
+  // 카드 선택 시: 칸반 카드 동기화를 끄고, 패널 내부용으로만 summary 로드
   useEffect(() => {
+    // 카드 클릭 = 조회만 → 칸반 카드 상태는 건드리지 않음
+    shouldSyncToColumnsRef.current = false
+    if (!selectedContractId) {
+      setContractSummary(null)
+      return
+    }
+    // API에서 최신 데이터 로드 (패널 내부 표시용)
     void loadContractSummaryById(selectedContractId, selectedItemId)
   }, [selectedContractId, selectedItemId, loadContractSummaryById])
 
@@ -339,9 +353,14 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   // selectedItem을 ref로 참조 — dependency에 넣으면 setColumns → 리렌더 → selectedItem 새 참조 → 무한 루프
   const selectedItemRef = useRef(selectedItem)
   selectedItemRef.current = selectedItem
+  // contractSummary → 칸반 카드 동기화
+  // shouldSyncToColumnsRef가 true일 때만 실행 (저장/변경 시에만, 카드 클릭 시에는 스킵)
   useEffect(() => {
     const current = selectedItemRef.current
     if (!current || !current.contract || !contractSummary) return
+    // 카드 클릭만으로는 칸반 카드 상태를 건드리지 않음 → 깜빡임 완전 방지
+    if (!shouldSyncToColumnsRef.current) return
+
     const contractId = current.contract.id
     setColumns((prev) =>
       prev.map((col) => ({
@@ -977,7 +996,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                onClick={() => setSelectedItem(item)}
+                                onClick={() => { setSelectedItem(item); setEditingInquiryDate(false) }}
                                 className={cn(
                                   "group relative bg-white rounded-md border border-slate-200 p-3 shadow-none hover:shadow-md hover:-translate-y-0.5 transition-all cursor-grab",
                                   snapshot.isDragging && "shadow-md ring-1 ring-slate-200 scale-[1.01]"
@@ -1019,11 +1038,17 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                   </p>
                                 </div>
 
-                                {/* 문의 일시 + 고객명 (제목과 간격 두고 하단 배치) */}
+                                {/* 계약 착수일~종료일 */}
                                 <div className="mt-4 space-y-1">
-                                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                    <Calendar className="h-3 w-3 shrink-0" />
-                                    <span>{item.inquiry_date ? formatDate(item.inquiry_date) : "없음"}</span>
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <Calendar className="h-3 w-3 shrink-0 text-gray-500" />
+                                    {item.contract?.start_date || item.contract?.end_date ? (
+                                      <span className="text-gray-500">
+                                        {item.contract.start_date ? formatDate(item.contract.start_date) : ""}{" ~ "}{item.contract.end_date ? formatDate(item.contract.end_date) : ""}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-300">없음</span>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                     <Building2 className="h-3 w-3 shrink-0" />
@@ -1198,7 +1223,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                     {failedItems.map((item) => (
                       <button
                         key={item.id}
-                        onClick={() => setSelectedItem(item)}
+                        onClick={() => { setSelectedItem(item); setEditingInquiryDate(false) }}
                         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-100 transition-colors text-left"
                       >
                         <span className="text-xs text-gray-700 truncate" title={item.title}>
@@ -1472,10 +1497,35 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                   </div>
                   {/* 2행: 메타 칩 (날짜 · 고객 · 생성일) */}
                   <div className="flex items-center gap-1.5 px-5 pb-2.5">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100/80 text-[11px] text-slate-500">
-                      <Calendar className="h-2.5 w-2.5" />
-                      {selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : "문의일 미지정"}
-                    </span>
+                    {/* 문의일시 — 클릭하면 날짜 수정 가능 */}
+                    {editingInquiryDate ? (
+                      <input
+                        type="date"
+                        autoFocus
+                        className="px-2 py-0.5 rounded-full bg-white border border-sky-aqua/50 text-[11px] text-slate-600 outline-none"
+                        defaultValue={selectedItem.inquiry_date || ""}
+                        onBlur={(e) => {
+                          const v = e.target.value
+                          if (v && v !== selectedItem.inquiry_date) {
+                            updateRequestField("inquiry_date", v)
+                          }
+                          setEditingInquiryDate(false)
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+                          if (e.key === "Escape") setEditingInquiryDate(false)
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100/80 text-[11px] text-slate-500 cursor-pointer hover:bg-sky-aqua/10 hover:text-sky-aqua transition-colors"
+                        onClick={() => setEditingInquiryDate(true)}
+                        title="클릭하여 문의일시 수정"
+                      >
+                        <Calendar className="h-2.5 w-2.5" />
+                        {selectedItem.inquiry_date ? formatDate(selectedItem.inquiry_date) : "문의일 미지정"}
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100/80 text-[11px] text-slate-500">
                       <Building2 className="h-2.5 w-2.5" />
                       {selectedItem.customer?.company_name || "고객 미연결"}
@@ -1615,10 +1665,27 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         await updateRequestField("contract_id", contractId)
                       }}
                       onSavedContract={(contractId) => {
+                        // 실제 저장 시에만 칸반 카드 동기화 허용
+                        shouldSyncToColumnsRef.current = true
                         void loadContractSummaryById(contractId, selectedItem.id)
                       }}
                       onSummaryChange={handleSummaryChange}
                       contractSummary={contractSummary}
+                      manualIncentive={selectedItem.manual_incentive}
+                      onManualIncentiveChange={async (v: number) => {
+                        // 숫자 필드이므로 updateRequestField(string) 대신 직접 API 호출
+                        setSelectedItem((prev) => prev ? { ...prev, manual_incentive: v } : null)
+                        setSaveMessage("저장 중...")
+                        try {
+                          const res = await fetch("/api/requests", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ id: selectedItem.id, manual_incentive: v }),
+                          })
+                          setSaveMessage(res.ok ? "자동 저장됨" : "저장 실패")
+                        } catch { setSaveMessage("저장 실패") }
+                        setTimeout(() => setSaveMessage(""), 1500)
+                      }}
                     />
                   </div>
                 </div>

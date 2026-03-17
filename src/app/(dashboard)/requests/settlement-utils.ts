@@ -210,8 +210,9 @@ export function buildContractSnapshot(params: {
   stageConditions?: Record<SettlementStage, string>
   settlementStatusMap: Record<string, SettlementStatusInput>
   customerId: string | null
+  vatTotalOverride?: number | null
 }): string {
-  const { draft, selectedStages, stageRatios, middleInstallments, stageScheduledDates, stageConditions, settlementStatusMap, customerId } = params
+  const { draft, selectedStages, stageRatios, middleInstallments, stageScheduledDates, stageConditions, settlementStatusMap, customerId, vatTotalOverride } = params
   return JSON.stringify({
     id: draft.id,
     title: draft.title.trim(),
@@ -236,6 +237,7 @@ export function buildContractSnapshot(params: {
         normalizeSettlementStatusInput(value),
       ])
     ),
+    vat_total_override: vatTotalOverride ?? null,
   })
 }
 
@@ -270,8 +272,8 @@ export function buildSettlementRows(
 
   const rows: Array<{ key: string; label: string; ratio: number; supply: number; vat: number; total: number }> = []
 
-  // VAT 포함 총액: round(supply * 1.1)로 역산 오차 방지
-  const totalWithVat = Math.round(supplyAmount * 1.1)
+  // VAT 포함 총액: 공급가액 + VAT(절삭) — round(×1.1)은 1원 초과 오차 발생
+  const totalWithVat = supplyAmount + Math.floor(supplyAmount * 0.1)
 
   selectedStages.forEach((stage) => {
     // 금액 모드: stageRatios 값이 VAT 포함 금액

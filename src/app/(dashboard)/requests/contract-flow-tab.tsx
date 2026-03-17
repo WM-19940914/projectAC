@@ -78,6 +78,10 @@ export function ContractFlowTab({
   const [saveMessage, setSaveMessage] = useState("")
   const [isAmountModalOpen, setIsAmountModalOpen] = useState(false)
   const [amountInputValue, setAmountInputValue] = useState("")
+  // 금액 입력 모드: "excl" = VAT별도(기본), "incl" = VAT포함 역산
+  const [amountInputMode, setAmountInputMode] = useState<"excl" | "incl">("excl")
+  // VAT포함 금액 직접 입력 시 override (공급가액 × 1.1 로는 딱 안 떨어지는 경우 대비)
+  const [vatTotalOverride, setVatTotalOverride] = useState<number | null>(null)
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false)
   const [isContractFormVisible, setIsContractFormVisible] = useState(!!requestContractId)
   // activeView는 외부(SalesFlowPanel)에서 제어됨 — 계약서/정산 현황 독립 탭
@@ -328,8 +332,8 @@ export function ContractFlowTab({
         const dbAmountMode = hasMetaRatios && isAmountMode(contractMeta?.stage_ratios)
         // 항상 금액 모드 (VAT 포함)
         const contractAmt = Math.max(0, Math.round(Number(nextDraft.contract_amount || 0)))
-        // VAT 포함 총액: round(supply * 1.1)로 역산 오차 방지
-        const totalWithVat = Math.round(contractAmt * 1.1)
+        // VAT 포함 총액: 공급가액 + VAT(절삭) — round(×1.1)은 1원 초과 오차 발생
+        const totalWithVat = contractAmt + Math.floor(contractAmt * 0.1)
         let nextRatios: Record<SettlementStage, number>
         if (hasMetaRatios && dbAmountMode) {
           // 이미 금액 모드 → 그대로 사용
@@ -414,6 +418,13 @@ export function ContractFlowTab({
         setStageScheduledDates(resolvedStageScheduledDates)
         setStageConditions(resolvedStageConditions)
         setSettlementStatusMap(resolvedSettlementStatusMap)
+        // VAT포함 override 복원 (contract_meta에 저장된 값)
+        const savedVatOverride = contractMeta?.vat_total_override
+        if (typeof savedVatOverride === "number" && savedVatOverride > 0) {
+          setVatTotalOverride(savedVatOverride)
+        } else {
+          setVatTotalOverride(null)
+        }
 
         if (nextDraft.id && Object.keys(nextSettlementStatusFromDb).length > 0) {
           try {
@@ -426,6 +437,8 @@ export function ContractFlowTab({
           }
         }
 
+        // VAT포함 override 값도 초기 스냅샷에 포함 (자동저장 변경 감지용)
+        const loadedVatOverride = (typeof savedVatOverride === "number" && savedVatOverride > 0) ? savedVatOverride : null
         const initialSnapshot = buildContractSnapshot({
           draft: nextDraft,
           selectedStages: nextDraft.settlement_type,
@@ -434,6 +447,7 @@ export function ContractFlowTab({
           stageScheduledDates: nextStageScheduledDates,
           settlementStatusMap: nextSettlementStatusFromDb,
           customerId: requestCustomer?.id || nextDraft.customer_id || null,
+          vatTotalOverride: loadedVatOverride,
         })
         initialSnapshotRef.current = initialSnapshot
         lastSavedSnapshotRef.current = initialSnapshot
@@ -473,8 +487,10 @@ export function ContractFlowTab({
 
   const selectedStages = SETTLEMENT_STAGE_ORDER.filter((stage) => draft.settlement_type.includes(stage))
   const supplyAmount = Math.max(0, Math.round(Number(draft.contract_amount || 0)))
-  // VAT 포함 총액: round(supply * 1.1)로 계산해야 ÷1.1 역산 시 1원 오차 방지
-  const totalWithVat = Math.round(supplyAmount * 1.1)
+  // VAT 포함 총액: override가 있으면 사용자가 직접 입력한 VAT포함 금액 우선
+  const totalWithVat = vatTotalOverride != null && vatTotalOverride > 0
+    ? vatTotalOverride
+    : supplyAmount + Math.floor(supplyAmount * 0.1)
   const settlementRows = buildSettlementRows(supplyAmount, selectedStages, stageRatios, middleInstallments, ratioAmountMode)
   const settlementRowsWithScheduledDate = settlementRows.map((row) => {
     let scheduledDate = ""
@@ -548,8 +564,9 @@ export function ContractFlowTab({
 
   useEffect(() => {
     if (!onSummaryChange) return
-    // 데이터 로딩 중에는 기본값(0%)으로 덮어쓰지 않음
+    // 데이터 로딩 중이거나 초기화 미완료 시 기본값으로 덮어쓰지 않음 → 카드 깜빡임 방지
     if (isLoading) return
+    if (!isInitializedRef.current) return
 
     // 단계별 입금완료 요약
     const stageSummariesForCard = settlementStatusRows.map((row) => {
@@ -614,6 +631,7 @@ export function ContractFlowTab({
     stageConditions,
     settlementStatusMap,
     customerId: requestCustomer?.id || draft.customer_id || null,
+    vatTotalOverride,
   })
 
   useEffect(() => {
@@ -844,7 +862,8 @@ export function ContractFlowTab({
   }, [])
 
   const openAmountModal = () => {
-    // 공급가액(VAT별도)으로 표시
+    // 기본 모드(VAT별도)로 열기, 현재 공급가액 표시
+    setAmountInputMode("excl")
     setAmountInputValue(supplyAmount > 0 ? supplyAmount.toLocaleString("ko-KR") : "")
     setIsAmountModalOpen(true)
   }
@@ -852,10 +871,22 @@ export function ContractFlowTab({
   const handleApplyAmount = () => {
     const digitsOnly = amountInputValue.replace(/[^0-9]/g, "")
     const next = digitsOnly ? Number(digitsOnly) : 0
-    // 입력값이 곧 공급가액(VAT별도) → 그대로 저장
-    const nextAmount = Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0
+    let nextAmount: number
+    if (amountInputMode === "incl") {
+      // VAT포함 금액 → 역산: 총액에서 공급가액을 구함
+      // 세금계산서 역산: VAT = floor(총액 / 11), 공급가액 = 총액 - VAT
+      const vatTotal = Number.isFinite(next) ? Math.max(0, next) : 0
+      const vat = Math.floor(vatTotal / 11)
+      nextAmount = vatTotal - vat
+      // 공급가액 × 1.1 로 딱 안 떨어지는 경우 → override에 사용자 입력값 저장
+      const recalcTotal = nextAmount + Math.floor(nextAmount * 0.1)
+      setVatTotalOverride(recalcTotal !== vatTotal && vatTotal > 0 ? vatTotal : null)
+    } else {
+      // VAT별도 → 그대로 공급가액, override 제거
+      nextAmount = Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0
+      setVatTotalOverride(null)
+    }
     setDraft((prev) => (prev.contract_amount === nextAmount ? prev : { ...prev, contract_amount: nextAmount }))
-    // 계약금액 변경 시 입금내역은 유지 (이미 입력된 정산 데이터 보존)
     setIsAmountModalOpen(false)
   }
 
@@ -993,6 +1024,10 @@ export function ContractFlowTab({
             [stage]: stageConditions[stage] || "",
           }), {} as Record<SettlementStage, string>),
           settlement_status_map: settlementStatusForSave,
+          // VAT포함 금액 override (공급가액 × 1.1 로 딱 안 떨어질 때만 저장)
+          ...(vatTotalOverride != null && vatTotalOverride > 0
+            ? { vat_total_override: vatTotalOverride }
+            : { vat_total_override: null }),
         },
       }
 
@@ -1054,6 +1089,7 @@ export function ContractFlowTab({
     onSavedContract,
     saveRatioToLocal,
     clearPendingDraftFromLocal,
+    vatTotalOverride,
   ])
 
   const handleUnlinkContract = useCallback(async () => {
@@ -1252,19 +1288,46 @@ export function ContractFlowTab({
             </PopoverTrigger>
             <PopoverContent align="end" side="bottom" sideOffset={4} className="w-52 border-gray-200 p-2.5">
               <div className="space-y-2">
-                <button
-                  type="button"
-                  disabled={typeof confirmedQuoteSupplyAmount !== "number"}
-                  onClick={() => {
-                    if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
-                      // 확정 견적 공급가액을 그대로 불러오기
-                      setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
-                    }
-                  }}
-                  className="inline-flex h-7 w-full items-center justify-center rounded border border-gray-200 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
-                >
-                  금액 불러오기(VAT별도)
-                </button>
+                {/* 입력 모드 탭 토글 */}
+                <div className="flex rounded-lg bg-gray-100 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAmountInputMode("excl")
+                      setAmountInputValue(supplyAmount > 0 ? supplyAmount.toLocaleString("ko-KR") : "")
+                    }}
+                    className={`flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${amountInputMode === "excl" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                  >
+                    VAT별도
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAmountInputMode("incl")
+                      // override 값이 있으면 그걸 보여주고, 없으면 계산값
+                      const currentTotal = vatTotalOverride ?? (supplyAmount + Math.floor(supplyAmount * 0.1))
+                      setAmountInputValue(currentTotal > 0 ? currentTotal.toLocaleString("ko-KR") : "")
+                    }}
+                    className={`flex-1 rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${amountInputMode === "incl" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
+                  >
+                    VAT포함
+                  </button>
+                </div>
+                {/* 견적서 금액 불러오기 — VAT별도 모드에서만 */}
+                {amountInputMode === "excl" && (
+                  <button
+                    type="button"
+                    disabled={typeof confirmedQuoteSupplyAmount !== "number"}
+                    onClick={() => {
+                      if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
+                        setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
+                      }
+                    }}
+                    className="inline-flex h-7 w-full items-center justify-center rounded border border-gray-200 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                  >
+                    금액 불러오기(VAT별도)
+                  </button>
+                )}
                 <Input
                   id="contract-amount-editor"
                   type="text"
@@ -1284,7 +1347,9 @@ export function ContractFlowTab({
                   placeholder="0"
                   className="h-7 border-gray-200 text-sm font-semibold text-right tabular-nums focus:ring-slate-300"
                 />
-                <p className="text-right text-[10px] text-gray-400">VAT 별도 금액 (공급가액)</p>
+                <p className="text-right text-[10px] text-gray-400">
+                  {amountInputMode === "excl" ? "VAT 별도 금액 (공급가액)" : "VAT 포함 총액 → 공급가액 자동 역산"}
+                </p>
                 <div className="flex items-center justify-end gap-1.5">
                   <button
                     type="button"
@@ -1651,13 +1716,13 @@ export function ContractFlowTab({
 
                   {/* 계약금액 2종 — 1행 2컬럼 */}
                   <div className="grid grid-cols-2 gap-2">
-                    {/* 계약금액 (VAT별도) — 수정 가능 */}
+                    {/* 계약금액 (VAT별도) — 수정 가능, 흰색 배경 */}
                     <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
                       <div className="min-w-0">
-                        <p className="text-[10px] text-slate-400">계약금액 (VAT별도)</p>
-                        <p className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900 truncate">
+                        <p className="text-sm font-semibold tabular-nums text-slate-900 truncate">
                           {supplyAmount > 0 ? `${formatCurrency(supplyAmount)}원` : "미입력"}
                         </p>
+                        <p className="mt-0.5 text-[10px] text-slate-400">계약금액 (VAT별도)</p>
                       </div>
                       <Popover open={isAmountModalOpen} onOpenChange={setIsAmountModalOpen}>
                         <PopoverTrigger asChild>
@@ -1671,19 +1736,47 @@ export function ContractFlowTab({
                         </PopoverTrigger>
                         <PopoverContent align="start" side="bottom" sideOffset={4} className="w-56 border-slate-200 p-3">
                           <div className="space-y-2.5">
-                            <button
-                              type="button"
-                              disabled={typeof confirmedQuoteSupplyAmount !== "number"}
-                              onClick={() => {
-                                if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
-                                  // 확정 견적 공급가액을 그대로 불러오기
-                                  setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
-                                }
-                              }}
-                              className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-                            >
-                              금액 불러오기(VAT별도)
-                            </button>
+                            {/* 입력 모드 탭 토글: VAT별도(기본) / VAT포함(역산) */}
+                            <div className="flex rounded-lg bg-slate-100 p-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAmountInputMode("excl")
+                                  // 모드 전환 시 현재 공급가액으로 초기화
+                                  setAmountInputValue(supplyAmount > 0 ? supplyAmount.toLocaleString("ko-KR") : "")
+                                }}
+                                className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${amountInputMode === "excl" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                              >
+                                VAT별도
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAmountInputMode("incl")
+                                  // override 값이 있으면 그걸 보여주고, 없으면 계산값
+                                  const currentTotal = vatTotalOverride ?? (supplyAmount + Math.floor(supplyAmount * 0.1))
+                                  setAmountInputValue(currentTotal > 0 ? currentTotal.toLocaleString("ko-KR") : "")
+                                }}
+                                className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${amountInputMode === "incl" ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                              >
+                                VAT포함
+                              </button>
+                            </div>
+                            {/* 견적서 금액 불러오기 — VAT별도 모드에서만 표시 */}
+                            {amountInputMode === "excl" && (
+                              <button
+                                type="button"
+                                disabled={typeof confirmedQuoteSupplyAmount !== "number"}
+                                onClick={() => {
+                                  if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
+                                    setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
+                                  }
+                                }}
+                                className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                              >
+                                금액 불러오기(VAT별도)
+                              </button>
+                            )}
                             <Input
                               type="text"
                               inputMode="numeric"
@@ -1702,7 +1795,9 @@ export function ContractFlowTab({
                               placeholder="0"
                               className="h-9 border-slate-200 text-right text-sm font-semibold tabular-nums focus:ring-slate-300"
                             />
-                            <p className="text-right text-[10px] text-slate-400">VAT 별도 금액 (공급가액)</p>
+                            <p className="text-right text-[10px] text-slate-400">
+                              {amountInputMode === "excl" ? "VAT 별도 금액 (공급가액)" : "VAT 포함 총액 → 공급가액 자동 역산"}
+                            </p>
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
@@ -1724,12 +1819,12 @@ export function ContractFlowTab({
                       </Popover>
                     </div>
 
-                    {/* 계약금액 (VAT포함) — 자동계산 (공급가액 × 1.1) */}
-                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
-                      <p className="text-[10px] text-slate-400">계약금액 (VAT포함)</p>
-                      <p className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900 truncate">
+                    {/* 계약금액 (VAT포함) — 자동계산, 회색 배경으로 수정 불가 표시 */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2">
+                      <p className="text-sm font-semibold tabular-nums text-slate-500 whitespace-nowrap">
                         {totalWithVat > 0 ? `${formatCurrency(totalWithVat)}원` : "미입력"}
                       </p>
+                      <p className="mt-0.5 text-[10px] text-slate-400">계약금액 (VAT포함)</p>
                     </div>
                   </div>
 
@@ -1752,7 +1847,7 @@ export function ContractFlowTab({
                   {settlementRowsWithScheduledDate.length > 0 && supplyAmount > 0 && (
                     <div className="rounded-lg border border-slate-100 overflow-hidden">
                       {/* 테이블 헤더 */}
-                      <div className="grid grid-cols-[1fr_90px_24px_120px] items-center bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-400">
+                      <div className="grid grid-cols-[1fr_auto_24px_120px] items-center bg-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-400">
                         <span>단계</span>
                         <span className="text-right pr-1">금액(VAT포함)</span>
                         <span />
@@ -1765,9 +1860,9 @@ export function ContractFlowTab({
                         const conditionText = stageConditions[conditionKey] || ""
                         const hasDate = !!row.scheduledDate
                         return (
-                          <div key={row.key} className="grid grid-cols-[1fr_90px_24px_120px] items-center px-3 py-1.5 border-t border-slate-100 text-[11px]">
+                          <div key={row.key} className="grid grid-cols-[1fr_auto_24px_120px] items-center px-3 py-1.5 border-t border-slate-100 text-[11px]">
                             <span className="text-slate-600">{row.label} <span className="text-slate-400">{Number.isInteger(row.ratio) ? row.ratio : row.ratio.toFixed(1)}%</span></span>
-                            <span className="font-medium tabular-nums text-slate-700 text-right pr-1">{formatCurrency(row.total)}원</span>
+                            <span className="font-medium tabular-nums text-slate-700 text-right pr-1 whitespace-nowrap">{formatCurrency(row.total)}원</span>
                             <span className="flex justify-center"><span className="h-4 w-px bg-slate-200" /></span>
                             {/* 입금예정일 — 미입력 시 연한 핑크, 조건 hover 시 툴팁 */}
                             <div className="relative group flex justify-center">
@@ -1796,9 +1891,9 @@ export function ContractFlowTab({
                         )
                       })}
                       {/* 합계 */}
-                      <div className="grid grid-cols-[1fr_90px_24px_120px] items-center px-3 py-1.5 border-t border-slate-300/50 bg-slate-50/50 text-[11px]">
+                      <div className="grid grid-cols-[1fr_auto_24px_120px] items-center px-3 py-1.5 border-t border-slate-300/50 bg-slate-50/50 text-[11px]">
                         <span className="text-slate-500 font-medium">합계</span>
-                        <span className="font-semibold tabular-nums text-slate-900 text-right pr-1">{formatCurrency(totalWithVat)}원</span>
+                        <span className="font-semibold tabular-nums text-slate-900 text-right pr-1 whitespace-nowrap">{formatCurrency(totalWithVat)}원</span>
                         <span />
                         <span />
                       </div>
@@ -1861,7 +1956,10 @@ export function ContractFlowTab({
                     )}
                   </div>
 
-                  {/* 단계별 정산 카드 */}
+                  {/* 단계별 정산 카드 — 2개 기준 max 높이, 3개 이상이면 스크롤 */}
+                  <div className={cn(
+                    settlementStatusRows.length > 2 && "max-h-[340px] overflow-y-auto -mx-1 px-1"
+                  )} style={settlementStatusRows.length > 2 ? { scrollbarWidth: "thin", scrollbarColor: "#e2e8f0 transparent" } : undefined}>
                   {settlementStatusRows.map((row) => {
                     const issued = row.taxInvoiceIssued
                     return (
@@ -2031,6 +2129,7 @@ export function ContractFlowTab({
                       </div>
                     )
                   })}
+                  </div>
                 </div>
               )}
               </div>
@@ -2125,20 +2224,6 @@ export function ContractFlowTab({
                               {Math.round((modalRatios[stage] || 0) / totalWithVat * 100)}%
                             </span>
                           )}
-                      {stage === "중도금" && checked && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-gray-500">회차</span>
-                          <select
-                            value={modalMiddleInstallments}
-                            onChange={(e) => setModalMiddleInstallments(normalizeMiddleInstallments(e.target.value))}
-                            className="h-7 rounded-md border border-gray-300 bg-white px-1.5 text-[10px] text-gray-600 focus:outline-none focus:ring-2 focus:ring-slate-300/50"
-                          >
-                            {[1, 2, 3, 4, 5].map((count) => (
-                              <option key={count} value={count}>{count}회</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex items-center gap-1">
