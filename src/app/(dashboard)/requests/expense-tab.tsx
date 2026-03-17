@@ -13,6 +13,7 @@ import { Calendar as CalendarPicker } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { AirVent, Calendar, ChartPie, Info, Plus, Trash2, Receipt, Wrench } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 // ─────────────────────────────────────────
 // 타입 정의
@@ -143,99 +144,104 @@ function ExpenseDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[540px] p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-5 pt-5 pb-4 border-b border-gray-100">
-          <DialogTitle className="font-sans text-base">
-            {isEditMode ? "지출내역 수정" : "지출내역 추가"} — {category} 지출
-          </DialogTitle>
+      <DialogContent className="sm:max-w-[540px] p-0 gap-0 overflow-hidden rounded-2xl">
+        {/* ── 헤더 ── */}
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white">
+              {category === "장비" ? <AirVent className="h-4 w-4" /> : <Wrench className="h-4 w-4" />}
+            </div>
+            <div>
+              <DialogTitle className="font-sans text-base font-bold text-slate-900">
+                {isEditMode ? "지출내역 수정" : "지출내역 추가"}
+              </DialogTitle>
+              <p className="text-[11px] text-slate-400 mt-0.5">{category} 지출</p>
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="flex min-h-0">
           {/* ── 좌측: 플래그 토글 ── */}
-          <div className="w-32 shrink-0 border-r border-gray-100 bg-gray-50/60 px-3 py-4 space-y-2.5">
-            {/* 미지급 토글 — 활성화 시 soft-blush 강조 */}
+          <div className="w-36 shrink-0 border-r border-slate-100 bg-slate-50/60 px-3 py-5 space-y-3">
+            {/* 미지급 토글 */}
             <button
               type="button"
               onClick={() => setForm((prev) => ({ ...prev, is_unpaid: !prev.is_unpaid }))}
-              className={
+              className={cn(
+                "w-full rounded-xl border px-3 py-3 text-left transition-all",
                 form.is_unpaid
-                  ? "w-full rounded-lg border border-red-300 bg-red-100 px-2.5 py-2.5 text-left transition-all"
-                  : "w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2.5 text-left hover:border-red-300 transition-all"
-              }
+                  ? "border-soft-blush bg-soft-blush/30 shadow-sm"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              )}
             >
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className={
-                  form.is_unpaid
-                    ? "inline-block h-1.5 w-1.5 rounded-full bg-red-500 shrink-0"
-                    : "inline-block h-1.5 w-1.5 rounded-full bg-gray-300 shrink-0"
-                } />
-                <span className={
-                  form.is_unpaid
-                    ? "text-[10px] font-bold text-gray-700"
-                    : "text-[10px] font-medium text-gray-400"
-                }>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className={cn(
+                  "inline-block h-2 w-2 rounded-full shrink-0",
+                  form.is_unpaid ? "bg-red-500" : "bg-slate-300"
+                )} />
+                <span className={cn(
+                  "text-[11px] font-bold",
+                  form.is_unpaid ? "text-slate-800" : "text-slate-400"
+                )}>
                   미지급
                 </span>
               </div>
-              <p className={
-                form.is_unpaid
-                  ? "text-[9px] leading-snug text-gray-600"
-                  : "text-[9px] leading-snug text-gray-300"
-              }>
+              <p className={cn(
+                "text-[9px] leading-snug",
+                form.is_unpaid ? "text-slate-600" : "text-slate-300"
+              )}>
                 {form.is_unpaid ? "아직 지급 전이에요" : "지급 완료 상태"}
               </p>
             </button>
 
-            {/* 세금계산서 토글 — 활성화 시 soft-blush 강조 */}
+            {/* 세금계산서 토글 */}
             <button
               type="button"
               onClick={() => setForm((prev) => ({ ...prev, needs_tax_invoice: !prev.needs_tax_invoice }))}
-              className={
+              className={cn(
+                "w-full rounded-xl border px-3 py-3 text-left transition-all",
                 form.needs_tax_invoice
-                  ? "w-full rounded-lg border border-red-300 bg-red-100 px-2.5 py-2.5 text-left transition-all"
-                  : "w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2.5 text-left hover:border-red-300 transition-all"
-              }
+                  ? "border-soft-blush bg-soft-blush/30 shadow-sm"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              )}
             >
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className={
-                  form.needs_tax_invoice
-                    ? "inline-block h-1.5 w-1.5 rounded-full bg-red-500 shrink-0"
-                    : "inline-block h-1.5 w-1.5 rounded-full bg-gray-300 shrink-0"
-                } />
-                <span className={
-                  form.needs_tax_invoice
-                    ? "text-[10px] font-bold text-gray-700"
-                    : "text-[10px] font-medium text-gray-400"
-                }>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className={cn(
+                  "inline-block h-2 w-2 rounded-full shrink-0",
+                  form.needs_tax_invoice ? "bg-red-500" : "bg-slate-300"
+                )} />
+                <span className={cn(
+                  "text-[11px] font-bold",
+                  form.needs_tax_invoice ? "text-slate-800" : "text-slate-400"
+                )}>
                   세금계산서
                 </span>
               </div>
-              <p className={
-                form.needs_tax_invoice
-                  ? "text-[9px] leading-snug text-gray-600"
-                  : "text-[9px] leading-snug text-gray-300"
-              }>
+              <p className={cn(
+                "text-[9px] leading-snug",
+                form.needs_tax_invoice ? "text-slate-600" : "text-slate-300"
+              )}>
                 {form.needs_tax_invoice ? "아직 못 받았어요" : "수신 완료 상태"}
               </p>
             </button>
           </div>
 
           {/* ── 우측: 입력 필드 ── */}
-          <div className="flex-1 px-5 py-5 space-y-4 overflow-y-auto max-h-[70vh]">
+          <div className="flex-1 px-6 py-5 space-y-5 overflow-y-auto max-h-[70vh]">
 
             {/* 지출일자 */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-gray-500">
+              <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
                 지출일자 <span className="text-red-500">*</span>
               </Label>
               <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="flex h-9 w-full items-center justify-between rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 hover:border-slate-400 focus:outline-none"
+                    className="flex h-10 w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors"
                   >
                     <span>{form.expense_date || "날짜 선택"}</span>
-                    <Calendar className="h-4 w-4 text-gray-400" />
+                    <Calendar className="h-4 w-4 text-slate-400" />
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="start" className="w-auto p-0">
@@ -253,93 +259,94 @@ function ExpenseDialog({
             </div>
 
             {/* 금액: VAT 제외 입력 + VAT 포함 자동표시 */}
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1">
-                <Label className="text-xs font-medium text-gray-500">금액</Label>
-                <span className="text-red-500 text-xs">*</span>
-              </div>
-              <div className="flex gap-2">
-                {/* VAT 제외 입력 */}
-                <div className="flex-1 space-y-1">
-                  <div className="relative">
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={amountInput}
-                      onChange={(e) => {
-                        const digits = e.target.value.replace(/[^0-9]/g, "")
-                        setAmountInput(digits ? Number(digits).toLocaleString("ko-KR") : "")
-                      }}
-                      placeholder="0"
-                      className="h-9 pr-8 text-right tabular-nums text-sm font-semibold text-slate-700"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">원</span>
+            <div className="space-y-2">
+              <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                금액 <span className="text-red-500">*</span>
+              </Label>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                <div className="flex items-center gap-2">
+                  {/* VAT 제외 입력 */}
+                  <div className="flex-1 space-y-1">
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={amountInput}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/[^0-9]/g, "")
+                          setAmountInput(digits ? Number(digits).toLocaleString("ko-KR") : "")
+                        }}
+                        placeholder="0"
+                        className="h-10 pr-8 text-right tabular-nums text-sm font-semibold text-slate-700 bg-white rounded-lg"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">원</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 text-right font-medium">VAT 제외</p>
                   </div>
-                  <p className="text-[10px] text-slate-500 text-right font-medium">VAT 제외</p>
-                </div>
 
-                {/* 구분 화살표 */}
-                <div className="flex flex-col items-center justify-center pt-0.5 pb-5 gap-0.5">
-                  <div className="w-px h-2.5 bg-gray-200" />
-                  <span className="text-[9px] text-gray-300 font-medium leading-none">+10%</span>
-                  <div className="w-px h-2.5 bg-gray-200" />
-                </div>
-
-                {/* VAT 포함 자동계산 표시 — 회색 처리 */}
-                <div className="flex-1 space-y-1">
-                  <div className="flex h-9 items-center justify-end rounded-md bg-gray-50 border border-gray-200 px-3 gap-1">
-                    <span className="tabular-nums text-sm font-semibold text-gray-500">
-                      {vatIncluded > 0 ? formatCurrency(vatIncluded) : "—"}
-                    </span>
-                    <span className="text-xs text-gray-400">원</span>
+                  {/* 구분 화살표 */}
+                  <div className="flex flex-col items-center justify-center pt-0.5 pb-5 gap-0.5">
+                    <div className="w-px h-2 bg-slate-200" />
+                    <span className="text-[9px] text-slate-300 font-bold leading-none">+10%</span>
+                    <div className="w-px h-2 bg-slate-200" />
                   </div>
-                  <p className="text-[10px] text-gray-400 text-right font-medium">VAT 포함</p>
-                </div>
-              </div>
 
-              {/* 결제수단 — 뱃지 토글 방식 */}
-              <div className="flex items-center gap-1.5 pt-1 flex-wrap">
-                <span className="text-[10px] text-gray-400 shrink-0 mr-0.5">결제수단</span>
-                {PAYMENT_METHODS.map((m) => {
-                  const isSelected = form.payment_method === m
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          // 이미 선택된 뱃지 다시 클릭하면 해제
-                          payment_method: prev.payment_method === m ? "" : m,
-                        }))
-                      }
-                      className={
-                        isSelected
-                          ? "inline-flex h-5 items-center rounded-full border border-slate-400 bg-slate-50 px-2 text-[10px] font-semibold text-slate-700 transition-colors"
-                          : "inline-flex h-5 items-center rounded-full border border-gray-200 bg-white px-2 text-[10px] font-medium text-gray-500 hover:border-slate-400 hover:text-slate-700 transition-colors"
-                      }
-                    >
-                      {m}
-                    </button>
-                  )
-                })}
+                  {/* VAT 포함 자동계산 표시 */}
+                  <div className="flex-1 space-y-1">
+                    <div className="flex h-10 items-center justify-end rounded-lg bg-slate-100 border border-slate-200 px-3 gap-1">
+                      <span className="tabular-nums text-sm font-semibold text-slate-500">
+                        {vatIncluded > 0 ? formatCurrency(vatIncluded) : "—"}
+                      </span>
+                      <span className="text-xs text-slate-400">원</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 text-right font-medium">VAT 포함</p>
+                  </div>
+                </div>
+
+                {/* 결제수단 — 뱃지 토글 방식 */}
+                <div className="flex items-center gap-1.5 pt-2.5 mt-2.5 border-t border-slate-200/70 flex-wrap">
+                  <span className="text-[10px] text-slate-400 shrink-0 mr-0.5">결제수단</span>
+                  {PAYMENT_METHODS.map((m) => {
+                    const isSelected = form.payment_method === m
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            payment_method: prev.payment_method === m ? "" : m,
+                          }))
+                        }
+                        className={cn(
+                          "inline-flex h-6 items-center rounded-full border px-2.5 text-[10px] font-medium transition-colors",
+                          isSelected
+                            ? "border-slate-400 bg-slate-700 text-white"
+                            : "border-slate-200 bg-white text-slate-500 hover:border-slate-400"
+                        )}
+                      >
+                        {m}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
             {/* 거래처 */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-gray-500">거래처</Label>
+              <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">거래처</Label>
               <Input
                 value={form.vendor}
                 onChange={(e) => setForm((prev) => ({ ...prev, vendor: e.target.value }))}
                 placeholder="거래처명"
-                className="h-9 text-sm"
+                className="h-10 text-sm rounded-lg"
               />
             </div>
 
             {/* 거래 내용 */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-gray-500">거래 내용</Label>
+              <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">거래 내용</Label>
               <textarea
                 value={form.description}
                 onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
@@ -349,13 +356,37 @@ function ExpenseDialog({
                     : "설치 작업 내용 등 설치지출 내용을 입력하세요."
                 }
                 rows={3}
-                className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-300 resize-none focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 placeholder:text-slate-300 resize-none focus:outline-none focus:ring-2 focus:ring-slate-200 transition-colors"
               />
             </div>
           </div>
         </div>
 
-        {/* 닫을 때 자동 저장됨 — 별도 버튼 불필요 */}
+        {/* ── 하단: 저장 버튼 ── */}
+        <div className="border-t border-slate-100 bg-slate-50/50 px-6 py-4">
+          <button
+            type="button"
+            disabled={rawAmount <= 0}
+            onClick={() => {
+              const amount = Number.isFinite(rawAmount) ? Math.max(0, Math.round(rawAmount)) : 0
+              if (amount > 0) {
+                onSave({ ...form, category, amount }, editingItem?.id)
+              }
+              onClose()
+            }}
+            className={cn(
+              "w-full h-11 rounded-xl text-sm font-bold transition-all",
+              rawAmount > 0
+                ? "bg-slate-900 text-white hover:bg-slate-800 shadow-sm"
+                : "bg-slate-200 text-slate-400 cursor-not-allowed"
+            )}
+          >
+            {rawAmount > 0
+              ? `${formatCurrency(vatIncluded)}원 ${isEditMode ? "수정" : "추가"}하기 (VAT포함)`
+              : "금액을 입력해주세요"
+            }
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   )
@@ -415,10 +446,11 @@ function ExpenseCard({
         {item.vendor || "거래처 미입력"}{item.description ? ` · ${item.description}` : ""}
       </p>
 
-      {/* 3행: 금액 (VAT포함) */}
+      {/* 3행: 금액 (VAT별도 + VAT포함) */}
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold tabular-nums text-slate-900">{formatCurrency(vatIncluded)}원</span>
-        <span className="text-[10px] text-slate-400">VAT포함</span>
+        <span className="text-[11px] tabular-nums text-slate-400">{formatCurrency(item.amount)}원 <span className="text-[9px]">VAT별도</span></span>
+        <span className="text-[10px] text-slate-300">│</span>
+        <span className="text-xs font-semibold tabular-nums text-slate-900">{formatCurrency(vatIncluded)}원 <span className="text-[10px]">VAT포함</span></span>
       </div>
     </div>
   )
@@ -473,8 +505,9 @@ function ExpenseSection({
           <div className="flex items-center gap-2">
             <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">{category === "장비" ? <AirVent className="h-3.5 w-3.5 text-slate-400" /> : <Wrench className="h-3.5 w-3.5 text-slate-400" />}{category} 지출</p>
             {items.length > 0 && (
-              <span className="text-[11px] font-semibold tabular-nums text-slate-500">
-                {formatCurrency(total)}원
+              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 whitespace-nowrap">
+                <span className="text-[10px] font-semibold tabular-nums text-slate-700">{formatCurrency(total)}</span>
+                <span className="text-[8px] text-slate-400">VAT포함</span>
               </span>
             )}
           </div>
@@ -684,7 +717,7 @@ export default function ExpenseTab({
                   {formatCurrency(grandTotal)}
                   <span className="ml-0.5 text-[10px] font-normal text-slate-400">원</span>
                 </p>
-                <p className="text-[10px] text-slate-400">VAT 포함 기준</p>
+                <p className="text-[10px] font-medium text-red-500">VAT 포함 기준</p>
               </div>
             </div>
 

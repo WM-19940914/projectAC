@@ -63,18 +63,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {/* 로고 영역 */}
         <div className="flex h-12 items-center justify-between px-3">
           {!collapsed ? (
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-xs font-bold text-white">
-                M
-              </div>
-              <span className="text-[13px] font-bold text-slate-800 tracking-tight">Management</span>
+            <Link href="/dashboard" className="flex items-center">
+              <img src="/logo-melea-full.png" alt="MELEA" className="h-7" />
             </Link>
           ) : (
             <Link
               href="/dashboard"
-              className="mx-auto flex h-7 w-7 items-center justify-center rounded-md bg-slate-800 text-xs font-bold text-white"
+              className="mx-auto flex items-center justify-center"
             >
-              M
+              <img src="/logo-melea.png" alt="M" className="h-7 w-7 object-contain" />
             </Link>
           )}
 

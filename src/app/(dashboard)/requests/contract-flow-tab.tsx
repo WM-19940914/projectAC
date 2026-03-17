@@ -591,10 +591,11 @@ export function ContractFlowTab({
     unpaidAmount,
     progressPercent,
   ])
-  const stageSummary = selectedStages.length > 0
-    ? selectedStages.map((stage) => {
-      const suffix = stage === "중도금" && middleInstallments > 1 ? `(${middleInstallments}회)` : ""
-      return `${stage}${suffix}`
+  // 정산 구조 요약: settlementRows의 label + ratio(%) 그대로 사용
+  const stageSummary = settlementRows.length > 0
+    ? settlementRows.map((row) => {
+      const ratioStr = Number.isInteger(row.ratio) ? `${row.ratio}` : row.ratio.toFixed(1)
+      return `${row.label} ${ratioStr}%`
     }).join(" / ")
     : "정산 형태를 설정해주세요."
   const modalSelectedRatioSum = modalStages.reduce((sum, stage) => {
@@ -843,17 +844,16 @@ export function ContractFlowTab({
   }, [])
 
   const openAmountModal = () => {
-    // VAT포함 금액으로 표시
-    setAmountInputValue(totalWithVat > 0 ? totalWithVat.toLocaleString("ko-KR") : "")
+    // 공급가액(VAT별도)으로 표시
+    setAmountInputValue(supplyAmount > 0 ? supplyAmount.toLocaleString("ko-KR") : "")
     setIsAmountModalOpen(true)
   }
 
   const handleApplyAmount = () => {
     const digitsOnly = amountInputValue.replace(/[^0-9]/g, "")
     const next = digitsOnly ? Number(digitsOnly) : 0
-    // 입력값은 VAT포함 → 공급가(VAT제외)로 변환하여 저장
-    const vatIncluded = Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0
-    const nextAmount = Math.round(vatIncluded / 1.1)
+    // 입력값이 곧 공급가액(VAT별도) → 그대로 저장
+    const nextAmount = Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0
     setDraft((prev) => (prev.contract_amount === nextAmount ? prev : { ...prev, contract_amount: nextAmount }))
     // 계약금액 변경 시 입금내역은 유지 (이미 입력된 정산 데이터 보존)
     setIsAmountModalOpen(false)
@@ -1244,10 +1244,10 @@ export function ContractFlowTab({
               <button
                 type="button"
                 onClick={openAmountModal}
-                title="계약금액 (VAT포함)"
+                title="계약금액 (VAT별도)"
                 className="text-sm font-semibold tabular-nums text-gray-800 hover:text-slate-600 transition-colors shrink-0 whitespace-nowrap"
               >
-                {totalWithVat > 0 ? formatCurrency(totalWithVat) : "금액 입력"}
+                {supplyAmount > 0 ? formatCurrency(supplyAmount) : "금액 입력"}
               </button>
             </PopoverTrigger>
             <PopoverContent align="end" side="bottom" sideOffset={4} className="w-52 border-gray-200 p-2.5">
@@ -1257,13 +1257,13 @@ export function ContractFlowTab({
                   disabled={typeof confirmedQuoteSupplyAmount !== "number"}
                   onClick={() => {
                     if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
-                      const vatIncluded = Math.round(confirmedQuoteSupplyAmount) + Math.floor(Math.round(confirmedQuoteSupplyAmount) * 0.1)
-                      setAmountInputValue(vatIncluded.toLocaleString("ko-KR"))
+                      // 확정 견적 공급가액을 그대로 불러오기
+                      setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
                     }
                   }}
                   className="inline-flex h-7 w-full items-center justify-center rounded border border-gray-200 text-[10px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
                 >
-                  금액 불러오기(VAT포함)
+                  금액 불러오기(VAT별도)
                 </button>
                 <Input
                   id="contract-amount-editor"
@@ -1284,7 +1284,7 @@ export function ContractFlowTab({
                   placeholder="0"
                   className="h-7 border-gray-200 text-sm font-semibold text-right tabular-nums focus:ring-slate-300"
                 />
-                <p className="text-right text-[10px] text-gray-400">VAT 포함 금액</p>
+                <p className="text-right text-[10px] text-gray-400">VAT 별도 금액 (공급가액)</p>
                 <div className="flex items-center justify-end gap-1.5">
                   <button
                     type="button"
@@ -1332,7 +1332,7 @@ export function ContractFlowTab({
             {settlementRowsWithScheduledDate.map((row) => {
               return (
               <div key={row.key} className="flex items-center justify-between py-1 border-b border-gray-100 last:border-b-0">
-                <span className="text-gray-600">{row.label}</span>
+                <span className="text-gray-600">{row.label} <span className="text-gray-400">{Number.isInteger(row.ratio) ? row.ratio : row.ratio.toFixed(1)}%</span></span>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400">{row.scheduledDate || ""}</span>
                   <span className="font-medium tabular-nums text-gray-700">{formatCurrency(row.total)}</span>
@@ -1405,7 +1405,7 @@ export function ContractFlowTab({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <p className="truncate text-[11px] font-semibold text-gray-700">{row.label}</p>
+                    <p className="truncate text-[11px] font-semibold text-gray-700">{row.label} <span className="font-normal text-gray-400">{Number.isInteger(row.ratio) ? row.ratio : row.ratio.toFixed(1)}%</span></p>
                     <span className={cn(
                       "inline-flex shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold",
                       row.paymentConfirmed
@@ -1649,13 +1649,14 @@ export function ContractFlowTab({
                     </div>
                   </div>
 
-                  {/* 계약금액 + 정산구조 — 2컬럼 */}
+                  {/* 계약금액 2종 — 1행 2컬럼 */}
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+                    {/* 계약금액 (VAT별도) — 수정 가능 */}
+                    <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
                       <div className="min-w-0">
-                        <p className="text-[10px] text-slate-400">계약금액 (VAT포함)</p>
+                        <p className="text-[10px] text-slate-400">계약금액 (VAT별도)</p>
                         <p className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900 truncate">
-                          {totalWithVat > 0 ? `${formatCurrency(totalWithVat)}원` : "미입력"}
+                          {supplyAmount > 0 ? `${formatCurrency(supplyAmount)}원` : "미입력"}
                         </p>
                       </div>
                       <Popover open={isAmountModalOpen} onOpenChange={setIsAmountModalOpen}>
@@ -1668,21 +1669,20 @@ export function ContractFlowTab({
                             수정
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent align="end" side="bottom" sideOffset={4} className="w-56 border-slate-200 p-3">
+                        <PopoverContent align="start" side="bottom" sideOffset={4} className="w-56 border-slate-200 p-3">
                           <div className="space-y-2.5">
                             <button
                               type="button"
                               disabled={typeof confirmedQuoteSupplyAmount !== "number"}
                               onClick={() => {
                                 if (typeof confirmedQuoteSupplyAmount === "number" && confirmedQuoteSupplyAmount >= 0) {
-                                  // 확정 견적 공급가 → VAT포함 금액으로 변환
-                                  const vatIncluded = Math.round(confirmedQuoteSupplyAmount) + Math.floor(Math.round(confirmedQuoteSupplyAmount) * 0.1)
-                                  setAmountInputValue(vatIncluded.toLocaleString("ko-KR"))
+                                  // 확정 견적 공급가액을 그대로 불러오기
+                                  setAmountInputValue(Math.round(confirmedQuoteSupplyAmount).toLocaleString("ko-KR"))
                                 }
                               }}
                               className="inline-flex h-8 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40"
                             >
-                              금액 불러오기(VAT포함)
+                              금액 불러오기(VAT별도)
                             </button>
                             <Input
                               type="text"
@@ -1702,7 +1702,7 @@ export function ContractFlowTab({
                               placeholder="0"
                               className="h-9 border-slate-200 text-right text-sm font-semibold tabular-nums focus:ring-slate-300"
                             />
-                            <p className="text-right text-[10px] text-slate-400">VAT 포함 금액</p>
+                            <p className="text-right text-[10px] text-slate-400">VAT 별도 금액 (공급가액)</p>
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
@@ -1723,19 +1723,29 @@ export function ContractFlowTab({
                         </PopoverContent>
                       </Popover>
                     </div>
-                    <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-slate-400">정산 구조</p>
-                        <p className="mt-0.5 truncate text-xs text-slate-700">{stageSummary}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={openSettlementModal}
-                        className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 px-2 text-[11px] font-medium text-slate-500 hover:border-slate-300 hover:bg-slate-50"
-                      >
-                        변경
-                      </button>
+
+                    {/* 계약금액 (VAT포함) — 자동계산 (공급가액 × 1.1) */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2">
+                      <p className="text-[10px] text-slate-400">계약금액 (VAT포함)</p>
+                      <p className="mt-0.5 text-sm font-semibold tabular-nums text-slate-900 truncate">
+                        {totalWithVat > 0 ? `${formatCurrency(totalWithVat)}원` : "미입력"}
+                      </p>
                     </div>
+                  </div>
+
+                  {/* 정산 구조 — 2행 (풀 너비) */}
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-[10px] text-slate-400">정산 구조</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-700">{stageSummary}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={openSettlementModal}
+                      className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 px-2 text-[11px] font-medium text-slate-500 hover:border-slate-300 hover:bg-slate-50"
+                    >
+                      변경
+                    </button>
                   </div>
 
                   {/* 정산 구조별 금액 테이블 */}
@@ -1756,7 +1766,7 @@ export function ContractFlowTab({
                         const hasDate = !!row.scheduledDate
                         return (
                           <div key={row.key} className="grid grid-cols-[1fr_90px_24px_120px] items-center px-3 py-1.5 border-t border-slate-100 text-[11px]">
-                            <span className="text-slate-600">{row.label}</span>
+                            <span className="text-slate-600">{row.label} <span className="text-slate-400">{Number.isInteger(row.ratio) ? row.ratio : row.ratio.toFixed(1)}%</span></span>
                             <span className="font-medium tabular-nums text-slate-700 text-right pr-1">{formatCurrency(row.total)}원</span>
                             <span className="flex justify-center"><span className="h-4 w-px bg-slate-200" /></span>
                             {/* 입금예정일 — 미입력 시 연한 핑크, 조건 hover 시 툴팁 */}
@@ -1872,7 +1882,7 @@ export function ContractFlowTab({
                           row.paymentConfirmed ? "bg-muted-teal/5" : "bg-slate-50/70"
                         )}>
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-[11px] font-bold text-slate-800">{row.label}</span>
+                            <span className="text-[11px] font-bold text-slate-800">{row.label} <span className="font-medium text-slate-400">{Number.isInteger(row.ratio) ? row.ratio : row.ratio.toFixed(1)}%</span></span>
                             <span className={cn(
                               "inline-flex h-[18px] shrink-0 items-center rounded-full px-1.5 text-[9px] font-semibold",
                               row.paymentConfirmed
