@@ -3,11 +3,14 @@
 // ----- 대시보드 클라이언트 오케스트레이터 -----
 // 3개 섹션을 세로로 나열하는 레이아웃 컴포넌트
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { SmilePlus } from "lucide-react"
 import { useAuth } from "@/providers/auth-provider"
-import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo } from "./dashboard-types"
+import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, MonthlyProgressRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo } from "./dashboard-types"
 import { SettlementExpenseSection } from "./settlement-expense-section"
 import { RevenueChartSection } from "./revenue-chart-section"
+import { ProgressRevenueSection } from "./progress-revenue-section"
 import { ContributionSection } from "./contribution-section"
 
 // 시간대별 인사 메시지 (의뢰 칸반보드와 동일)
@@ -33,6 +36,8 @@ interface Props {
   requestInfoMap: Record<string, DashboardRequestInfo>
   initialYear: number
   initialMonth: number
+  allProgressData: Record<number, MonthlyProgressRevenue[]>
+  progressAvailableYears: number[]
 }
 
 export function DashboardClient({
@@ -48,11 +53,21 @@ export function DashboardClient({
   requestInfoMap,
   initialYear,
   initialMonth,
+  allProgressData,
+  progressAvailableYears,
 }: Props) {
   const { profile } = useAuth()
+  const router = useRouter()
+
+  // 탭 포커스 복귀 시 서버 데이터 자동 갱신
+  useEffect(() => {
+    const onFocus = () => router.refresh()
+    window.addEventListener("focus", onFocus)
+    return () => window.removeEventListener("focus", onFocus)
+  }, [router])
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-6 max-w-[1150px] mx-auto">
       {/* 페이지 제목 + 인사 메시지 */}
       <div className="flex items-center gap-4">
         <h1 className="text-2xl font-heading font-bold text-gray-900">DashBoard</h1>
@@ -80,6 +95,13 @@ export function DashboardClient({
         availableYears={availableYears}
         currentYear={currentYear}
         currentMonth={currentMonth}
+      />
+
+      {/* 섹션2.5: 진행 매출 (계약기간 안분) */}
+      <ProgressRevenueSection
+        allProgressData={allProgressData}
+        availableYears={progressAvailableYears}
+        currentYear={currentYear}
       />
 
       {/* 섹션3: 계약별 공헌이익 */}

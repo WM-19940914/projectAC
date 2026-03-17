@@ -3,7 +3,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { DashboardClient } from "./dashboard-client"
-import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo } from "./dashboard-types"
+import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, MonthlyProgressRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo } from "./dashboard-types"
 
 // 캐시 비활성화 — 항상 최신 데이터
 export const dynamic = "force-dynamic"
@@ -236,7 +236,7 @@ export default async function DashboardPage() {
     // 2. 계약
     supabase
       .from("contracts")
-      .select("id, title, contract_amount, settlement_type, created_at, end_date, request_id")
+      .select("id, title, contract_amount, settlement_type, created_at, start_date, end_date, request_id")
       .is("deleted_at", null),
     // 3. 정산 메타
     supabase
@@ -637,6 +637,69 @@ export default async function DashboardPage() {
     }
   }
 
+  // ----- 6. 진행 매출 데이터 (계약기간 안분 기준) -----
+  const progressByYearMonth: Record<string, { amount: number; contracts: Set<string> }> = {}
+  for (const c of contracts) {
+    const contractAmount = Number(c.contract_amount) || 0
+    if (contractAmount <= 0) continue
+    // VAT 포함 금액으로 안분
+    const contractAmountVat = contractAmount + Math.floor(contractAmount * 0.1)
+    const startStr = (c as Record<string, unknown>).start_date as string | null
+    const endStr = (c as Record<string, unknown>).end_date as string | null
+    if (!startStr || !endStr) continue
+    const startDate = new Date(startStr + "T00:00:00")
+    const endDate = new Date(endStr + "T00:00:00")
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) continue
+    // 총 일수 (착수일~종료일 포함)
+    const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1)
+    const dailyRevenue = contractAmountVat / totalDays
+
+    // 착수월 ~ 종료월까지 순회하며 해당 월 포함 일수 계산
+    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1)
+    const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1)
+    while (cursor <= endMonth) {
+      const y = cursor.getFullYear()
+      const m = cursor.getMonth() // 0-based
+      // 해당 월 시작/끝
+      const monthStart = new Date(y, m, 1)
+      const monthEnd = new Date(y, m + 1, 0) // 해당 월 말일
+      // 계약 기간과 교차하는 구간
+      const overlapStart = startDate > monthStart ? startDate : monthStart
+      const overlapEnd = endDate < monthEnd ? endDate : monthEnd
+      const days = Math.max(0, Math.round((overlapEnd.getTime() - overlapStart.getTime()) / 86400000) + 1)
+      if (days > 0) {
+        const key = `${y}-${m + 1}`
+        if (!progressByYearMonth[key]) progressByYearMonth[key] = { amount: 0, contracts: new Set() }
+        progressByYearMonth[key].amount += Math.round(dailyRevenue * days)
+        progressByYearMonth[key].contracts.add(c.id)
+      }
+      cursor.setMonth(cursor.getMonth() + 1)
+    }
+  }
+
+  // 연도별 12개월 배열로 정리
+  const progressYearsSet = new Set<number>()
+  for (const key of Object.keys(progressByYearMonth)) {
+    progressYearsSet.add(Number(key.split("-")[0]))
+  }
+  for (const y of availableYears) progressYearsSet.add(y)
+  const progressYearsArr = Array.from(progressYearsSet)
+
+  const allProgressData: Record<number, MonthlyProgressRevenue[]> = {}
+  for (const y of progressYearsArr) {
+    allProgressData[y] = Array.from({ length: 12 }, (_, i) => {
+      const key = `${y}-${i + 1}`
+      const entry = progressByYearMonth[key]
+      return {
+        month: i + 1,
+        label: `${i + 1}월`,
+        amount: entry ? entry.amount : 0,
+        contractCount: entry ? entry.contracts.size : 0,
+      }
+    })
+  }
+  const progressAvailableYears = progressYearsArr.sort()
+
   // 계약별 공헌이익 항목 생성 (end_date 기준 월 필터링)
   // totalPaid = confirmed payment_entries 합계 (VAT포함)
   const contractContributions: ContractContribution[] = contracts
@@ -699,6 +762,8 @@ export default async function DashboardPage() {
       requestInfoMap={requestInfoMap}
       initialYear={currentYear}
       initialMonth={currentMonth}
+      allProgressData={allProgressData}
+      progressAvailableYears={progressAvailableYears}
     />
   )
 }

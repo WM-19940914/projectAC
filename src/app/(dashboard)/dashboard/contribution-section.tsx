@@ -64,6 +64,8 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
   // 집계 — 이익률 분모는 계약금액(VAT포함) 합계
   const totalContractAmountVat = sorted.reduce((s, i) => s + i.contractAmountVat, 0)
   const totalProfit = sorted.reduce((s, i) => s + i.netProfit, 0)
+  const totalIncentive = sorted.reduce((s, i) => s + i.incentiveTotal, 0)
+  const totalGrossProfit = totalProfit + totalIncentive
   const totalRate = totalContractAmountVat > 0 ? (totalProfit / totalContractAmountVat) * 100 : 0
   const lossCount = sorted.filter(i => i.netProfit < 0).length
 
@@ -180,17 +182,39 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
                 모든 금액은 VAT 포함 금액입니다
               </p>
             </div>
-            <div className="flex items-baseline gap-3">
-              <span className="text-3xl font-heading font-bold text-gray-900">
-                {fmtAmount(totalProfit)}
-              </span>
-              <span className={`text-sm font-medium px-2.5 py-0.5 rounded-full ${
-                totalRate >= 0
-                  ? "bg-muted-teal/10 text-muted-teal"
-                  : "bg-soft-blush/10 text-soft-blush"
-              }`}>
-                이익률 {totalRate.toFixed(2)}%
-              </span>
+            <div className="flex items-center gap-6 flex-wrap">
+              {/* 순이익 */}
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">순이익</p>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-heading font-bold ${totalProfit >= 0 ? "text-gray-900" : "text-soft-blush"}`}>
+                    {totalProfit >= 0 ? "+" : "-"}{fmtAmount(totalProfit)}
+                  </span>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                    totalRate >= 0
+                      ? "bg-muted-teal/10 text-muted-teal"
+                      : "bg-soft-blush/10 text-soft-blush"
+                  }`}>
+                    {totalRate.toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+              <div className="h-10 w-px bg-gray-200" />
+              {/* 장려금 총합계 */}
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">장려금</p>
+                <span className="text-lg font-heading font-bold text-gray-700">
+                  {totalIncentive > 0 ? fmtAmount(totalIncentive) : "-"}
+                </span>
+              </div>
+              <div className="h-10 w-px bg-gray-200" />
+              {/* 총이익 (순이익 + 장려금) */}
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">총이익 <span className="text-gray-300">(순이익+장려금)</span></p>
+                <span className={`text-lg font-heading font-bold ${totalGrossProfit >= 0 ? "text-muted-teal" : "text-soft-blush"}`}>
+                  {totalGrossProfit >= 0 ? "+" : "-"}{fmtAmount(totalGrossProfit)}
+                </span>
+              </div>
             </div>
 
             {/* 계약별 순위 테이블 */}

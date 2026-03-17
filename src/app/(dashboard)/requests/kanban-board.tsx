@@ -97,6 +97,24 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   // 수주 실패 패널 펼침/접힘
   const [isFailedExpanded, setIsFailedExpanded] = useState(false)
 
+  // 일회성 localStorage 정리 — DB 직접 수정 후 브라우저 캐시에 남은 stale 데이터 제거
+  useEffect(() => {
+    const CLEANUP_KEY = "requests:ratioCleanup:v2"
+    if (typeof window !== "undefined" && !localStorage.getItem(CLEANUP_KEY)) {
+      localStorage.removeItem("requests:contractRatios:v1")
+      // 정산 status 캐시도 정리
+      const keysToRemove: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && (key.startsWith("requests:settlementStatus:v1:") || key.startsWith("requests:pendingDraft:"))) {
+          keysToRemove.push(key)
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k))
+      localStorage.setItem(CLEANUP_KEY, new Date().toISOString())
+    }
+  }, [])
+
   // 서버에서 새 데이터가 오면 (생성/삭제 후 refresh) 화면도 바로 갱신
   // JSON 비교로 "실제 데이터"가 바뀔 때만 동기화 (드래그 중 리셋 방지)
   const prevDataRef = useRef(JSON.stringify(initialColumns))
@@ -541,33 +559,34 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     const nextConfirmedQuoteId = selectedItem.confirmed_quote_id === quote.id ? null : quote.id
     await updateRequestField("confirmed_quote_id", nextConfirmedQuoteId)
   }, [selectedItem, updateRequestField])
-  // 컬럼별 정렬 상태: null(기본) → "asc"(오름차순) → "desc"(내림차순) → null 순환
-  const [sortOrder, setSortOrder] = useState<Record<string, "asc" | "desc" | null>>({})
+  // 컬럼별 정렬 상태: "asc"(오름차순=오래된순) ↔ "desc"(내림차순=최신순) 토글
+  const [sortOrder, setSortOrder] = useState<Record<string, "asc" | "desc">>({})
 
-  // 정렬 토글 함수
+  // 정렬 토글 함수 — 착수일 기준, asc ↔ desc 순환
   const toggleSort = (status: string) => {
     setSortOrder((prev) => {
-      const current = prev[status] || null
-      // null → asc → desc → null 순환
-      const next = current === null ? "asc" : current === "asc" ? "desc" : null
+      const current = prev[status] || "desc"
+      const next = current === "asc" ? "desc" : "asc"
       return { ...prev, [status]: next }
     })
   }
 
-  // 정렬이 적용된 컬럼 데이터 반환
+  // 착수일(contract.start_date) 기준 정렬 — 기본은 최신순(desc)
   const getSortedItems = (col: KanbanColumn) => {
-    const order = sortOrder[col.status]
-    if (!order) return col.items
+    const order = sortOrder[col.status] || "desc"
 
     return [...col.items].sort((a, b) => {
-      // 문의 일시가 없는 항목은 맨 뒤로
-      if (!a.inquiry_date && !b.inquiry_date) return 0
-      if (!a.inquiry_date) return 1
-      if (!b.inquiry_date) return -1
+      const dateA = a.contract?.start_date
+      const dateB = b.contract?.start_date
 
-      const dateA = new Date(a.inquiry_date).getTime()
-      const dateB = new Date(b.inquiry_date).getTime()
-      return order === "asc" ? dateA - dateB : dateB - dateA
+      // 착수일이 없는 항목은 맨 위로
+      if (!dateA && !dateB) return 0
+      if (!dateA) return -1
+      if (!dateB) return 1
+
+      const timeA = new Date(dateA).getTime()
+      const timeB = new Date(dateB).getTime()
+      return order === "asc" ? timeA - timeB : timeB - timeA
     })
   }
 
@@ -952,27 +971,23 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                       <Badge variant="secondary" className={cn("text-xs", style.badge)}>
                         {col.count}
                       </Badge>
-                      {/* 문의 일시 기준 정렬 버튼 */}
+                      {/* 착수일 기준 정렬 버튼 */}
                       <button
                         onClick={() => toggleSort(col.status)}
                         title={
-                          sortOrder[col.status] === "asc" ? "오래된 순 (오름차순)"
-                            : sortOrder[col.status] === "desc" ? "최신 순 (내림차순)"
-                              : "정렬 없음"
+                          (sortOrder[col.status] || "desc") === "asc"
+                            ? "착수일 오래된 순"
+                            : "착수일 최신 순"
                         }
                         className={cn(
                           "p-1 rounded-md transition-all",
-                          sortOrder[col.status]
-                            ? `${style.badge} hover:opacity-80`
-                            : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                          `${style.badge} hover:opacity-80`
                         )}
                       >
-                        {sortOrder[col.status] === "asc" ? (
+                        {(sortOrder[col.status] || "desc") === "asc" ? (
                           <ArrowUp className="h-3.5 w-3.5" />
-                        ) : sortOrder[col.status] === "desc" ? (
-                          <ArrowDown className="h-3.5 w-3.5" />
                         ) : (
-                          <ArrowUpDown className="h-3.5 w-3.5" />
+                          <ArrowDown className="h-3.5 w-3.5" />
                         )}
                       </button>
                     </div>

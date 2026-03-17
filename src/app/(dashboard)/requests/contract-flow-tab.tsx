@@ -335,9 +335,35 @@ export function ContractFlowTab({
         // VAT 포함 총액: 공급가액 + VAT(절삭) — round(×1.1)은 1원 초과 오차 발생
         const totalWithVat = contractAmt + Math.floor(contractAmt * 0.1)
         let nextRatios: Record<SettlementStage, number>
-        if (hasMetaRatios && dbAmountMode) {
-          // 이미 금액 모드 → 그대로 사용
+        // 금액 모드인데 비율값(0~100)이 들어가 있는 경우 자동 보정
+        // (마이그레이션 시 비율이 금액 자리에 잘못 들어간 데이터)
+        const needsAmountFix = dbAmountMode && totalWithVat > 10000 && (() => {
+          const raw = contractMeta?.stage_ratios as Record<string, unknown> | undefined
+          if (!raw) return false
+          const vals = Object.entries(raw).filter(([k]) => k !== "_mode").map(([, v]) => Number(v) || 0).filter(v => v > 0)
+          return vals.length > 0 && vals.every(v => v <= 100)
+        })()
+        if (hasMetaRatios && dbAmountMode && !needsAmountFix) {
+          // 이미 금액 모드 & 정상값 → 그대로 사용
           nextRatios = getStageAmounts(contractMeta?.stage_ratios, nextDraft.settlement_type)
+        } else if (hasMetaRatios && needsAmountFix) {
+          // 금액 모드인데 비율값이 들어간 경우 → 비율로 취급하여 금액 변환
+          const raw = contractMeta?.stage_ratios as Record<string, number>
+          const ratioSum = Object.entries(raw).filter(([k]) => k !== "_mode").reduce((s, [, v]) => s + (Number(v) || 0), 0)
+          nextRatios = { ...EMPTY_STAGE_RATIOS }
+          let allocated = 0
+          const activeStages = nextDraft.settlement_type.filter(st => (Number(raw[st]) || 0) > 0)
+          nextDraft.settlement_type.forEach((stage) => {
+            const ratio = Number(raw[stage]) || 0
+            if (ratio === 0) { nextRatios[stage] = 0; return }
+            if (stage === activeStages[activeStages.length - 1]) {
+              nextRatios[stage] = totalWithVat - allocated
+            } else {
+              const amt = Math.round(totalWithVat * ratio / ratioSum)
+              nextRatios[stage] = amt
+              allocated += amt
+            }
+          })
         } else if (hasMetaRatios) {
           // 기존 비율(%) 데이터 → VAT 포함 금액으로 자동 변환
           const pctRatios = normalizeRatios(contractMeta?.stage_ratios, nextDraft.settlement_type)
@@ -390,9 +416,17 @@ export function ContractFlowTab({
           settlement_type: pendingStages.length > 0 ? pendingStages : nextDraft.settlement_type,
         } : nextDraft
         // 항상 금액 모드 → getStageAmounts 사용 (normalizeRatios는 0~100 클리핑이라 금액을 망가뜨림)
-        const resolvedRatios = canApplyPending && pending
+        // pending에도 비율값(0~100)이 금액 자리에 들어간 경우 보정
+        let resolvedRatios = canApplyPending && pending
           ? getStageAmounts(pending.stageRatios, resolvedDraft.settlement_type)
           : nextRatios
+        if (totalWithVat > 10000) {
+          const rVals = Object.entries(resolvedRatios).filter(([k]) => k !== "_mode").map(([, v]) => Number(v) || 0).filter(v => v > 0)
+          if (rVals.length > 0 && rVals.every(v => v <= 100)) {
+            // 비율값이 금액 자리에 들어간 경우 → DB 데이터(nextRatios) 우선 사용
+            resolvedRatios = nextRatios
+          }
+        }
         const resolvedMiddleInstallments = canApplyPending && pending
           ? normalizeMiddleInstallments(pending.middleInstallments)
           : nextMiddleInstallments

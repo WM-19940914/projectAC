@@ -10,14 +10,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { BarChart3, ChevronLeft, ChevronRight, Info, TrendingUp, TrendingDown, Building2, FileText, Receipt } from "lucide-react"
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip as RechartsTooltip,
   ResponsiveContainer,
-  Cell,
+  ReferenceLine,
 } from "recharts"
 import type { MonthlyRevenue, RevenueDetail } from "./dashboard-types"
 
@@ -229,10 +229,13 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
     return max
   }, [allRevenueData])
 
-  // 전년 대비
+  // 전년 대비 — 전년 데이터가 6개월 미만이면 비교 무의미하므로 표시 안 함
   const prevYearData = allRevenueData[selectedYear - 1]
+  const prevYearMonthsWithData = prevYearData ? prevYearData.filter(d => d.amount > 0).length : 0
   const prevYearTotal = prevYearData ? prevYearData.reduce((s, d) => s + d.amount, 0) : 0
-  const yoyChange = prevYearTotal > 0 ? ((yearTotal - prevYearTotal) / prevYearTotal) * 100 : null
+  const yoyChange = prevYearTotal > 0 && prevYearMonthsWithData >= 6
+    ? ((yearTotal - prevYearTotal) / prevYearTotal) * 100
+    : null
 
   const canNext = selectedYear < currentYear
 
@@ -259,12 +262,13 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
           <div>
             <CardTitle className="text-lg font-heading flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-sky-aqua" />
-              매출 추이
+              월별 매출 집계
+              <span className="text-xs font-sans font-normal text-sky-aqua ml-1">세금계산서 발행일 기준</span>
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button type="button" className="inline-flex items-center justify-center">
-                      <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 transition-colors" />
+                      <Info className="h-4 w-4 text-sky-aqua hover:text-sky-aqua/70 transition-colors" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-[260px] text-xs leading-relaxed">
@@ -346,11 +350,10 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
             <div
               className="h-[470px] w-full cursor-pointer"
               onClick={(e) => {
-                // 클릭 X 좌표로 어떤 월인지 계산 (YAxis 70px, 우측 margin 10px 제외)
                 const rect = e.currentTarget.getBoundingClientRect()
                 const x = e.clientX - rect.left
-                const chartLeft = 70  // YAxis(60) + margin(10)
-                const chartRight = rect.width - 10  // margin right
+                const chartLeft = 70
+                const chartRight = rect.width - 10
                 if (x < chartLeft || x > chartRight) return
                 const colWidth = (chartRight - chartLeft) / 12
                 const idx = Math.floor((x - chartLeft) / colWidth)
@@ -360,23 +363,14 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
               }}
             >
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
+                  <AreaChart
                     data={chartData}
                     margin={{ top: 20, right: 10, left: 10, bottom: 5 }}
-                    barCategoryGap="20%"
                   >
                     <defs>
-                      <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#42CAFD" stopOpacity={0.9} />
-                        <stop offset="100%" stopColor="#66B3BA" stopOpacity={0.7} />
-                      </linearGradient>
-                      <linearGradient id="barGradientCurrent" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#42CAFD" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#42CAFD" stopOpacity={0.8} />
-                      </linearGradient>
-                      <linearGradient id="barGradientSelected" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#42CAFD" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#66B3BA" stopOpacity={1} />
+                      <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#42CAFD" stopOpacity={0.3} />
+                        <stop offset="100%" stopColor="#42CAFD" stopOpacity={0.02} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -396,39 +390,42 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
                     />
                     <RechartsTooltip
                       content={<CustomChartTooltip selectedYear={selectedYear} />}
-                      cursor={{ fill: "rgba(66, 202, 253, 0.08)", radius: 6 }}
+                      cursor={{ stroke: "#42CAFD", strokeWidth: 1, strokeDasharray: "4 4" }}
                     />
-                    <Bar
+                    <ReferenceLine
+                      y={yearTotal / Math.max(1, chartData.filter(d => !d.isFuture && d.amount > 0).length)}
+                      stroke="#d1d5db"
+                      strokeDasharray="6 4"
+                      strokeWidth={1.5}
+                      label={{ value: "평균", position: "insideTopLeft", fontSize: 11, fill: "#9ca3af" }}
+                    />
+                    <Area
+                      type="linear"
                       dataKey="amount"
-                      radius={[6, 6, 0, 0]}
-                      maxBarSize={52}
+                      stroke="#42CAFD"
+                      strokeWidth={2.5}
+                      fill="url(#areaGradient)"
+                      dot={(props: Record<string, unknown>) => {
+                        const { cx, cy, payload } = props as { cx: number; cy: number; payload: { isFuture: boolean; isSelected: boolean; isCurrent: boolean; amount: number } }
+                        if (payload.isFuture) return <circle key={`dot-${cx}`} cx={cx} cy={cy} r={0} />
+                        const isActive = payload.isSelected || payload.isCurrent
+                        return (
+                          <circle
+                            key={`dot-${cx}`}
+                            cx={cx}
+                            cy={cy}
+                            r={isActive ? 6 : 4}
+                            fill={isActive ? "#42CAFD" : "#fff"}
+                            stroke="#42CAFD"
+                            strokeWidth={isActive ? 3 : 2}
+                          />
+                        )
+                      }}
+                      activeDot={{ r: 7, fill: "#42CAFD", stroke: "#fff", strokeWidth: 3 }}
                       animationDuration={600}
                       animationEasing="ease-out"
-                    >
-                      {chartData.map((entry) => (
-                        <Cell
-                          key={entry.month}
-                          fill={
-                            entry.isFuture
-                              ? "#f1f5f9"
-                              : entry.isSelected
-                                ? "url(#barGradientSelected)"
-                                : entry.isCurrent
-                                  ? "url(#barGradientCurrent)"
-                                  : "url(#barGradient)"
-                          }
-                          stroke={
-                            entry.isSelected
-                              ? "#42CAFD"
-                              : entry.isCurrent
-                                ? "#42CAFD"
-                                : "none"
-                          }
-                          strokeWidth={entry.isSelected ? 2.5 : entry.isCurrent ? 1.5 : 0}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
+                    />
+                  </AreaChart>
                 </ResponsiveContainer>
             </div>
           )}

@@ -70,6 +70,14 @@ export interface DashboardRequestInfo {
   customer: { id: string; company_name: string; deleted_at: string | null } | null
 }
 
+// 진행 매출 월별 집계 (계약기간 안분 기준)
+export interface MonthlyProgressRevenue {
+  month: number       // 1~12
+  label: string       // "1월", "2월" 등
+  amount: number      // 안분된 진행매출 합계 (공급가액)
+  contractCount: number // 해당 월에 진행 중인 계약 수
+}
+
 // 공헌이익 데이터 (레거시)
 export interface ContributionData {
   revenue: number
