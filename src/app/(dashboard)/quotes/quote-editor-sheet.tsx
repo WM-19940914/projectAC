@@ -11,7 +11,7 @@ import {
 import {
   Plus, Trash2, PanelRightOpen, PanelRightClose,
   Package, Wrench, Pencil, Check, Loader2, Building2, PenLine, ImageIcon,
-  Search, List, Eraser, X as XIcon, FileText,
+  Search, List, Eraser, X as XIcon, FileText, Download, FileSpreadsheet,
 } from "lucide-react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -22,6 +22,7 @@ import {
   AlertDialogDescription, AlertDialogFooter,
 } from "@/components/ui/alert-dialog"
 import { formatCurrency } from "@/lib/format"
+import { exportQuotePDF, exportQuoteExcel, type QuoteExportData } from "@/lib/quote-export"
 import type { QuotationWithItems, QuotationItem } from "@/types"
 import { Input } from "@/components/ui/input"
 
@@ -191,9 +192,6 @@ export default function QuoteEditorSheet({
   const [deliveryDate, setDeliveryDate] = useState("협의 일정")
   const [deliveryPlace, setDeliveryPlace] = useState("협의 장소")
   const [paymentCondition, setPaymentCondition] = useState("협의 조건")
-  // 이하여백 체크 인덱스 (null = 미사용)
-  const [equipBlankIdx, setEquipBlankIdx] = useState<number | null>(null)
-  const [installBlankIdx, setInstallBlankIdx] = useState<number | null>(null)
   // 견적서 뷰 탭 (네비게이션 전용, autoSave 트리거 안 함)
   const [activeTab, setActiveTab] = useState<string>("simple")
   const activeTabRef = useRef<string>("simple")
@@ -664,6 +662,30 @@ export default function QuoteEditorSheet({
     const ok = await doSave(false)
     if (ok) { onSaved(); onClose() }
   }
+
+  // PDF/Excel 내보내기용 데이터 조립
+  const buildExportData = useCallback((): QuoteExportData | null => {
+    if (!title.trim()) return null
+    return {
+      title, quotationNumber: quotation?.quotation_number || "", quotationDate, quoteType, notes,
+      supplier, receiver,
+      deliveryDate, deliveryPlace, paymentCondition,
+      equipItems, installItems, coverItems,
+      coverEquipLabel, coverInstallLabel,
+      equipTotal, installTotal, totalAmount,
+      truncationAmount: Number(truncationInput.replace(/[^0-9]/g, "")) || 0,
+      supplyAmount, taxAmount, grandTotal,
+      totalPurchase, totalProfit,
+      logoUrl, stampUrl,
+    }
+  }, [
+    title, quotation, quotationDate, quoteType, notes, supplier, receiver,
+    deliveryDate, deliveryPlace, paymentCondition,
+    equipItems, installItems, coverItems, coverEquipLabel, coverInstallLabel,
+    equipTotal, installTotal, totalAmount, truncationInput,
+    supplyAmount, taxAmount, grandTotal, totalPurchase, totalProfit,
+    logoUrl, stampUrl,
+  ])
 
   // 자동저장: 데이터 변경 시 2초 디바운스
   // - doSave는 deps에서 제외 (doSaveRef 사용) → 콜백 참조 변경으로 인한 불필요한 트리거 방지
@@ -1136,7 +1158,7 @@ export default function QuoteEditorSheet({
                       <div className="flex items-center gap-2">
                         <Package className="h-4 w-4 text-slate-700" />
                         <span className="font-sans font-semibold text-sm text-gray-900">장비 내역</span>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${equipTotal > 0 ? "bg-slate-100 text-slate-700" : "bg-gray-100 text-gray-400"}`}>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${equipTotal > 0 ? "bg-sky-aqua/15 text-sky-aqua" : "bg-gray-100 text-gray-400"}`}>
                           {equipTotal > 0 ? formatCurrency(equipTotal) : "0원"}
                         </span>
                       </div>
@@ -1145,8 +1167,8 @@ export default function QuoteEditorSheet({
                       updateItem={(i, f, v) => updateItem(setEquipItems, i, f, v)}
                       addRow={() => addRow(setEquipItems)}
                       removeRow={(i) => removeRow(setEquipItems, equipItems, i)}
-                      blankIdx={equipBlankIdx}
-                      onToggleBlank={(i) => setEquipBlankIdx(equipBlankIdx === i ? null : i)}
+                      blankIdx={null}
+                      onToggleBlank={() => {}}
                       isRowMatched={isRowMatched}
                       clearRow={(i) => clearItemRow(setEquipItems, i)}
                       onPasteCells={(startRow, startCol, data) => handlePasteCells(setEquipItems, startRow, startCol, data)} />
@@ -1180,7 +1202,7 @@ export default function QuoteEditorSheet({
                       <div className="flex items-center gap-2">
                         <Wrench className="h-4 w-4 text-slate-500" />
                         <span className="font-sans font-semibold text-sm text-gray-900">설치비 내역</span>
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${installTotal > 0 ? "bg-slate-100 text-slate-500" : "bg-gray-100 text-gray-400"}`}>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${installTotal > 0 ? "bg-tropical-teal/15 text-tropical-teal" : "bg-gray-100 text-gray-400"}`}>
                           {installTotal > 0 ? formatCurrency(installTotal) : "0원"}
                         </span>
                       </div>
@@ -1189,8 +1211,8 @@ export default function QuoteEditorSheet({
                       updateItem={(i, f, v) => updateItem(setInstallItems, i, f, v)}
                       addRow={() => addRow(setInstallItems)}
                       removeRow={(i) => removeRow(setInstallItems, installItems, i)}
-                      blankIdx={installBlankIdx}
-                      onToggleBlank={(i) => setInstallBlankIdx(installBlankIdx === i ? null : i)}
+                      blankIdx={null}
+                      onToggleBlank={() => {}}
                       isRowMatched={isRowMatched}
                       clearRow={(i) => clearItemRow(setInstallItems, i)}
                       onPasteCells={(startRow, startCol, data) => handlePasteCells(setInstallItems, startRow, startCol, data)} />
@@ -1219,46 +1241,42 @@ export default function QuoteEditorSheet({
 
                 {/* 비고 & 합계 */}
                 <div className="flex gap-3">
-                  <div className={`${leftW} border border-gray-200 rounded-lg`}>
-                    <div className="px-4 py-3 bg-gray-50/50">
-                      <span className="font-sans font-semibold text-sm">비고 / 합계</span>
+                  <div className={`${leftW} flex gap-3`}>
+                    {/* 좌측: 비고 */}
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <span className="text-xs font-semibold text-gray-500 mb-1 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-400" />비고</span>
+                      <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+                        placeholder="비고 / 특이사항을 입력하세요"
+                        className="flex-1 w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-400 resize-none" />
                     </div>
-                    <div className="px-4 pb-4">
-                      <div className="space-y-4 pt-2">
-                        <div>
-                          <label className="text-xs font-medium text-gray-500 mb-1 block">비고 / 특이사항</label>
-                          <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-                            placeholder="견적 관련 특이사항을 입력하세요" rows={3}
-                            className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-400 resize-none" />
+                    {/* 우측: 합계 */}
+                    <div className="w-[300px] shrink-0 flex flex-col">
+                      <span className="mb-1">&nbsp;</span>
+                      <div className="flex-1 space-y-3 border border-gray-200 rounded-lg p-5 bg-gray-50/30">
+                      <SummaryRow label="총 합계" value={totalAmount} bold />
+                      {/* 단위절사: 직접 입력, 빨간색 표시 */}
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-red-500 font-medium">단위절사</span>
+                        <div className="flex items-center gap-0.5 text-red-500 font-semibold">
+                          <span>-</span>
+                          <input
+                            type="text" inputMode="numeric"
+                            value={truncationInput}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/[^0-9]/g, "")
+                              setTruncationInput(raw ? Number(raw).toLocaleString() : "")
+                            }}
+                            placeholder="0"
+                            className="w-[90px] text-right bg-transparent border-0 border-b border-red-300 focus:outline-none focus:border-red-300 text-red-500 font-semibold placeholder:text-red-500/30 tabular-nums text-xs px-0"
+                          />
                         </div>
-                        <div className="flex justify-end">
-                          <div className="w-[300px] space-y-3 border border-gray-200 rounded-lg p-5 bg-gray-50/30">
-                            <SummaryRow label="총 합계" value={totalAmount} bold />
-                            {/* 단위절사: 직접 입력, 빨간색 표시 */}
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-red-500 font-medium">단위절사</span>
-                              <div className="flex items-center gap-0.5 text-red-500 font-semibold">
-                                <span>-</span>
-                                <input
-                                  type="text" inputMode="numeric"
-                                  value={truncationInput}
-                                  onChange={(e) => {
-                                    const raw = e.target.value.replace(/[^0-9]/g, "")
-                                    setTruncationInput(raw ? Number(raw).toLocaleString() : "")
-                                  }}
-                                  placeholder="0"
-                                  className="w-[90px] text-right bg-transparent border-0 border-b border-red-300 focus:outline-none focus:border-red-300 text-red-500 font-semibold placeholder:text-red-500/30 tabular-nums text-xs px-0"
-                                />
-                              </div>
-                            </div>
-                            <SummaryRow label="공급가액" value={supplyAmount} />
-                            <SummaryRow label="VAT (10%)" value={taxAmount} />
-                            <div className="-mx-5 px-5 py-3 bg-slate-100 border-t border-slate-300 flex justify-between items-center mt-1">
-                              <span className="text-sm font-semibold text-gray-900">최종 견적</span>
-                              <span className="text-sm font-bold text-gray-900 tabular-nums">{formatCurrency(grandTotal)}</span>
-                            </div>
-                          </div>
-                        </div>
+                      </div>
+                      <SummaryRow label="공급가액" value={supplyAmount} />
+                      <SummaryRow label="VAT (10%)" value={taxAmount} />
+                      <div className="-mx-5 px-5 py-3 bg-slate-100 border-t border-slate-300 flex justify-between items-center mt-1 rounded-b-lg">
+                        <span className="text-sm font-semibold text-gray-900">최종 견적</span>
+                        <span className="text-sm font-bold text-gray-900 tabular-nums">{formatCurrency(grandTotal)}</span>
+                      </div>
                       </div>
                     </div>
                   </div>
@@ -1431,7 +1449,7 @@ export default function QuoteEditorSheet({
                   {/* ── 품목 테이블 ── */}
                   <div className="border-b border-gray-300">
                     {/* 테이블 헤더 */}
-                    <div className="grid grid-cols-[40px_80px_1fr_50px_50px_90px_100px_80px] bg-gray-100 border-b border-gray-400 text-[11px] font-semibold text-gray-700">
+                    <div className="grid grid-cols-[40px_80px_1fr_50px_50px_120px_130px_80px] bg-gray-100 border-b border-gray-400 text-[11px] font-semibold text-gray-700">
                       <div className="px-2 py-2.5 text-center border-r border-gray-300">순번</div>
                       <div className="px-2 py-2.5 text-center border-r border-gray-300">구 분</div>
                       <div className="px-2 py-2.5 text-center border-r border-gray-300">내 용</div>
@@ -1442,7 +1460,7 @@ export default function QuoteEditorSheet({
                       <div className="px-2 py-2.5 text-center">비 고</div>
                     </div>
                     {/* 장비 행 (구분/내용 수정 가능) */}
-                    <div className="grid grid-cols-[40px_80px_1fr_50px_50px_90px_100px_80px] border-b border-gray-200 text-xs bg-gray-50/50">
+                    <div className="grid grid-cols-[40px_80px_1fr_50px_50px_120px_130px_80px] border-b border-gray-200 text-xs bg-gray-50/50">
                       <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-400">1</div>
                       <div className="px-1 border-r border-gray-200 flex items-center">
                         <input type="text" value={coverEquipLabel.name} onChange={(e) => setCoverEquipLabel(p => ({ ...p, name: e.target.value }))} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 font-medium text-gray-700" />
@@ -1457,7 +1475,7 @@ export default function QuoteEditorSheet({
                       <div className="px-2 py-2.5 text-center text-gray-500"></div>
                     </div>
                     {/* 설치비 행 (구분/내용 수정 가능) */}
-                    <div className="grid grid-cols-[40px_80px_1fr_50px_50px_90px_100px_80px] border-b border-gray-200 text-xs bg-gray-50/50">
+                    <div className="grid grid-cols-[40px_80px_1fr_50px_50px_120px_130px_80px] border-b border-gray-200 text-xs bg-gray-50/50">
                       <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-400">2</div>
                       <div className="px-1 border-r border-gray-200 flex items-center">
                         <input type="text" value={coverInstallLabel.name} onChange={(e) => setCoverInstallLabel(p => ({ ...p, name: e.target.value }))} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 font-medium text-gray-700" />
@@ -1474,7 +1492,7 @@ export default function QuoteEditorSheet({
 
                     {/* 추가 행들 (coverItems) */}
                     {coverItems.map((row, idx) => (
-                      <div key={idx} className="grid grid-cols-[40px_80px_1fr_50px_50px_90px_100px_80px] border-b border-gray-200 text-xs group hover:bg-slate-50 transition-colors">
+                      <div key={idx} className="grid grid-cols-[40px_80px_1fr_50px_50px_120px_130px_80px] border-b border-gray-200 text-xs group hover:bg-slate-50 transition-colors">
                         <div className="px-2 py-2.5 text-center border-r border-gray-200 text-gray-700">{idx + 3}</div>
                         <div className="px-1 border-r border-gray-200 flex items-center">
                           <input type="text" value={row.item_name} onChange={(e) => updateItem(setCoverItems, idx, "item_name", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 font-medium text-gray-900" placeholder="항목명" />
@@ -1504,7 +1522,7 @@ export default function QuoteEditorSheet({
 
                     {/* 빈 행 (여유 공간) */}
                     {Array.from({ length: Math.max(0, 8 - coverItems.length) }).map((_, i) => (
-                      <div key={`empty-${i}`} className="grid grid-cols-[40px_80px_1fr_50px_50px_90px_100px_80px] border-b border-gray-100 text-xs">
+                      <div key={`empty-${i}`} className="grid grid-cols-[40px_80px_1fr_50px_50px_120px_130px_80px] border-b border-gray-100 text-xs">
                         <div className="px-2 py-2.5 text-center border-r border-gray-100 text-gray-300">{i + 3 + coverItems.length}</div>
                         <div className="px-2 py-2.5 border-r border-gray-100"></div>
                         <div className="px-2 py-2.5 border-r border-gray-100"></div>
@@ -1568,8 +1586,8 @@ export default function QuoteEditorSheet({
                         <div className="px-3 py-2.5 text-right tabular-nums text-gray-900">{formatCurrency(taxAmount)}</div>
                       </div>
                       <div className="grid grid-cols-[90px_1fr]">
-                        <div className="px-3 py-4 bg-slate-100 border-r border-slate-300 font-bold text-gray-900 text-sm flex items-center">최종견적</div>
-                        <div className="px-3 py-4 bg-slate-100 text-right tabular-nums font-bold text-slate-700 text-lg tracking-tight">{formatCurrency(grandTotal)}</div>
+                        <div className="px-3 py-3 bg-slate-100 border-r border-slate-300 font-bold text-gray-900 text-xs flex items-center">최종견적</div>
+                        <div className="px-3 py-3 bg-slate-100 text-right tabular-nums font-bold text-slate-700 text-sm tracking-tight">{formatCurrency(grandTotal)}</div>
                       </div>
                     </div>
                   </div>
@@ -1595,7 +1613,7 @@ export default function QuoteEditorSheet({
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-slate-700" />
                       <span className="font-sans font-semibold text-sm text-gray-900">장비 내역</span>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${equipTotal > 0 ? "bg-slate-100 text-slate-700" : "bg-gray-100 text-gray-400"}`}>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${equipTotal > 0 ? "bg-sky-aqua/15 text-sky-aqua" : "bg-gray-100 text-gray-400"}`}>
                         {equipTotal > 0 ? formatCurrency(equipTotal) : "0원"}
                       </span>
                     </div>
@@ -1604,8 +1622,8 @@ export default function QuoteEditorSheet({
                     updateItem={(i, f, v) => updateItem(setEquipItems, i, f, v)}
                     addRow={() => addRow(setEquipItems)}
                     removeRow={(i) => removeRow(setEquipItems, equipItems, i)}
-                    blankIdx={equipBlankIdx}
-                    onToggleBlank={(i) => setEquipBlankIdx(equipBlankIdx === i ? null : i)}
+                    blankIdx={null}
+                    onToggleBlank={() => {}}
                     isRowMatched={isRowMatched}
                     clearRow={(i) => clearItemRow(setEquipItems, i)}
                     onPasteCells={(startRow, startCol, data) => handlePasteCells(setEquipItems, startRow, startCol, data)} />
@@ -1648,7 +1666,7 @@ export default function QuoteEditorSheet({
                     <div className="flex items-center gap-2">
                       <Wrench className="h-4 w-4 text-slate-500" />
                       <span className="font-sans font-semibold text-sm text-gray-900">설치비 내역</span>
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${installTotal > 0 ? "bg-slate-100 text-slate-500" : "bg-gray-100 text-gray-400"}`}>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums ${installTotal > 0 ? "bg-tropical-teal/15 text-tropical-teal" : "bg-gray-100 text-gray-400"}`}>
                         {installTotal > 0 ? formatCurrency(installTotal) : "0원"}
                       </span>
                     </div>
@@ -1657,8 +1675,8 @@ export default function QuoteEditorSheet({
                     updateItem={(i, f, v) => updateItem(setInstallItems, i, f, v)}
                     addRow={() => addRow(setInstallItems)}
                     removeRow={(i) => removeRow(setInstallItems, installItems, i)}
-                    blankIdx={installBlankIdx}
-                    onToggleBlank={(i) => setInstallBlankIdx(installBlankIdx === i ? null : i)}
+                    blankIdx={null}
+                    onToggleBlank={() => {}}
                     isRowMatched={isRowMatched}
                     clearRow={(i) => clearItemRow(setInstallItems, i)}
                     onPasteCells={(startRow, startCol, data) => handlePasteCells(setInstallItems, startRow, startCol, data)} />
@@ -1823,7 +1841,30 @@ export default function QuoteEditorSheet({
 
         {/* 하단 액션 바 */}
         <div className="px-6 py-2.5 border-t bg-white shrink-0 flex items-center justify-between">
-          <div />
+          {/* 좌측: PDF / Excel 내보내기 */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={async () => {
+                const exportData = buildExportData()
+                if (!exportData) return
+                try { await exportQuotePDF(exportData) } catch (e) { console.error("PDF 내보내기 오류:", e) }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-700 hover:border-slate-300 transition-colors"
+            >
+              <Download className="h-3 w-3" /> PDF
+            </button>
+            <button
+              onClick={() => {
+                const exportData = buildExportData()
+                if (!exportData) return
+                try { exportQuoteExcel(exportData) } catch (e) { console.error("Excel 내보내기 오류:", e) }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-700 hover:border-slate-300 transition-colors"
+            >
+              <FileSpreadsheet className="h-3 w-3" /> Excel
+            </button>
+          </div>
+          {/* 우측: 저장 상태 */}
           <div className="flex items-center gap-2.5">
             {/* 자동저장 상태 표시 */}
             {autoSaveStatus === "saving" && (
@@ -2435,12 +2476,7 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
     <div onPaste={handlePaste}>
       {/* 헤더 */}
       <div className="flex">
-        {/* 좌: 이하여백 헤더 */}
-        <div className={`w-[18px] shrink-0 flex items-center justify-center ${HEADER_H}`}>
-          <span className="text-[7px] text-gray-300 leading-none writing-vertical" style={{ writingMode: "vertical-rl" }}>여백</span>
-        </div>
-        {/* 테이블 본체 */}
-        <div className={`flex-1 grid grid-cols-[24px_194px_180px_42px_50px_120px_128px] bg-slate-100 border-y border-slate-300 ${HEADER_H}`}>
+        <div className={`flex-1 grid grid-cols-[24px_210px_180px_42px_50px_120px_128px] bg-slate-100 border-y border-slate-300 ${HEADER_H}`}>
           <div className="px-1 flex items-center justify-center text-[11px] font-medium text-gray-600">#</div>
           <div className="px-2 flex items-center justify-center text-[11px] font-medium text-gray-600">품목명</div>
           <div className="px-2 flex items-center justify-center text-[11px] font-medium text-gray-600">규격</div>
@@ -2449,70 +2485,41 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
           <div className="px-2 flex items-center justify-end text-[11px] font-medium text-gray-600">단가</div>
           <div className="px-2 flex items-center justify-end text-[11px] font-medium text-gray-600">금액</div>
         </div>
-        {/* 우: X 버튼 헤더 */}
         <div className={`w-[36px] shrink-0 ${HEADER_H}`} />
       </div>
       {/* 행 */}
       {items.map((item, idx) => {
-        const isBlankRow = blankIdx !== null && idx === blankIdx
-        const isBelowBlank = blankIdx !== null && idx > blankIdx
         const isMatched = isRowMatched?.(item)
-        const hasContent = !!(item.item_name.trim() || item.specification.trim() || item.unit.trim() || item.retrieval_price > 0)
         return (
           <div key={idx} className={`flex border-b border-gray-100 hover:bg-gray-50 transition-colors ${ROW_H}`}>
-            {/* 좌: 이하여백 체크 (테이블 밖) */}
-            <div className="w-[18px] shrink-0 flex items-center justify-center">
-              <button onClick={() => onToggleBlank(idx)}
-                className={`w-2.5 h-2.5 rounded-sm border transition-colors ${isBlankRow
-                  ? "bg-slate-700 border-slate-400"
-                  : "border-gray-300 hover:border-gray-500"
-                  }`}>
-                {isBlankRow && (
-                  <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M2.5 6l2.5 2.5 4.5-5" />
-                  </svg>
-                )}
-              </button>
-            </div>
-            {/* 테이블 본체 */}
-            <div className={`flex-1 grid grid-cols-[24px_194px_180px_42px_50px_120px_128px] ${ROW_H}`}>
-              <div className={`relative flex items-center justify-center text-[10px] ${idx >= 14 ? "text-red-500 font-semibold" : "text-gray-300"}`}>
+            <div className={`flex-1 grid grid-cols-[24px_210px_180px_42px_50px_120px_128px] ${ROW_H}`}>
+              <div className={`relative flex items-center justify-center text-[10px] text-gray-300`}>
                 {item.item_name.trim() && !isMatched && (
                   <span className="absolute top-0 left-0 w-0 h-0"
                     style={{ borderTop: "6px solid #F0D2D1", borderRight: "6px solid transparent" }} />
                 )}
                 {idx + 1}
               </div>
-              {isBlankRow ? (
-                <div className="col-span-6 flex items-center justify-center text-[11px] text-gray-400 font-medium tracking-[0.5em]">
-                  - 이 하 여 백 -
-                </div>
-              ) : isBelowBlank ? (
-                <><div /><div /><div /><div /><div /><div /></>
-              ) : (
-                <>
-                  <CellInput value={item.item_name} onChange={(v) => updateItem(idx, "item_name", v)} placeholder="품목명 *" center row={idx} col={0} />
-                  <CellInput value={item.specification} onChange={(v) => updateItem(idx, "specification", v)} placeholder="규격" center row={idx} col={1} />
-                  <CellInput value={item.unit} onChange={(v) => updateItem(idx, "unit", v)} placeholder="식" center row={idx} col={2} />
-                  <CellNumber value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} row={idx} col={3} />
-                  <div className="flex items-center justify-end px-2 text-xs text-gray-900 tabular-nums bg-gray-50">
-                    {item.unit_price > 0 ? item.unit_price.toLocaleString() : ""}
-                  </div>
-                  <div className="flex items-center justify-end px-2 text-xs text-gray-900 tabular-nums bg-gray-50">
-                    {item.quantity * item.unit_price > 0 ? (item.quantity * item.unit_price).toLocaleString() : ""}
-                  </div>
-                </>
-              )}
+              <CellInput value={item.item_name} onChange={(v) => updateItem(idx, "item_name", v)} placeholder="품목명 *" center row={idx} col={0} />
+              <CellInput value={item.specification} onChange={(v) => updateItem(idx, "specification", v)} placeholder="규격" center row={idx} col={1} />
+              <CellInput value={item.unit} onChange={(v) => updateItem(idx, "unit", v)} placeholder="식" center row={idx} col={2} />
+              <CellNumber value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} row={idx} col={3} />
+              <div className="flex items-center justify-end px-2 text-xs text-gray-900 tabular-nums bg-gray-50">
+                {item.unit_price > 0 ? item.unit_price.toLocaleString() : ""}
+              </div>
+              <div className="flex items-center justify-end px-2 text-xs text-gray-900 tabular-nums bg-gray-50">
+                {item.quantity * item.unit_price > 0 ? (item.quantity * item.unit_price).toLocaleString() : ""}
+              </div>
             </div>
-            {/* 우: 지우개(초기화) + X(행 삭제) 버튼 */}
+            {/* 지우개(초기화) + X(행 삭제) */}
             <div className="w-[36px] shrink-0 flex items-center justify-center gap-0.5">
-              {!isBlankRow && !isBelowBlank && clearRow && (
+              {clearRow && (
                 <button onClick={() => clearRow(idx)} title="데이터 초기화"
                   className="p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
                   <Eraser className="h-3 w-3" />
                 </button>
               )}
-              {!isBlankRow && !isBelowBlank && items.length > 1 && (
+              {items.length > 1 && (
                 <button onClick={() => removeRow(idx)} title="행 삭제"
                   className="p-0.5 rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
                   <XIcon className="h-3 w-3" />
@@ -2523,9 +2530,6 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
         )
       })}
       <div className="px-4 py-2">
-        {items.length >= 15 && (
-          <p className="text-[10px] text-red-500 mb-1.5 text-center">A4 1페이지를 초과할 수 있습니다</p>
-        )}
         <button onClick={addRow}
           className="w-full py-2 flex items-center justify-center gap-1.5 text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg hover:border-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all">
           <Plus className="h-4 w-4" /> 행 추가

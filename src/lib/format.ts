@@ -12,7 +12,7 @@ import { ko } from 'date-fns/locale';
 export function formatCurrency(amount: number, currency: string = 'KRW'): string {
   if (currency === 'KRW') {
     const formatted = Math.abs(amount).toLocaleString('ko-KR');
-    return amount < 0 ? `-₩${formatted}` : `₩${formatted}`;
+    return amount < 0 ? `-₩ ${formatted}` : `₩ ${formatted}`;
   }
 
   // 기타 통화
