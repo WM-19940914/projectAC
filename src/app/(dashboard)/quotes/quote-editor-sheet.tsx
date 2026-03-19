@@ -154,6 +154,7 @@ export default function QuoteEditorSheet({
   const [saveError, setSaveError] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [pdfExporting, setPdfExporting] = useState(false)
   const savedIdRef = useRef<string | null>(null)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialLoadRef = useRef(true)
@@ -216,6 +217,8 @@ export default function QuoteEditorSheet({
   const [deliveryDate, setDeliveryDate] = useState("협의 일정")
   const [deliveryPlace, setDeliveryPlace] = useState("협의 장소")
   const [paymentCondition, setPaymentCondition] = useState("협의 조건")
+  const [validUntil, setValidUntil] = useState("견적 후 7일")
+  const [faxNumber, setFaxNumber] = useState("02) 711-7807")
   // 견적서 뷰 탭 (네비게이션 전용, autoSave 트리거 안 함)
   const [activeTab, setActiveTab] = useState<string>("simple")
   const activeTabRef = useRef<string>("simple")
@@ -338,6 +341,8 @@ export default function QuoteEditorSheet({
           setDeliveryDate((q.delivery_date as string) || "협의 일정")
           setDeliveryPlace((q.delivery_place as string) || "협의 장소")
           setPaymentCondition((q.payment_condition as string) || "협의 조건")
+          setValidUntil((q.terms as string) || "견적 후 7일")
+          setFaxNumber((q.fax_number as string) || "02) 711-7807")
 
           const equip: ItemRow[] = []
           const install: ItemRow[] = []
@@ -395,6 +400,7 @@ export default function QuoteEditorSheet({
           })
           // 납기/결제 기본값
           setDeliveryDate("협의 일정"); setDeliveryPlace("협의 장소"); setPaymentCondition("협의 조건")
+          setValidUntil("견적 후 7일"); setFaxNumber("02) 711-7807")
           // 비동기 로드 후 상태 변경이 autoSave 트리거하지 않도록 가드 재설정
           initialLoadRef.current = true
         }
@@ -604,6 +610,7 @@ export default function QuoteEditorSheet({
       delivery_date: deliveryDate || null,
       delivery_place: deliveryPlace || null,
       payment_condition: paymentCondition || null,
+      terms: validUntil || null,
       // 수신자 확장
       receiver_company_name: receiver.companyName || null,
       receiver_biz_number: receiver.bizNumber || null,
@@ -617,7 +624,7 @@ export default function QuoteEditorSheet({
       grand_total: grandTotal,
       tax_amount: taxAmount,
     }
-  }, [title, quotationDate, requestId, customerId, receiver, supplier, supplierMode, notes, equipItems, installItems, coverItems, supplyAmount, grandTotal, taxAmount, quoteType, deliveryDate, deliveryPlace, paymentCondition])
+  }, [title, quotationDate, requestId, customerId, receiver, supplier, supplierMode, notes, equipItems, installItems, coverItems, supplyAmount, grandTotal, taxAmount, quoteType, deliveryDate, deliveryPlace, paymentCondition, validUntil])
 
   const doSave = useCallback(async (isAuto = false): Promise<boolean> => {
     const isUpdate = !!savedIdRef.current
@@ -693,7 +700,7 @@ export default function QuoteEditorSheet({
     return {
       title, quotationNumber: quotation?.quotation_number || "", quotationDate, quoteType, notes,
       supplier, receiver,
-      deliveryDate, deliveryPlace, paymentCondition,
+      deliveryDate, deliveryPlace, paymentCondition, validUntil,
       equipItems, installItems, coverItems,
       coverEquipLabel, coverInstallLabel,
       equipTotal, installTotal, totalAmount,
@@ -704,7 +711,7 @@ export default function QuoteEditorSheet({
     }
   }, [
     title, quotation, quotationDate, quoteType, notes, supplier, receiver,
-    deliveryDate, deliveryPlace, paymentCondition,
+    deliveryDate, deliveryPlace, paymentCondition, validUntil,
     equipItems, installItems, coverItems, coverEquipLabel, coverInstallLabel,
     equipTotal, installTotal, totalAmount, truncationInput,
     supplyAmount, taxAmount, grandTotal, totalPurchase, totalProfit,
@@ -1067,32 +1074,35 @@ export default function QuoteEditorSheet({
                       <h1 className="text-[28px] font-bold tracking-[1em] text-gray-900 font-serif">見　積　書</h1>
                     </div>
 
-                    {/* Row 5: 로고 + 회사명 + 도장 */}
-                    <div className="flex items-center justify-center gap-3 py-4 px-8">
-                      {/* 로고 */}
-                      <div className="shrink-0">
-                        {logoUrl ? (
-                          <div className="group relative">
-                            <img src={logoUrl} alt="로고" className="h-8 max-w-[100px] object-contain" />
-                            <div className="absolute inset-0 bg-black/40 rounded opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                              <button onClick={() => logoInputRef.current?.click()} className="px-1 py-0.5 bg-white rounded text-[8px]">변경</button>
-                              <button onClick={handleLogoDelete} className="px-1 py-0.5 bg-white rounded text-[8px] text-red-500">삭제</button>
+                    {/* Row 3-5: 로고+회사명(우측) + 도장(우측 끝) — 엑셀과 동일 배치 */}
+                    <div className="relative flex items-center py-3 px-6">
+                      {/* 좌측 여백 (엑셀 A~I열 영역 = 약 45%) */}
+                      <div className="w-[45%]" />
+                      {/* 우측: 로고 + 회사명 (엑셀 J~Q열 영역) */}
+                      <div className="flex-1 flex items-center gap-2">
+                        <div className="shrink-0">
+                          {logoUrl ? (
+                            <div className="group relative">
+                              <img src={logoUrl} alt="로고" className="h-9 max-w-[120px] object-contain" />
+                              <div className="absolute inset-0 bg-black/40 rounded opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                                <button onClick={() => logoInputRef.current?.click()} className="px-1 py-0.5 bg-white rounded text-[8px]">변경</button>
+                                <button onClick={handleLogoDelete} className="px-1 py-0.5 bg-white rounded text-[8px] text-red-500">삭제</button>
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <button onClick={() => logoInputRef.current?.click()}
-                            className="h-8 px-3 border border-dashed border-gray-300 rounded text-[10px] text-gray-400 hover:border-gray-500 hover:text-gray-600 transition-colors">
-                            {logoUploading ? "업로드..." : "로고"}
-                          </button>
-                        )}
+                          ) : (
+                            <button onClick={() => logoInputRef.current?.click()}
+                              className="h-9 px-3 border border-dashed border-gray-300 rounded text-[10px] text-gray-400 hover:border-gray-500 hover:text-gray-600 transition-colors">
+                              {logoUploading ? "업로드..." : "로고"}
+                            </button>
+                          )}
+                        </div>
+                        <span className="text-base font-bold text-gray-900">{supplier.companyName || "회사명"}</span>
                       </div>
-                      <span className="text-base font-bold text-gray-900">{supplier.companyName || "회사명"}</span>
-                      <span className="flex-1" />
-                      {/* 도장 */}
-                      <div className="shrink-0">
+                      {/* 도장 (엑셀 R열 = 우측 끝, 성명·(인) 위에 겹침) */}
+                      <div className="absolute right-6 top-1/2 -translate-y-1/2">
                         {stampUrl ? (
                           <div className="group relative">
-                            <img src={stampUrl} alt="도장" className="h-12 w-12 object-contain opacity-80" />
+                            <img src={stampUrl} alt="도장" className="h-14 w-14 object-contain opacity-80" />
                             <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-0.5">
                               <button onClick={() => stampInputRef.current?.click()} className="px-1 py-0.5 bg-white rounded text-[7px]">변경</button>
                               <button onClick={handleStampDelete} className="px-1 py-0.5 bg-white rounded text-[7px] text-red-500">삭제</button>
@@ -1100,7 +1110,7 @@ export default function QuoteEditorSheet({
                           </div>
                         ) : (
                           <button onClick={() => stampInputRef.current?.click()}
-                            className="h-12 w-12 border border-dashed border-gray-300 rounded-full text-[9px] text-gray-400 hover:border-gray-500 hover:text-gray-600 transition-colors flex items-center justify-center">
+                            className="h-14 w-14 border border-dashed border-gray-300 rounded-full text-[9px] text-gray-400 hover:border-gray-500 hover:text-gray-600 transition-colors flex items-center justify-center">
                             {stampUploading ? "..." : "도장"}
                           </button>
                         )}
@@ -1109,105 +1119,115 @@ export default function QuoteEditorSheet({
                       <input ref={stampInputRef} type="file" accept="image/png,image/webp,image/gif" className="hidden" onChange={handleStampUpload} />
                     </div>
 
-                    {/* Row 6: 수신처 귀하 (밑줄) */}
-                    <div className="px-8 pb-2">
-                      <span className="border-b border-gray-900 pb-0.5 text-sm text-gray-900">
-                        <button onClick={() => setReceiverDialogOpen(true)} type="button" className="hover:text-gray-600 transition-colors">
-                          {receiver.companyName || customerName || "(수신처)"}
-                        </button>
-                        {" "}귀하
-                      </span>
+                    {/* Row 6: 수신처 귀하 + 수신자 편집 */}
+                    <div className="px-6 pb-1.5 flex items-end gap-1.5">
+                      <button onClick={() => setReceiverDialogOpen(true)} type="button"
+                        className="text-[13px] font-bold text-gray-900 border-b border-gray-900 pb-0.5 hover:text-gray-600 transition-colors">
+                        {receiver.companyName || customerName || "(수신처)"}{" "}귀하
+                      </button>
+                      <button onClick={() => setReceiverDialogOpen(true)} type="button"
+                        className="text-[9px] text-gray-400 hover:text-gray-600 flex items-center gap-0.5 mb-0.5 opacity-60 hover:opacity-100 transition-opacity">
+                        <Pencil className="h-2.5 w-2.5" /> 수신자
+                      </button>
                     </div>
 
-                    {/* Row 7-11: 정보 행 (테두리 없는 순수 텍스트, 엑셀과 동일) */}
-                    <div className="px-8 py-1 space-y-0.5 text-xs text-gray-900">
-                      {/* Row 7: 담당자 / 등록번호·성명 */}
+                    {/* Row 7-11: 엑셀 동일 레이아웃 — 좌측(수신자) / 우측(공급자) */}
+                    <div className="px-6 py-1 text-[11px] text-gray-900 leading-[22px]">
+                      {/* Row 7: 담당자 / 등록번호·성명·(인) + 공급자 편집 */}
                       <div className="flex">
-                        <div className="w-1/2 flex">
-                          <span className="text-gray-500 w-[90px] shrink-0 tracking-widest">담 당 자 :</span>
-                          <span>{receiver.recipientName || ""}</span>
+                        <div className="w-[45%] flex">
+                          <span className="text-gray-500 w-[100px] shrink-0 tracking-[0.2em] font-bold">담 당 자 :</span>
+                          <span className="bg-yellow-100 px-0.5">{receiver.recipientName || ""}</span>
                         </div>
-                        <div className="w-1/2 flex gap-3">
-                          <span className="text-gray-500 tracking-wider">등 록 번 호</span>
-                          <span>{supplier.bizNumber || ""}</span>
-                          <span className="text-gray-500 tracking-widest">성　명</span>
-                          <span>{supplier.ceoName || ""}</span>
+                        <div className="w-[55%] flex items-center">
+                          <span className="text-gray-500 tracking-[0.15em] font-bold w-[88px] shrink-0">등 록 번 호</span>
+                          <span className="w-[110px] bg-yellow-100 px-0.5">{supplier.bizNumber || ""}</span>
+                          <span className="text-gray-500 tracking-[0.25em] font-bold w-[56px] shrink-0">성　명</span>
+                          <span className="bg-yellow-100 px-0.5">{supplier.ceoName || ""}</span>
+                          <span className="ml-1 text-gray-400">(인)</span>
+                          <button onClick={() => setSupplierDialogOpen(true)} type="button"
+                            className="ml-2 text-[9px] text-gray-400 hover:text-gray-600 flex items-center gap-0.5 opacity-60 hover:opacity-100 transition-opacity">
+                            <Pencil className="h-2.5 w-2.5" /> 공급자
+                          </button>
                         </div>
                       </div>
                       {/* Row 8: 납기/장소 / 사업장주소 */}
                       <div className="flex">
-                        <div className="w-1/2 flex">
-                          <span className="text-gray-500 w-[90px] shrink-0 tracking-wider">납기/장소 :</span>
+                        <div className="w-[45%] flex">
+                          <span className="text-gray-500 w-[100px] shrink-0 tracking-[0.12em] font-bold">납 기/장 소 :</span>
                           <input type="text" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)}
-                            className="w-[80px] bg-transparent border-0 focus:outline-none text-xs" />
+                            className="w-[72px] bg-transparent border-0 focus:outline-none text-[11px] p-0" placeholder="협의 일정" />
                           <span className="text-gray-400 mx-0.5">/</span>
                           <input type="text" value={deliveryPlace} onChange={(e) => setDeliveryPlace(e.target.value)}
-                            className="flex-1 min-w-0 bg-transparent border-0 focus:outline-none text-xs" />
+                            className="flex-1 min-w-0 bg-transparent border-0 focus:outline-none text-[11px] p-0" placeholder="협의 장소" />
                         </div>
-                        <div className="w-1/2 flex gap-2">
-                          <span className="text-gray-500 tracking-wider shrink-0">사업장주소</span>
-                          <span className="truncate">{supplier.address || ""}</span>
+                        <div className="w-[55%] flex items-center">
+                          <span className="text-gray-500 tracking-[0.1em] font-bold w-[88px] shrink-0">사업장주소</span>
+                          <span className="truncate bg-yellow-100 px-0.5">{supplier.address || ""}</span>
                         </div>
                       </div>
-                      {/* Row 9: 결제조건 / 전화번호·팩스 */}
+                      {/* Row 9: 결제조건 / 전화번호·팩스번호 */}
                       <div className="flex">
-                        <div className="w-1/2 flex">
-                          <span className="text-gray-500 w-[90px] shrink-0 tracking-wider">결 제 조 건 :</span>
+                        <div className="w-[45%] flex">
+                          <span className="text-gray-500 w-[100px] shrink-0 tracking-[0.12em] font-bold">결 제 조 건 :</span>
                           <input type="text" value={paymentCondition} onChange={(e) => setPaymentCondition(e.target.value)}
-                            className="flex-1 min-w-0 bg-transparent border-0 focus:outline-none text-xs" />
+                            className="flex-1 min-w-0 bg-transparent border-0 focus:outline-none text-[11px] p-0" placeholder="협의 조건" />
                         </div>
-                        <div className="w-1/2 flex gap-3">
-                          <span className="text-gray-500 tracking-wider">전화번호</span>
-                          <span>{supplier.managerPhone || ""}</span>
+                        <div className="w-[55%] flex items-center">
+                          <span className="text-gray-500 tracking-[0.15em] font-bold w-[88px] shrink-0">전 화 번 호</span>
+                          <span className="w-[110px] bg-yellow-100 px-0.5">{supplier.managerPhone || ""}</span>
+                          <span className="text-gray-500 tracking-[0.15em] font-bold w-[56px] shrink-0">팩스번호</span>
+                          <input type="text" value={faxNumber} onChange={(e) => setFaxNumber(e.target.value)}
+                            className="bg-transparent border-0 focus:outline-none text-[11px] p-0 w-[100px]" />
                         </div>
                       </div>
                       {/* Row 10: 견적일자 */}
                       <div className="flex">
-                        <div className="w-1/2 flex">
-                          <span className="text-gray-500 w-[90px] shrink-0 tracking-wider">견 적 일 자 :</span>
+                        <div className="w-[45%] flex">
+                          <span className="text-gray-500 w-[100px] shrink-0 tracking-[0.12em] font-bold">견 적 일 자 :</span>
                           <input type="date" value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)}
-                            className="bg-transparent border-0 focus:outline-none text-xs" />
+                            className="bg-transparent border-0 focus:outline-none text-[11px] p-0" />
                         </div>
                       </div>
                       {/* Row 11: 유효기간 / 견적담당·Mobile */}
                       <div className="flex">
-                        <div className="w-1/2 flex">
-                          <span className="text-gray-500 w-[90px] shrink-0 tracking-wider">유 효 기 간 :</span>
-                          <span>견적 후 7일</span>
+                        <div className="w-[45%] flex">
+                          <span className="text-gray-500 w-[100px] shrink-0 tracking-[0.12em] font-bold">유 효 기 간 :</span>
+                          <input type="text" value={validUntil} onChange={(e) => setValidUntil(e.target.value)}
+                            className="bg-transparent border-0 focus:outline-none text-[11px] p-0 w-[80px]" />
                         </div>
-                        <div className="w-1/2 flex gap-3">
-                          <span className="text-gray-500 tracking-wider">견적담당</span>
-                          <span>{supplier.manager || ""}</span>
-                          <span className="text-gray-500 tracking-[0.15em]">Mobile</span>
-                          <span>{supplier.managerPhone || ""}</span>
+                        <div className="w-[55%] flex items-center">
+                          <span className="text-gray-500 tracking-[0.15em] font-bold w-[88px] shrink-0">견 적 담 당</span>
+                          <span className="w-[110px] bg-yellow-100 px-0.5">{supplier.manager || ""}</span>
+                          <span className="text-gray-500 tracking-[0.12em] font-bold w-[56px] shrink-0">Mobile</span>
+                          <span className="bg-yellow-100 px-0.5">{supplier.managerPhone || ""}</span>
+                          <button onClick={() => setManagerDialogOpen(true)} type="button"
+                            className="ml-2 text-[9px] text-gray-400 hover:text-gray-600 flex items-center gap-0.5 opacity-60 hover:opacity-100 transition-opacity">
+                            <Pencil className="h-2.5 w-2.5" /> 담당자
+                          </button>
                         </div>
                       </div>
                     </div>
 
-                    {/* 편집 버튼 (호버 시 표시) */}
-                    <div className="px-8 py-0.5 flex gap-2 opacity-60 hover:opacity-100 transition-opacity">
-                      <button onClick={() => setReceiverDialogOpen(true)} type="button" className="text-[9px] text-gray-400 hover:text-gray-600 flex items-center gap-0.5"><Pencil className="h-2 w-2" /> 수신자</button>
-                      <button onClick={() => setSupplierDialogOpen(true)} type="button" className="text-[9px] text-gray-400 hover:text-gray-600 flex items-center gap-0.5"><Pencil className="h-2 w-2" /> 공급자</button>
-                      <button onClick={() => setManagerDialogOpen(true)} type="button" className="text-[9px] text-gray-400 hover:text-gray-600 flex items-center gap-0.5"><Pencil className="h-2 w-2" /> 담당자</button>
+
+                    {/* Row 12: "아래와 같이 견적합니다." */}
+                    <div className="px-6 pt-0.5 pb-2">
+                      <span className="text-[11px] text-gray-900 border-b border-gray-400 pb-0.5">아래와 같이 견적합니다.</span>
                     </div>
 
-                    {/* Row 12: "아래와 같이 견적합니다." (밑줄) */}
-                    <div className="px-8 pt-1 pb-2">
-                      <span className="text-xs text-gray-900 border-b border-gray-400 pb-0.5">아래와 같이 견적합니다.</span>
-                    </div>
-
-                    {/* Row 13: 합계금액 바 */}
-                    <div className="mx-6 mb-4 grid grid-cols-[110px_1fr_auto] border border-gray-400">
-                      <div className="px-2 py-1.5 bg-gray-50 text-center border-r border-gray-400 leading-tight">
-                        <span className="text-[11px] font-bold text-gray-900">합계금액</span><br />
-                        <span className="text-[9px] text-gray-600">(공급가+부가세)</span>
+                    {/* Row 13: 합계금액 바 — 엑셀 동일 레이아웃 */}
+                    <div className="mx-5 mb-3 grid grid-cols-[100px_1fr_auto] border border-gray-400">
+                      <div className="px-2 py-2.5 bg-gray-50 text-center border-r border-gray-400 leading-tight">
+                        <span className="text-xs font-bold text-gray-900">합계금액</span><br />
+                        <span className="text-[9px] text-gray-500">(공급가+부가세)</span>
                       </div>
-                      <div className="px-3 py-1.5 flex items-center text-xs text-gray-900">
+                      <div className="px-4 py-2.5 flex items-center justify-end text-sm text-gray-900 font-bold">
                         {grandTotal > 0 ? `${numberToKorean(grandTotal)} 원整` : "영 원整"}
-                        <span className="ml-3 text-gray-500">(₩</span>
                       </div>
-                      <div className="px-4 py-1.5 flex items-center justify-end text-xs font-bold text-gray-900 min-w-[140px]">
-                        {grandTotal > 0 ? grandTotal.toLocaleString() : ""}<span className="ml-2 text-gray-500 font-normal">)</span>
+                      <div className="px-4 py-2.5 flex items-center gap-1.5 text-sm">
+                        <span className="text-gray-500">(₩</span>
+                        <span className="font-bold text-gray-900 min-w-[120px] text-right">{grandTotal > 0 ? grandTotal.toLocaleString() : ""}</span>
+                        <span className="text-gray-500">)</span>
                       </div>
                     </div>
                   </div>
@@ -1894,18 +1914,8 @@ export default function QuoteEditorSheet({
 
         {/* 하단 액션 바 */}
         <div className="px-6 py-2.5 border-t bg-white shrink-0 flex items-center justify-between">
-          {/* 좌측: PDF / Excel 내보내기 */}
+          {/* 좌측: Excel / 우측에 PDF */}
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={async () => {
-                const exportData = buildExportData()
-                if (!exportData) return
-                try { await exportQuotePDF(exportData) } catch (e) { console.error("PDF 내보내기 오류:", e) }
-              }}
-              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-700 hover:border-slate-300 transition-colors"
-            >
-              <Download className="h-3 w-3" /> PDF
-            </button>
             <button
               onClick={() => {
                 const exportData = buildExportData()
@@ -1915,6 +1925,36 @@ export default function QuoteEditorSheet({
               className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-700 hover:border-slate-300 transition-colors"
             >
               <FileSpreadsheet className="h-3 w-3" /> Excel
+            </button>
+            <button
+              disabled={pdfExporting}
+              onClick={async () => {
+                const exportData = buildExportData()
+                if (!exportData) return
+                setPdfExporting(true)
+                try {
+                  const { buildQuoteExcelBuffer } = await import("@/lib/quote-export")
+                  const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
+                  if (!xlsxBuffer) return
+                  const res = await fetch("/api/excel-to-pdf", { method: "POST", body: xlsxBuffer })
+                  if (!res.ok) throw new Error(await res.text())
+                  const pdfBlob = await res.blob()
+                  const url = URL.createObjectURL(pdfBlob)
+                  const a = document.createElement("a")
+                  a.href = url
+                  a.download = `견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}.pdf`
+                  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                  URL.revokeObjectURL(url)
+                } catch (e) { console.error("PDF 내보내기 오류:", e) }
+                finally { setPdfExporting(false) }
+              }}
+              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border transition-colors ${pdfExporting ? "border-sky-aqua/50 text-sky-aqua bg-sky-aqua/5 cursor-wait" : "border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-700 hover:border-slate-300"}`}
+            >
+              {pdfExporting ? (
+                <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> PDF 변환중...</>
+              ) : (
+                <><Download className="h-3 w-3" /> PDF</>
+              )}
             </button>
           </div>
           {/* 우측: 저장 상태 */}
@@ -2597,8 +2637,8 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
 // ===================================================
 // 우측: 내부 단가 행 (# + 단가 컬럼)
 // ===================================================
-// 내부 단가 그리드 템플릿: #/반출가/DC율/매입단가/매입총액/MG율/제안가/이윤 (장려금 제거)
-const PRICING_COLS = "grid-cols-[24px_92px_48px_80px_88px_48px_80px_80px]"
+// 내부 단가 그리드 템플릿: #/반출가/DC율/매입단가/매입총액/MG율/제안가/이윤/장려금%/장려금
+const PRICING_COLS = "grid-cols-[24px_80px_44px_72px_80px_44px_72px_72px_44px_72px]"
 
 function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched, onPasteRetrieval }: {
   items: ItemRow[]
@@ -2662,6 +2702,8 @@ function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched
         <div className="px-1 flex items-center justify-center text-[11px] font-medium text-gray-600">MG율</div>
         <div className="px-1 flex items-center justify-center text-[11px] font-medium text-gray-600">제안가</div>
         <div className="px-1 flex items-center justify-center text-[11px] font-medium text-gray-600">이윤</div>
+        <div className="px-1 flex items-center justify-center text-[11px] font-medium text-gray-600">장려%</div>
+        <div className="px-1 flex items-center justify-center text-[11px] font-medium text-gray-600">장려금</div>
       </div>
       {/* 데이터 행 */}
       {items.map((item, idx) => {
@@ -2682,6 +2724,8 @@ function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched
             <CellPercent value={item.margin_rate} onChange={(v) => updateItem(idx, "margin_rate", v)} />
             <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.unit_price > 0 ? item.unit_price.toLocaleString() : ""}</div>
             <div className={`flex items-center justify-end px-1 text-xs font-semibold tabular-nums bg-gray-100/60 ${item.profit < 0 ? "text-red-500" : "text-green-600"}`}>{item.profit !== 0 ? item.profit.toLocaleString() : ""}</div>
+            <CellPercent value={item.incentive_rate} onChange={(v) => updateItem(idx, "incentive_rate", v)} />
+            <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_amount > 0 && item.incentive_rate > 0 ? Math.round(item.purchase_amount * item.incentive_rate / 100).toLocaleString() : ""}</div>
           </div>
         )
       })}
@@ -2702,6 +2746,8 @@ function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched
             <div />
             <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumUnitPrice > 0 ? sumUnitPrice.toLocaleString() : ""}</div>
             <div className={`flex items-center justify-end px-1 text-xs font-bold tabular-nums ${sumProfit < 0 ? "text-red-500" : "text-green-600"}`}>{sumProfit !== 0 ? sumProfit.toLocaleString() : ""}</div>
+            <div />
+            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{(() => { const s = items.reduce((a, r) => a + (r.purchase_amount > 0 && r.incentive_rate > 0 ? Math.round(r.purchase_amount * r.incentive_rate / 100) : 0), 0); return s > 0 ? s.toLocaleString() : ""; })()}</div>
           </div>
         )
       })()}

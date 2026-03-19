@@ -56,6 +56,7 @@ export interface QuoteExportData {
   deliveryDate: string
   deliveryPlace: string
   paymentCondition: string
+  validUntil: string
 
   equipItems: ItemRow[]
   installItems: ItemRow[]
@@ -1244,10 +1245,28 @@ function xlBuildCoverSheet(wb: any, d: QuoteExportData, logoId: number | null, s
    서식/수식/병합/테두리 100% 보존, 데이터만 기록
    ───────────────────────────────────────────────────────── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData, stampId: number | null) {
+async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<ArrayBuffer> {
   // 템플릿 파일 로드
   const res = await fetch('/templates/quote-template.xlsx')
   const buf = await res.arrayBuffer()
+
+  // ── 원본 템플릿의 drawing XML 보존 ──
+  // ExcelJS가 로드/저장 과정에서 <a:clrChange> (도장 투명 배경) 등
+  // 커스텀 drawing 속성을 제거하므로, 원본 XML을 보존했다가 나중에 복원한다.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const jszipMod = await import('jszip') as any
+  const JSZip = jszipMod.default || jszipMod
+  const origZip = await JSZip.loadAsync(buf)
+  const origDrawingXml = await origZip.file('xl/drawings/drawing1.xml')?.async('string') ?? null
+  const origDrawingRels = await origZip.file('xl/drawings/_rels/drawing1.xml.rels')?.async('string') ?? null
+  // 원본 미디어 파일(로고, 도장 이미지)도 보존
+  const origMedia: Record<string, Uint8Array> = {}
+  for (const [path, file] of Object.entries(origZip.files)) {
+    if (path.startsWith('xl/media/') && !file.dir) {
+      origMedia[path] = await file.async('uint8array')
+    }
+  }
+
   await wb.xlsx.load(buf)
 
   const ws = wb.getWorksheet('견적서')
@@ -1260,6 +1279,66 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData, stampId: n
     ...equipFiltered.map(item => ({ ...item, _section: '장비' })),
     ...installFiltered.map(item => ({ ...item, _section: '설치비' })),
   ]
+
+  /* ══════ 행 삽입: 15행(R16~R30) 초과 시 duplicateRow로 추가 ══════ */
+  const TEMPLATE_DATA_ROWS = 15 // 템플릿 기본 데이터 행 수 (R16~R30)
+  const extraRows = Math.max(0, allItems.length - TEMPLATE_DATA_ROWS)
+
+  if (extraRows > 0) {
+    // R30(마지막 데이터 행)을 복제 → 데이터/스타일 복사, 아래 행들 자동으로 밀림
+    ws.duplicateRow(30, extraRows, true)
+
+    // ── duplicateRow 버그 수정: 머지가 안 밀리므로 수동 보정 ──
+
+    // 1) 잘못된 위치에 남아있는 footer 머지 제거
+    const oldFooterMerges = [
+      'A31:K31', 'L31:R31',   // 합계
+      'A32:K32', 'L32:R32',   // 부가세
+      'A33:K33', 'L33:R33',   // 총계
+      'A35:E35',               // 특이사항 라벨
+      'A36:R41',               // 특이사항 내용
+    ]
+    for (const m of oldFooterMerges) {
+      try { ws.unMergeCells(m) } catch { /* 이미 없으면 무시 */ }
+    }
+
+    // 2) 복제된 데이터 행에 올바른 머지 추가 (품명/사양/단가/공급가/비고)
+    for (let i = 0; i < extraRows; i++) {
+      const r = 31 + i
+      ws.mergeCells(`B${r}:F${r}`)
+      ws.mergeCells(`G${r}:I${r}`)
+      ws.mergeCells(`L${r}:N${r}`)
+      ws.mergeCells(`O${r}:P${r}`)
+      ws.mergeCells(`Q${r}:R${r}`)
+    }
+
+    // 3) footer 머지를 새 위치에 복원
+    const lastDataRow = 30 + extraRows
+    const sumRow = 31 + extraRows
+    const vatRow = 32 + extraRows
+    const totalRow = 33 + extraRows
+    const noteLabelRow = 35 + extraRows
+    const noteStartRow = 36 + extraRows
+    const noteEndRow = 41 + extraRows
+
+    ws.mergeCells(`A${sumRow}:K${sumRow}`)
+    ws.mergeCells(`L${sumRow}:R${sumRow}`)
+    ws.mergeCells(`A${vatRow}:K${vatRow}`)
+    ws.mergeCells(`L${vatRow}:R${vatRow}`)
+    ws.mergeCells(`A${totalRow}:K${totalRow}`)
+    ws.mergeCells(`L${totalRow}:R${totalRow}`)
+    ws.mergeCells(`A${noteLabelRow}:E${noteLabelRow}`)
+    ws.mergeCells(`A${noteStartRow}:R${noteEndRow}`)
+
+    // 4) 합계/부가세/총계 수식 업데이트 (행 번호가 밀렸으므로)
+    ws.getCell(`L${sumRow}`).value = { formula: `SUM(O16:P${lastDataRow})` }
+    ws.getCell(`L${vatRow}`).value = { formula: `L${sumRow}*0.1` }
+    ws.getCell(`L${totalRow}`).value = { formula: `SUM(L${sumRow}:R${vatRow})` }
+
+    // R13 합계금액 수식도 총계 행 참조 업데이트
+    ws.getCell('D13').value = { formula: `NUMBERSTRING(L${totalRow},1)` }
+    ws.getCell('M13').value = { formula: `L${totalRow}` }
+  }
 
   /* ══════ 헤더 정보 채우기 ══════ */
   // Row 6: 수신처 귀하
@@ -1276,43 +1355,141 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData, stampId: n
   ws.getCell('M9').value = d.supplier.managerPhone || ''
   // Row 10: 견적일자
   ws.getCell('D10').value = d.quotationDate || ''
-  // Row 11: 견적담당 / Mobile
+  // Row 11: 유효기간 / 견적담당 / Mobile
+  ws.getCell('D11').value = d.validUntil || '견적 후 7일'
   ws.getCell('M11').value = d.supplier.manager || ''
   ws.getCell('P11').value = d.supplier.managerPhone || ''
 
-  // Row 36: 특이사항
-  if (d.notes) ws.getCell('A36').value = d.notes
-
-  // 도장 이미지
-  if (stampId !== null) {
-    ws.addImage(stampId, { tl: { col: 17, row: 5.5 }, ext: { width: 42, height: 42 } })
+  // 특이사항 (행 삽입 후 밀린 위치에 기록)
+  const notesRow = 36 + extraRows
+  if (d.notes) {
+    const notesCell = ws.getCell(`A${notesRow}`)
+    notesCell.value = d.notes
+    notesCell.alignment = { vertical: 'top', wrapText: true }
   }
 
-  /* ══════ 데이터 행 채우기 (Row 16~30, 최대 15행) ══════ */
-  for (let i = 0; i < Math.min(allItems.length, 15); i++) {
+  // 도장/로고는 템플릿에 이미 포함되어 있으므로 별도 추가 불필요
+
+  /* ══════ 기존 템플릿 데이터 행 초기화 (R16~R30+extraRows) ══════ */
+  // 템플릿에 샘플 데이터가 남아있으므로, 새 데이터를 채우기 전에 전부 비운다
+  const lastDataRow = 30 + extraRows
+  for (let r = 16; r <= lastDataRow; r++) {
+    // 본문 영역 (A~R) 값만 비움 (스타일/머지는 유지)
+    for (const col of ['A', 'B', 'G', 'J', 'K', 'L', 'O', 'Q']) {
+      ws.getCell(`${col}${r}`).value = null
+    }
+    // 원가분석 영역 (T~AC) 값 비움
+    for (const col of ['T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'AB', 'AC']) {
+      ws.getCell(`${col}${r}`).value = null
+    }
+  }
+
+  /* ══════ 데이터 행 채우기 (전체 아이템, 행 수 제한 없음) ══════ */
+  for (let i = 0; i < allItems.length; i++) {
     const row = 16 + i
     const item = allItems[i]
 
-    // 견적서 본문 — 입력값만 넣으면 기존 수식(O=L*K 등)이 자동 계산
+    // 견적서 본문
     ws.getCell(`A${row}`).value = i + 1                          // 순번
     ws.getCell(`B${row}`).value = item.item_name || null         // 품명
-    ws.getCell(`F${row}`).value = item.specification || null     // 모델/사양
+    ws.getCell(`G${row}`).value = item.specification || null     // 모델/사양 (G:I 머지 영역)
     ws.getCell(`J${row}`).value = item.unit || null              // 단위
     ws.getCell(`K${row}`).value = item.quantity || null          // 수량
-    ws.getCell(`L${row}`).value = item.unit_price || null        // 단가 → 수식으로 공급가(O) 자동 계산
+    ws.getCell(`L${row}`).value = { formula: `ROUNDUP(Z${row},-3)` }  // 단가 = 제안가(Z) 1000원 단위 올림
 
-    // 원가분석 (T~AA) — 입력값만 넣으면 기존 수식(W,X,Z,AA) 자동 계산
-    ws.getCell(`T${row}`).value = item._section                  // 구분 (장비/설치비)
-    ws.getCell(`U${row}`).value = item.retrieval_price || null   // 반출가
-    ws.getCell(`V${row}`).value = item.discount_rate || null     // DC율
-    ws.getCell(`Y${row}`).value = item.margin_rate || null       // MG율
+    // 공급가 수식 — sharedFormula 깨짐 방지를 위해 명시적으로 설정
+    ws.getCell(`O${row}`).value = { formula: `L${row}*K${row}` }
+
+    // 원가분석 — 입력값
+    ws.getCell(`T${row}`).value = item._section                                              // 구분 (장비/설치비)
+    ws.getCell(`U${row}`).value = item.retrieval_price || null                                // 반출가
+    ws.getCell(`V${row}`).value = item.discount_rate ? item.discount_rate / 100 : null        // DC율 (45 → 0.45, 셀 포맷 0%)
+    ws.getCell(`Y${row}`).value = item.margin_rate ? item.margin_rate / 100 : null            // MG율 (10 → 0.10, 셀 포맷 0%)
+
+    // 원가분석 수식 — sharedFormula 깨짐 방지를 위해 명시적으로 설정
+    ws.getCell(`W${row}`).value = { formula: `U${row}-(U${row}*V${row})` }     // 매입단가
+    ws.getCell(`X${row}`).value = { formula: `W${row}*K${row}` }               // 매입총액
+    ws.getCell(`Z${row}`).value = { formula: `W${row}+(W${row}*Y${row})` }     // 제안가
+    ws.getCell(`AA${row}`).value = { formula: `O${row}-X${row}` }              // 이윤
+    ws.getCell(`AB${row}`).value = item.incentive_rate ? item.incentive_rate / 100 : null  // 장려금% (6 → 0.06, 셀 포맷 0%)
+    ws.getCell(`AC${row}`).value = { formula: `X${row}*AB${row}` }             // 장려금 금액
   }
+
+  // 합계 행에 이윤/장려금 SUM 수식 추가
+  const sumRow = 31 + extraRows
+  // 이윤 합계 — 굵은 테두리 상자
+  const aaSumCell = ws.getCell(`AA${sumRow}`)
+  aaSumCell.value = { formula: `SUM(AA16:AA${lastDataRow})` }
+  aaSumCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
+
+  // 장려금 합계 — 굵은 테두리 상자 + 콤마 포맷
+  const acSumCell = ws.getCell(`AC${sumRow}`)
+  acSumCell.value = { formula: `SUM(AC16:AC${lastDataRow})` }
+  acSumCell.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
+  acSumCell.numFmt = '_-* #,##0_-;-* #,##0_-;_-* "-"_-;_-@_-'
+
+  /* ══════ 테두리 보정 — ExcelJS가 누락시키는 테두리만 복원 ══════ */
+  const thinBorder = { style: 'thin' as const }
+  const hairBorder = { style: 'hair' as const }
+  const vatRow = sumRow + 1
+  const totalRow = sumRow + 2
+
+  // 데이터 행: A열 좌측(thin) + R열 우측(thin) — 안쪽은 템플릿 원본 hair 유지
+  for (let r = 16; r <= lastDataRow; r++) {
+    const cellA = ws.getCell(`A${r}`)
+    cellA.border = { ...cellA.border, left: thinBorder }
+    const cellR = ws.getCell(`R${r}`)
+    cellR.border = { ...cellR.border, right: thinBorder }
+  }
+
+  // 합계/부가세/총계: R열 우측(thin) + 상하(hair/thin)
+  ws.getCell(`R${sumRow}`).border = { ...ws.getCell(`R${sumRow}`).border, right: thinBorder, top: thinBorder, bottom: hairBorder }
+  ws.getCell(`R${vatRow}`).border = { ...ws.getCell(`R${vatRow}`).border, right: thinBorder, top: hairBorder, bottom: hairBorder }
+  ws.getCell(`R${totalRow}`).border = { ...ws.getCell(`R${totalRow}`).border, right: thinBorder, top: hairBorder, bottom: thinBorder }
+
+  // 특이사항: R열 우측(thin) + 마지막 행 하단(thin)
+  const noteStartRow = totalRow + 3
+  const noteEndRow = totalRow + 8
+  for (let r = noteStartRow; r <= noteEndRow; r++) {
+    const cellR = ws.getCell(`R${r}`)
+    if (r === noteEndRow) {
+      cellR.border = { ...cellR.border, right: thinBorder, bottom: thinBorder }
+      for (let c = 1; c <= 17; c++) {
+        const cell = ws.getCell(r, c)
+        cell.border = { ...cell.border, bottom: thinBorder }
+      }
+    } else {
+      cellR.border = { ...cellR.border, right: thinBorder }
+    }
+  }
+
+  // 인쇄영역 업데이트 (행 삽입 시 마지막 행까지 포함)
+  ws.pageSetup.printArea = `A1:R${41 + extraRows}`
+
+  /* ══════ ExcelJS 출력 후 원본 drawing XML 복원 ══════ */
+  // ExcelJS가 writeBuffer 하면 <a:clrChange> (도장 투명색) 등이 사라지므로
+  // 원본 drawing XML과 미디어 파일을 복원해서 도장이 정상 표시되도록 한다.
+  const excelBuffer = await wb.xlsx.writeBuffer()
+  const outZip = await JSZip.loadAsync(excelBuffer)
+
+  if (origDrawingXml) {
+    outZip.file('xl/drawings/drawing1.xml', origDrawingXml)
+  }
+  if (origDrawingRels) {
+    outZip.file('xl/drawings/_rels/drawing1.xml.rels', origDrawingRels)
+  }
+  for (const [path, data] of Object.entries(origMedia)) {
+    outZip.file(path, data)
+  }
+
+  return await outZip.generateAsync({ type: 'arraybuffer' })
 }
 
 /* ═════════════════════════════════════════════════════════
    메인 진입점 — 간이/상세 분기
    ═════════════════════════════════════════════════════════ */
-export async function exportQuoteExcel(data: QuoteExportData): Promise<void> {
+// Excel 버퍼만 생성 (PDF 변환 등에서 재사용)
+export async function buildQuoteExcelBuffer(data: QuoteExportData): Promise<ArrayBuffer | null> {
   const ExcelJS = await import('exceljs')
   const wb = new ExcelJS.Workbook()
 
@@ -1326,10 +1503,9 @@ export async function exportQuoteExcel(data: QuoteExportData): Promise<void> {
 
   const validEquip = data.equipItems.filter(hasData)
   const validInstall = data.installItems.filter(hasData)
-  if (!validEquip.length && !validInstall.length) return
+  if (!validEquip.length && !validInstall.length) return null
 
   if (data.quoteType === 'detailed') {
-    // ── 상세 견적서: 갑지 + 장비 내역서(원가분석) + 설치비 내역서(원가분석) ──
     xlBuildCoverSheet(wb, data, logoId, stampId)
     if (validEquip.length) {
       const ws = xlCreateItemsWs(wb, '장비 내역서')
@@ -1339,13 +1515,17 @@ export async function exportQuoteExcel(data: QuoteExportData): Promise<void> {
       const ws = xlCreateItemsWs(wb, '설치비 내역서')
       xlRenderItemsTable(ws, validInstall, data, 1, true)
     }
+    return await wb.xlsx.writeBuffer() as ArrayBuffer
   } else {
-    // ── 간이 견적서: 템플릿 파일에 데이터만 채워넣기 (서식 100% 보존) ──
-    await xlBuildSimpleFromTemplate(wb, data, stampId)
+    return await xlBuildSimpleFromTemplate(wb, data)
   }
+}
+
+export async function exportQuoteExcel(data: QuoteExportData): Promise<void> {
+  const buffer = await buildQuoteExcelBuffer(data)
+  if (!buffer) return
 
   // 브라우저 다운로드
-  const buffer = await wb.xlsx.writeBuffer()
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -1355,4 +1535,154 @@ export async function exportQuoteExcel(data: QuoteExportData): Promise<void> {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+/* ═════════════════════════════════════════════════════════
+   PDF 내보내기 — Excel 인쇄영역 기반 HTML → 브라우저 인쇄
+   ═════════════════════════════════════════════════════════ */
+export async function exportQuoteExcelAsPdf(data: QuoteExportData): Promise<void> {
+  const validEquip = data.equipItems.filter(hasData)
+  const validInstall = data.installItems.filter(hasData)
+  if (!validEquip.length && !validInstall.length) return
+
+  const allItems = [
+    ...validEquip.map(item => ({ ...item, _section: '장비' as const })),
+    ...validInstall.map(item => ({ ...item, _section: '설치비' as const })),
+  ]
+
+  // 로고/도장 이미지 로드
+  const [logoDataUrl, stampDataUrl] = await Promise.all([
+    data.logoUrl ? loadImageDataUrl(data.logoUrl) : Promise.resolve(null),
+    data.stampUrl ? loadImageDataUrl(data.stampUrl) : Promise.resolve(null),
+  ])
+
+  // 합계 계산
+  const supplyTotal = allItems.reduce((s, r) => s + (r.quantity * r.unit_price), 0)
+  const vat = Math.round(supplyTotal * 0.1)
+  const grandTotal = supplyTotal + vat
+
+  // 한글 금액 변환
+  const koreanNum = numToKorPdf(grandTotal)
+
+  // 항목 행 HTML
+  const itemRows = allItems.map((item, i) => {
+    const supply = item.quantity * item.unit_price
+    return `<tr>
+      <td class="c" style="border-left:1px solid #333;">${i + 1}</td>
+      <td class="l" colspan="5">${esc(item.item_name)}</td>
+      <td class="l" colspan="3">${esc(item.specification)}</td>
+      <td class="c">${esc(item.unit)}</td>
+      <td class="r">${item.quantity || ''}</td>
+      <td class="r" colspan="3">${item.unit_price ? item.unit_price.toLocaleString() : ''}</td>
+      <td class="r" colspan="2">${supply ? supply.toLocaleString() : ''}</td>
+      <td class="l" colspan="2" style="border-right:1px solid #333;"></td>
+    </tr>`
+  }).join('\n')
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<title>견적서_${esc(data.title || '무제')}</title>
+<style>
+  @page { size: A4 portrait; margin: 15mm 10mm 10mm 10mm; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: '맑은 고딕', 'Malgun Gothic', sans-serif; font-size: 10pt; color: #111; }
+  table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  td, th { padding: 2px 4px; vertical-align: middle; font-size: 10pt; }
+  .c { text-align: center; } .l { text-align: left; } .r { text-align: right; } .b { font-weight: bold; }
+  .title { font-family: '바탕', serif; font-size: 28pt; font-weight: bold; text-align: center;
+    padding: 8px 0; border-bottom: 3px solid #111; letter-spacing: 0.8em; }
+  .header-row td { padding: 1px 4px; font-size: 10pt; height: 20px; }
+  .header-label { color: #555; font-weight: bold; letter-spacing: 0.1em; }
+  .receiver { font-size: 12pt; font-weight: bold; border-bottom: 1px solid #111; padding-bottom: 2px; }
+  .items-header th { background: #f5f5f5; border: 1px solid #333; font-weight: bold; padding: 4px 2px; font-size: 10pt; text-align: center; }
+  .items-body td { border-left: 1px solid #ccc; border-bottom: 1px solid #ddd; padding: 3px 4px; font-size: 9pt; height: 19px; }
+  .footer-row td { border: 1px solid #333; padding: 3px 4px; font-size: 10pt; height: 22px; }
+  .total-bar { border: 1px solid #333; } .total-bar td { padding: 4px 6px; font-size: 10pt; }
+  .notes-label { border: 1px solid #333; border-bottom: none; padding: 3px 6px; font-weight: bold; }
+  .notes-area { border: 1px solid #333; padding: 6px 8px; min-height: 80px; font-size: 9pt; white-space: pre-wrap; vertical-align: top; }
+  .logo-area { text-align: right; padding: 10px 0; position: relative; }
+  .logo-area img.logo { height: 30px; } .logo-area .cname { font-size: 14pt; font-weight: bold; vertical-align: middle; }
+  .stamp-img { position: absolute; right: 0; top: 50%; transform: translateY(-50%); height: 56px; width: 56px; opacity: 0.85; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style></head><body>
+<div class="title">見　積　書</div>
+<div class="logo-area">
+  <div style="display:inline-flex;align-items:center;gap:8px;margin-right:70px;">
+    ${logoDataUrl ? `<img class="logo" src="${logoDataUrl}" />` : ''}
+    <span class="cname">${esc(data.supplier.companyName)}</span>
+  </div>
+  ${stampDataUrl ? `<img class="stamp-img" src="${stampDataUrl}" />` : ''}
+</div>
+<div style="padding:0 4px 4px;"><span class="receiver">${esc(data.receiver.companyName)} 귀하</span></div>
+<table style="margin:4px 0;">
+  <tr class="header-row"><td width="13%" class="header-label">담 당 자 :</td><td width="22%">${esc(data.receiver.recipientName)}</td>
+    <td width="13%" class="header-label">등 록 번 호</td><td width="17%">${esc(data.supplier.bizNumber)}</td>
+    <td width="10%" class="header-label">성　명</td><td width="25%">${esc(data.supplier.ceoName)}　(인)</td></tr>
+  <tr class="header-row"><td class="header-label">납 기/장 소 :</td><td>${esc(data.deliveryDate || '협의 일정')} / ${esc(data.deliveryPlace || '협의 장소')}</td>
+    <td class="header-label">사업장주소</td><td colspan="3">${esc(data.supplier.address)}</td></tr>
+  <tr class="header-row"><td class="header-label">결 제 조 건 :</td><td>${esc(data.paymentCondition || '협의 조건')}</td>
+    <td class="header-label">전 화 번 호</td><td>${esc(data.supplier.managerPhone)}</td>
+    <td class="header-label">팩스번호</td><td>02) 711-7807</td></tr>
+  <tr class="header-row"><td class="header-label">견 적 일 자 :</td><td>${esc(data.quotationDate)}</td><td colspan="4"></td></tr>
+  <tr class="header-row"><td class="header-label">유 효 기 간 :</td><td>${esc(data.validUntil || '견적 후 7일')}</td>
+    <td class="header-label">견 적 담 당</td><td>${esc(data.supplier.manager)}</td>
+    <td class="header-label">Mobile</td><td>${esc(data.supplier.managerPhone)}</td></tr>
+</table>
+<div style="padding:2px 4px 6px;"><span style="font-size:10pt;border-bottom:1px solid #999;">아래와 같이 견적합니다.</span></div>
+<table class="total-bar" style="margin-bottom:2px;">
+  <tr><td width="14%" class="c b" style="background:#f5f5f5;border-right:1px solid #333;line-height:1.3;">합계금액<br><span style="font-size:8pt;font-weight:normal;color:#666;">(공급가+부가세)</span></td>
+    <td width="50%" class="b">${koreanNum} 원整</td>
+    <td width="36%" class="r">(₩ <b>${grandTotal.toLocaleString()}</b> )</td></tr>
+</table>
+<table><thead><tr class="items-header">
+  <th width="5%">순번</th><th colspan="5" width="28%">품　명</th><th colspan="3" width="20%">모델 및 사양</th>
+  <th width="5%">단위</th><th width="5%">수량</th><th colspan="3" width="14%">단　가</th>
+  <th colspan="2" width="13%">공 급 가</th><th colspan="2" width="10%">비　고</th>
+</tr></thead><tbody class="items-body">${itemRows}</tbody></table>
+<table>
+  <tr class="footer-row"><td colspan="11" class="c b" width="60%">합　　계</td><td colspan="7" class="r b">${supplyTotal.toLocaleString()}</td></tr>
+  <tr class="footer-row"><td colspan="11" class="c">부 가 세</td><td colspan="7" class="r">${vat.toLocaleString()}</td></tr>
+  <tr class="footer-row"><td colspan="11" class="c b">총　　계</td><td colspan="7" class="r b">${grandTotal.toLocaleString()}</td></tr>
+</table>
+<div class="notes-label" style="margin-top:8px;">※ 특 이 사 항</div>
+<div class="notes-area">${esc(data.notes || '')}</div>
+</body></html>`
+
+  const win = window.open('', '_blank')
+  if (!win) { alert('팝업이 차단되었습니다. 팝업을 허용해주세요.'); return }
+  win.document.write(html)
+  win.document.close()
+  setTimeout(() => win.print(), 800)
+}
+
+// HTML 이스케이프
+function esc(s: string | null | undefined): string {
+  if (!s) return ''
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+// 숫자 → 한글 금액 (PDF용)
+function numToKorPdf(n: number): string {
+  if (n === 0) return '영'
+  const units = ['', '만', '억', '조']
+  const digits = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구']
+  const subUnits = ['', '십', '백', '천']
+  let result = ''
+  let unitIdx = 0
+  while (n > 0) {
+    const chunk = n % 10000
+    if (chunk > 0) {
+      let chunkStr = ''
+      let c = chunk
+      for (let i = 0; i < 4; i++) {
+        const d = c % 10
+        if (d > 0) chunkStr = digits[d] + subUnits[i] + chunkStr
+        c = Math.floor(c / 10)
+      }
+      result = chunkStr + units[unitIdx] + result
+    }
+    n = Math.floor(n / 10000)
+    unitIdx++
+  }
+  return result
 }
