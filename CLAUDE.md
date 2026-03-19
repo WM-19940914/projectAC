@@ -10,14 +10,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm run dev          # 개발 서버 (predev로 UTF-8 체크 자동 실행)
-npm run build        # 프로덕션 빌드
+npm run build        # 프로덕션 빌드 (타입 에러 확인용 — 테스트 프레임워크 없음)
 npm run lint         # ESLint 실행
 npm run check:utf8   # UTF-8 인코딩 검사
 npm run import:customers   # 고객 데이터 임포트 (Excel/CSV)
 npm run import:prices      # 가격표 데이터 임포트
+npm run export:data        # 데이터 내보내기
 ```
 
-- **테스트 프레임워크 없음** — 현재 단위/E2E 테스트 미설정. `npm run build`로 타입 에러 확인.
 - `npm install` 시 `prepare` 스크립트가 git hooks를 자동 설정함 (`scripts/setup-githooks.mjs`)
 - pre-commit hook이 스테이징된 파일의 UTF-8 인코딩을 검사함
 
@@ -64,14 +64,22 @@ npm run import:prices      # 가격표 데이터 임포트
 - `src/app/api/` — CRUD 엔드포인트 (quotes, customers, requests, contracts, expenses, order-deliveries, price-list, settings)
 
 ### API 라우트 패턴
-모든 API가 동일한 구조: GET/POST/PATCH/DELETE → `createAdminClient()` → whitelist 필드 검증 → DB 작업 → `revalidatePath()` → `jsonWithUTF8()` 응답 (`src/lib/utf8-response.ts`). 새 API 라우트 작성 시 `jsonWithUTF8()`을 사용해야 한글 깨짐 방지.
+모든 API가 동일한 구조: GET/POST/PATCH/DELETE → `createAdminClient()` → whitelist 필드 검증 → DB 작업 → `revalidatePath()` → 응답. `src/middleware.ts`가 `/api/` 경로에 UTF-8 헤더(`Content-Type: application/json; charset=utf-8`, `Content-Language: ko-KR`, `Cache-Control: no-cache`)를 자동 설정한다. 일부 API는 `jsonWithUTF8()` (`src/lib/utf8-response.ts`)도 병행 사용.
 
 ### 업무 흐름
 ```
 의뢰 접수 → 고객 등록 → 견적서 작성 → 계약 체결 → 정산/지출 관리
 ```
 
-의뢰 상태 칸반: `견적 문의` → `영업중` → `계약 성공` / `수주 실패` / `숨김` (`src/lib/constants.ts`의 `REQUEST_STATUSES`)
+### 의뢰 상태 — 이중 시스템 주의
+
+**칸반 컬럼용** (`src/lib/constants.ts`의 `REQUEST_STATUSES`):
+`견적 문의` → `영업중` → `계약 성공` / `수주 실패` / `숨김`
+
+**TypeScript 타입** (`src/types/index.ts`의 `RequestStatus`):
+`견적서 작성중` | `계약 진행` | `계약 체결` | `주문·배송 진행` | `완료`
+
+칸반 보드는 `constants.ts`의 상태를 사용한다. 두 정의가 혼용되므로 수정 시 양쪽 모두 확인할 것.
 
 ### 의뢰 칸반보드 (핵심 모듈)
 
@@ -99,7 +107,8 @@ npm run import:prices      # 가격표 데이터 임포트
 
 **단계:** `선금` → `중도금` (1~5차 분할 가능) → `잔금`
 - DB: `contracts.settlement_type` (텍스트, 예: "선금,중도금,잔금")
-- DB: `contract_settlement_meta` 테이블 → `stage_ratios`, `settlement_status_map`, `middle_installments`
+- DB: `contract_settlement_meta` 테이블 → `stage_ratios`, `settlement_status_map`, `middle_installments`, `stage_scheduled_dates`, `vat_total_override`
+- 메타데이터는 `contract_settlement_meta` 테이블과 `contracts.memo` (JSON)에 이중 저장됨
 
 **계산 흐름:**
 ```
@@ -124,27 +133,26 @@ sum(confirmed payment_entries) → 실제 입금액
 
 **자동 저장:** useRef 기반 스냅샷 비교 → 변경 감지 시만 저장. 초기 로드 중에는 저장 방지.
 
-### 미들웨어
-
-`src/middleware.ts` — `/api/` 경로에 UTF-8 헤더 자동 설정, `Content-Language: ko-KR`, `Cache-Control: no-cache`. 인증은 현재 개발 모드로 우회 중.
+**PDF/Excel 내보내기:** `src/lib/quote-export.ts` — jsPDF로 간이/상세 견적서 2가지 PDF 형식 생성, xlsx로 원가분석 포함 다중 시트 Excel 내보내기. Pretendard 폰트 캐싱, 로고/도장 이미지 렌더링 포함.
 
 ## 디자인 시스템 (필수 준수)
 
-### 컬러 팔레트 — 이 5색만 사용. Tailwind 기본 색상(blue, red, green 등) 사용 금지.
-| 이름 | HEX | Tailwind 클래스 | 용도 |
+### 컬러 팔레트 — 이 5색의 Tailwind 클래스명만 사용. Tailwind 기본 색상(blue, red, green 등) 사용 금지.
+
+| 이름 | 실제 HEX (tailwind.config.ts) | Tailwind 클래스 | 용도 |
 |------|------|-----------------|------|
-| Sky Aqua | `#42CAFD` | `sky-aqua` | 메인 포인트, 버튼, 링크 |
-| Tropical Teal | `#66B3BA` | `tropical-teal` | 보조 포인트, 호버, 아이콘 |
-| Muted Teal | `#8EB19D` | `muted-teal` | 성공/완료 상태, 배지 |
-| Vanilla Custard | `#F6EFA6` | `vanilla-custard` | 경고, 알림, 하이라이트 |
-| Soft Blush | `#F0D2D1` | `soft-blush` | 에러, 삭제, 위험 |
+| Sky Aqua | `#475569` (slate-600) | `sky-aqua` | 메인 포인트, 버튼, 링크 |
+| Tropical Teal | `#64748B` (slate-700) | `tropical-teal` | 보조 포인트, 호버, 아이콘 |
+| Muted Teal | `#22C55E` (green-500) | `muted-teal` | 성공/완료 상태, 배지 |
+| Vanilla Custard | `#F59E0B` (amber-500) | `vanilla-custard` | 경고, 알림, 하이라이트 |
+| Soft Blush | `#EF4444` (red-500) | `soft-blush` | 에러, 삭제, 위험 |
 
 배경/텍스트는 흰색(#FFFFFF), 검정/회색 계열만 허용.
 
 ### 폰트
-- **제목:** Plus Jakarta Sans → `font-heading` (weight 600~800)
-- **본문:** Pretendard → `font-sans` 기본 적용 (weight 400~500)
+- **본문/전체:** Pretendard → `font-sans` 기본 적용 (weight 400~500)
 - **강조:** Pretendard → `font-sans font-semibold` (weight 600)
+- **제목:** 코드에서 `font-heading` 클래스가 사용되지만, tailwind.config.ts에 정의가 없으므로 실질적으로 브라우저 기본 sans-serif로 폴백됨
 - 이 외의 폰트 사용 금지
 
 ## 개발 규칙
@@ -163,6 +171,7 @@ sum(confirmed payment_entries) → 실제 입금액
 - `src/lib/format.ts` — 통화(₩), 날짜 포맷 유틸리티
 - `src/lib/validators.ts` — Zod 스키마 (login, signup)
 - `src/lib/utf8-response.ts` — API 응답 UTF-8 강제 헬퍼 (`jsonWithUTF8`)
+- `src/lib/quote-export.ts` — 견적서 PDF/Excel 내보내기 (간이/상세 2가지 형식)
 - `tailwind.config.ts` — 커스텀 컬러/폰트 정의
 
 ## 환경 변수
