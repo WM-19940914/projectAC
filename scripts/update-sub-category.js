@@ -6,7 +6,9 @@ async function updateSubCategory() {
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   // 엑셀 읽기
-  const wb = XLSX.readFile('C:/Users/minig/Desktop/장비_가격표.xlsx');
+  // CLI 인자 또는 기본 경로에서 엑셀 파일 로드
+  const excelPath = process.argv[2] || './imports/price-list.xlsx';
+  const wb = XLSX.readFile(excelPath);
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws);
 

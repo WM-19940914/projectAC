@@ -49,6 +49,22 @@ export async function POST(req: NextRequest) {
       windowsHide: true,
     })
 
+    // PDF 파일 완성 대기 — "Microsoft Print to PDF"는 비동기라 PrintOut 반환 후에도
+    // 파일이 아직 디스크에 안 써졌을 수 있음. 최대 5초간 200ms 간격으로 확인.
+    const { stat } = await import("fs/promises")
+    let pdfReady = false
+    for (let i = 0; i < 25; i++) {
+      try {
+        const st = await stat(pdfPath)
+        if (st.size > 0) { pdfReady = true; break }
+      } catch { /* 파일 아직 없음 */ }
+      await new Promise((r) => setTimeout(r, 200))
+    }
+
+    if (!pdfReady) {
+      throw new Error("PDF 파일 생성 시간 초과")
+    }
+
     // PDF 읽기
     const pdfBuffer = await readFile(pdfPath)
 

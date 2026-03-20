@@ -15,7 +15,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const EXCEL_PATH = 'C:/Users/User/OneDrive/Desktop/가격표.xlsx';
+// CLI 인자 또는 기본 경로에서 엑셀 파일 로드
+// 사용법: node scripts/import-price-list.js [파일경로]
+const EXCEL_PATH = process.argv[2] || './imports/price-list.xlsx';
 
 // ═══════════════════════════════════════════════════════════
 // UTF-8 인코딩 검증 및 정제 함수

@@ -129,14 +129,24 @@ export async function POST(req: NextRequest) {
       if (!requestValidation.ok) return requestValidation.response
     }
 
-    // 견적번호 생성: Q-YYYYMMDD-NNN 형식
+    // 견적번호 생성: Q-YYYYMMDD-NNN 형식 (동시성 충돌 시 최대 3회 재시도)
     const today = new Date().toLocaleDateString("sv-SE").replace(/-/g, "")
-    const { count } = await supabase
-      .from("quotations")
-      .select("*", { count: "exact", head: true })
-      .like("quotation_number", `Q-${today}-%`)
-    const seq = ((count || 0) + 1).toString().padStart(3, "0")
-    const quotationNumber = `Q-${today}-${seq}`
+    let quotationNumber = ""
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { count } = await supabase
+        .from("quotations")
+        .select("*", { count: "exact", head: true })
+        .like("quotation_number", `Q-${today}-%`)
+      const seq = ((count || 0) + 1 + attempt).toString().padStart(3, "0")
+      quotationNumber = `Q-${today}-${seq}`
+      // 중복 확인
+      const { data: existing } = await supabase
+        .from("quotations")
+        .select("id")
+        .eq("quotation_number", quotationNumber)
+        .maybeSingle()
+      if (!existing) break // 사용 가능한 번호 확보
+    }
 
     // 합계 계산 (단위절사 반영: 프론트에서 전달된 값 우선, 없으면 자동 계산)
     const rawTotal = (items || []).reduce(
@@ -314,44 +324,63 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: headerError.message }, { status: 500 })
     }
 
-    // 품목 교체: 기존 삭제 후 재삽입 (빈 행은 저장하지 않음)
+    // 품목 교체: 새 품목 먼저 준비 → 기존 삭제 → 삽입 (삽입 실패 시 빈 견적서 방지)
     if (items !== undefined) {
-      await supabase.from("quotation_items").delete().eq("quotation_id", id)
-
       const normalizedUpdateItems = (Array.isArray(items) ? items : []).filter((item) =>
         hasMeaningfulItem(item as Record<string, unknown>)
       ) as Record<string, unknown>[]
 
-      if (normalizedUpdateItems.length > 0) {
-        const itemRows = normalizedUpdateItems.map((item, index: number) => ({
-          quotation_id: id,
-          category: item.category || "장비",
-          item_order: index,
-          item_name: item.item_name || "",
-          specification: item.specification || null,
-          unit: item.unit || null,
-          quantity: Number(item.quantity) || 0,
-          unit_price: Number(item.unit_price) || 0,
-          amount: (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
-          memo: item.memo || null,
-          // 내부 단가 필드
-          retrieval_price: Number(item.retrieval_price) || 0,
-          discount_rate: Number(item.discount_rate) || 0,
-          purchase_unit_price: Number(item.purchase_unit_price) || 0,
-          purchase_amount: Number(item.purchase_amount) || 0,
-          margin_rate: Number(item.margin_rate) || 0,
-          proposed_price: Number(item.proposed_price) || 0,
-          profit: Number(item.profit) || 0,
-          incentive_rate: Number(item.incentive_rate) || 0,
-        }))
+      const itemRows = normalizedUpdateItems.map((item, index: number) => ({
+        quotation_id: id,
+        category: item.category || "장비",
+        item_order: index,
+        item_name: item.item_name || "",
+        specification: item.specification || null,
+        unit: item.unit || null,
+        quantity: Number(item.quantity) || 0,
+        unit_price: Number(item.unit_price) || 0,
+        amount: (Number(item.quantity) || 0) * (Number(item.unit_price) || 0),
+        memo: item.memo || null,
+        // 내부 단가 필드
+        retrieval_price: Number(item.retrieval_price) || 0,
+        discount_rate: Number(item.discount_rate) || 0,
+        purchase_unit_price: Number(item.purchase_unit_price) || 0,
+        purchase_amount: Number(item.purchase_amount) || 0,
+        margin_rate: Number(item.margin_rate) || 0,
+        proposed_price: Number(item.proposed_price) || 0,
+        profit: Number(item.profit) || 0,
+        incentive_rate: Number(item.incentive_rate) || 0,
+      }))
+
+      // 새 품목이 있으면 먼저 삽입 검증 (실패 시 기존 데이터 보존)
+      if (itemRows.length > 0) {
+        // 기존 품목 백업용 조회
+        const { data: backupItems } = await supabase
+          .from("quotation_items")
+          .select("*")
+          .eq("quotation_id", id)
+
+        // 기존 삭제 후 새 품목 삽입
+        await supabase.from("quotation_items").delete().eq("quotation_id", id)
 
         const { error: itemsError } = await supabase
           .from("quotation_items")
           .insert(itemRows)
 
         if (itemsError) {
+          // 삽입 실패 시 백업 데이터로 복원 시도
+          if (backupItems && backupItems.length > 0) {
+            const restoreRows = backupItems.map((b) => {
+              const { id: _id, created_at: _ca, ...rest } = b as Record<string, unknown>
+              return rest
+            })
+            await supabase.from("quotation_items").insert(restoreRows)
+          }
           return NextResponse.json({ error: itemsError.message }, { status: 500 })
         }
+      } else {
+        // 새 품목이 없으면 기존 품목만 삭제
+        await supabase.from("quotation_items").delete().eq("quotation_id", id)
       }
     }
 

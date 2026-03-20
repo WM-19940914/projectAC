@@ -119,7 +119,10 @@ async function run() {
   await repairExistingData();
   
   // 1. 엑셀 파일 읽기
-  const wb = XLSX.readFile('C:/Users/minig/Desktop/pluuug_data_Melea_김우민_고객_260220.xlsx');
+  // CLI 인자 또는 기본 경로에서 엑셀 파일 로드
+  // 사용법: node scripts/import-customers.js [파일경로]
+  const excelPath = process.argv[2] || './imports/customers.xlsx';
+  const wb = XLSX.readFile(excelPath);
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws);
   

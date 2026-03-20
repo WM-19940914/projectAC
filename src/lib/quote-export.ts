@@ -1758,7 +1758,7 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<A
   const origDrawingRels = await origZip.file('xl/drawings/_rels/drawing1.xml.rels')?.async('string') ?? null
   // 원본 미디어 파일(로고, 도장 이미지)도 보존
   const origMedia: Record<string, Uint8Array> = {}
-  for (const [path, file] of Object.entries(origZip.files)) {
+  for (const [path, file] of Object.entries(origZip.files) as [string, any][]) {
     if (path.startsWith('xl/media/') && !file.dir) {
       origMedia[path] = await file.async('uint8array')
     }

@@ -3,28 +3,16 @@ import { NextResponse, type NextRequest } from "next/server"
 
 /**
  * Next.js 미들웨어
- * - Supabase 세션 확인 → 비로그인 시 /login 리다이렉트
- * - API 라우트에 UTF-8 헤더 설정
+ * - API 라우트: 인증 필수 (401 반환) + UTF-8 헤더
+ * - 페이지 라우트: 비로그인 시 /login 리다이렉트
+ * - Supabase 세션 갱신 (토큰 리프레시) 자동 처리
  */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+  const isApiRoute = pathname.startsWith("/api/")
 
-  // API 라우트는 인증 리다이렉트 안 함 (UTF-8 헤더만 설정)
-  if (pathname.startsWith("/api/")) {
-    const response = NextResponse.next()
-    if (
-      !pathname.startsWith("/api/quote-template") &&
-      !pathname.startsWith("/api/excel-to-pdf") &&
-      !pathname.startsWith("/api/excel-to-png")
-    ) {
-      response.headers.set("Content-Type", "application/json; charset=utf-8")
-    }
-    response.headers.set("Content-Language", "ko-KR")
-    response.headers.set("Cache-Control", "no-cache, must-revalidate")
-    return response
-  }
-
-  // ── 페이지 라우트: Supabase 세션 확인 ──
+  // ── Supabase 세션 관리 (API + 페이지 공통) ──
+  // 세션 갱신 시 쿠키를 자동으로 갱신하기 위해 API/페이지 모두 동일한 클라이언트 사용
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -36,6 +24,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
+          // 요청 쿠키에 새 값 반영 (다운스트림 라우트에서도 최신 세션 사용)
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
@@ -53,6 +42,30 @@ export async function middleware(request: NextRequest) {
     data: { session },
   } = await supabase.auth.getSession()
 
+  // ── API 라우트: 인증 필수 + UTF-8 헤더 ──
+  if (isApiRoute) {
+    // 인증되지 않은 요청 차단
+    if (!session) {
+      return NextResponse.json(
+        { error: "인증이 필요합니다" },
+        { status: 401 }
+      )
+    }
+
+    // UTF-8 헤더 설정 (바이너리 응답 엔드포인트는 제외)
+    if (
+      !pathname.startsWith("/api/quote-template") &&
+      !pathname.startsWith("/api/excel-to-pdf") &&
+      !pathname.startsWith("/api/excel-to-png")
+    ) {
+      supabaseResponse.headers.set("Content-Type", "application/json; charset=utf-8")
+    }
+    supabaseResponse.headers.set("Content-Language", "ko-KR")
+    supabaseResponse.headers.set("Cache-Control", "no-cache, must-revalidate")
+    return supabaseResponse
+  }
+
+  // ── 페이지 라우트: Supabase 세션 기반 리다이렉트 ──
   const isAuthPage =
     pathname === "/login" || pathname === "/signup"
 

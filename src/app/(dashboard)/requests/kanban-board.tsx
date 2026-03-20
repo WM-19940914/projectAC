@@ -848,7 +848,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
             <div className="flex items-center gap-2">
               <SmilePlus className="h-4.5 w-4.5 text-sky-aqua" />
               <span className="text-[13px] text-gray-400">
-                {getGreeting()}, <span className="font-medium text-gray-500">{profile?.name || "사용자"}</span>님
+                {getGreeting()}, <span className="font-medium text-gray-500">{profile?.full_name || "사용자"}</span>님
               </span>
             </div>
 

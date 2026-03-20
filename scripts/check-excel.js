@@ -1,5 +1,7 @@
 const XLSX = require('xlsx');
-const wb = XLSX.readFile('C:/Users/minig/Desktop/장비_가격표.xlsx');
+// CLI 인자 또는 기본 경로에서 엑셀 파일 로드
+const excelPath = process.argv[2] || './imports/price-list.xlsx';
+const wb = XLSX.readFile(excelPath);
 const ws = wb.Sheets[wb.SheetNames[0]];
 const data = XLSX.utils.sheet_to_json(ws);
 

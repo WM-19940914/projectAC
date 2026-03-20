@@ -41,7 +41,7 @@ async function loadTemplateBuffer(): Promise<Buffer> {
 export async function GET() {
   try {
     const buf = await loadTemplateBuffer()
-    return new NextResponse(buf, {
+    return new NextResponse(buf as unknown as BodyInit, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": 'attachment; filename="quote-template.xlsx"',

@@ -997,6 +997,7 @@ export default function QuoteEditorSheet({
                       const pdfRes = await fetch("/api/excel-to-pdf", { method: "POST", body: xlsxBuffer })
                       if (!pdfRes.ok) throw new Error(await pdfRes.text())
                       const pdfArrayBuf = await pdfRes.arrayBuffer()
+                      // pdf.js를 CDN에서 로드 (브라우저 전용, window 캐싱)
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       let pdfjsLib = (window as any)["pdfjs-dist/build/pdf"]
                       if (!pdfjsLib) {

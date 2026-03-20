@@ -343,9 +343,10 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
                     미지급 {unpaidExpenses.length}건
                   </Badge>
                   {unpaidExpenses.map((a, i) => (
-                    <div
+                    <button
                       key={`up-${i}`}
-                      className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-sm"
+                      type="button"
+                      className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-sm text-left"
                       onClick={() => handleClick(a.requestId)}
                     >
                       <div className="min-w-0 flex-1">
@@ -357,7 +358,7 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
                       <span className="text-soft-blush font-medium ml-2 whitespace-nowrap text-xs">
                         {formatCurrency(a.amount)}
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -369,9 +370,10 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
                     세금계산서 예정 {taxDueExpenses.length}건
                   </Badge>
                   {taxDueExpenses.map((a, i) => (
-                    <div
+                    <button
                       key={`tx-${i}`}
-                      className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-sm"
+                      type="button"
+                      className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-sm text-left"
                       onClick={() => handleClick(a.requestId)}
                     >
                       <div className="min-w-0 flex-1">
@@ -383,7 +385,7 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
                       <span className="text-yellow-700 font-medium ml-2 whitespace-nowrap text-xs">
                         {formatCurrency(a.amount)}
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -404,9 +406,10 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
                     미발행 {taxInvoiceCount}건
                   </Badge>
                   {taxInvoiceAlerts.map((a, i) => (
-                    <div
+                    <button
                       key={`ti-${i}`}
-                      className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-sm"
+                      type="button"
+                      className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-sm text-left"
                       onClick={() => handleClick(a.requestId)}
                     >
                       <div className="min-w-0 flex-1">
@@ -425,7 +428,7 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
                           미발행
                         </Badge>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -468,8 +471,9 @@ function SettlementRow({
   badgeLabel: string
 }) {
   return (
-    <div
-      className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+    <button
+      type="button"
+      className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-left"
       onClick={onClick}
     >
       <div className="min-w-0 flex-1">
@@ -487,6 +491,6 @@ function SettlementRow({
           {badgeLabel}
         </Badge>
       </div>
-    </div>
+    </button>
   )
 }

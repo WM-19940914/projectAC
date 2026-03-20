@@ -6,6 +6,11 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // pdfjs-dist가 서버 빌드에서 canvas를 요구하지만 클라이언트에서만 사용하므로 무시
+  webpack: (config) => {
+    config.resolve.alias.canvas = false
+    return config
+  },
 };
 
 export default nextConfig;
