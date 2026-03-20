@@ -135,6 +135,7 @@ async function loadImageDataUrl(url: string): Promise<string | null> {
   }
 }
 
+
 // ===== 폰트 캐시 =====
 let cachedRegular: string | null = null
 let cachedBold: string | null = null
@@ -979,14 +980,11 @@ function xlRenderSimpleHeader(ws: any, d: QuoteExportData, logoId: number | null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function xlRenderItemsTable(ws: any, items: ItemRow[], d: QuoteExportData, r: number, showTitle: boolean): number {
   if (showTitle) {
-    // 시트 제목 + 메타
+    // 시트 제목 (시트 이름 사용 — "장비 내역서" / "설치비 내역서")
     ws.mergeCells(`A${r}:G${r}`)
-    ws.getCell(`A${r}`).value = `견적서 — ${d.title || '무제'}`
+    ws.getCell(`A${r}`).value = ws.name || '내역서'
     xlStyle(ws.getCell(`A${r}`), { sz: 14, bold: true })
     ws.getRow(r).height = 32; r++
-    ws.mergeCells(`A${r}:G${r}`)
-    ws.getCell(`A${r}`).value = [d.quotationNumber && `견적번호: ${d.quotationNumber}`, `견적일: ${d.quotationDate}`, d.supplier.manager && `견적담당: ${d.supplier.manager}`].filter(Boolean).join('    |    ')
-    xlStyle(ws.getCell(`A${r}`), { sz: 9, color: XL.GRAY500 }); r++
     ws.getRow(r).height = 8; r++
   }
 
@@ -1082,7 +1080,381 @@ function xlRenderSummary(ws: any, d: QuoteExportData, r: number): number {
 }
 
 /* ─────────────────────────────────────────────────────────
-   상세 견적서 — 갑지 시트 (견적서 표지)
+   상세 견적서 — 갑지 + 내역서 통합 빌드
+   갑지: 템플릿 기반 (장비/설치비 요약 2행, 원가분석 없음)
+   내역서: 템플릿 15행 이하 구조 + 원가분석 포함
+   ───────────────────────────────────────────────────────── */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function xlBuildDetailedAllSheets(wb: any, d: QuoteExportData, validEquip: ItemRow[], validInstall: ItemRow[]): Promise<ArrayBuffer> {
+  // 1. 갑지 빌드 (템플릿 기반)
+  const coverBuf = await xlBuildDetailedCover(wb, d)
+
+  // 2. 갑지 결과 로드 → 내역서 시트 추가
+  const ExcelJS2 = await import('exceljs')
+  const wb2 = new ExcelJS2.Workbook()
+  await wb2.xlsx.load(coverBuf)
+
+  // 내역서 시트 생성 (갑지와 이질감 없는 깔끔한 스타일)
+  if (validEquip.length) xlBuildItemSheet(wb2, '장비 내역서', validEquip, d)
+  if (validInstall.length) xlBuildItemSheet(wb2, '설치비 내역서', validInstall, d)
+
+  return await wb2.xlsx.writeBuffer() as ArrayBuffer
+}
+
+/* ─────────────────────────────────────────────────────────
+   상세 견적서 — 내역서 시트 (ExcelJS 생성, 갑지와 통일감)
+   ───────────────────────────────────────────────────────── */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExportData) {
+  const ws = wb.addWorksheet(name, { views: [{ showGridLines: false }] })
+
+  // 컬럼 너비 — 갑지 템플릿과 유사하게
+  const widths = [
+    4.5, 6, 6, 6, 6, 6,   // A~F (순번 + 품명 병합)
+    7.5, 5, 5,              // G~I (모델/사양 병합)
+    5, 6,                    // J~K (단위, 수량)
+    7, 5, 5.5,               // L~N (단가 병합)
+    7.5, 6,                  // O~P (공급가 병합)
+    5.5, 5.5,                // Q~R (비고 병합)
+    1,                       // S (구분선)
+    6, 10, 7, 10, 12, 7, 10, 12, 7, 12, // T~AC (원가분석)
+  ]
+  widths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
+
+  const thin = { style: 'thin' as const }
+  const hair = { style: 'hair' as const }
+  const grayBg = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFF3F4F6' } }
+
+  // ── Row 1~2: 제목 ──
+  let r = 1
+  ws.getRow(r).height = 8; r++
+  ws.mergeCells(`A${r}:R${r}`)
+  ws.getCell(`A${r}`).value = name
+  ws.getCell(`A${r}`).font = { size: 16, bold: true }
+  ws.getCell(`A${r}`).alignment = { horizontal: 'left', vertical: 'middle' }
+  ws.getRow(r).height = 28; r++
+
+  // 견적 메타
+  ws.mergeCells(`A${r}:R${r}`)
+  ws.getCell(`A${r}`).value = [`견적일: ${d.quotationDate}`, d.supplier.manager && `담당: ${d.supplier.manager}`].filter(Boolean).join('    |    ')
+  ws.getCell(`A${r}`).font = { size: 8, color: { argb: XL.GRAY500 } }
+  ws.getRow(r).height = 14; r++
+
+  // 구분선
+  ws.getRow(r).height = 4
+  for (let c = 1; c <= 18; c++) ws.getRow(r).getCell(c).border = { bottom: thin }
+  r++
+
+  // ── 컬럼 헤더 (본문 + 원가분석 — 갑지와 동일한 톤) ──
+  ws.mergeCells(`B${r}:F${r}`)
+  ws.mergeCells(`G${r}:I${r}`)
+  ws.mergeCells(`L${r}:N${r}`)
+  ws.mergeCells(`O${r}:P${r}`)
+  ws.mergeCells(`Q${r}:R${r}`)
+  // 본문 헤더 (테두리 있음)
+  const mainHdrs: [string, string][] = [
+    ['A', '순번'], ['B', '품  명'], ['G', '모델/사양'], ['J', '단위'], ['K', '수량'], ['L', '단  가'], ['O', '공 급 가'], ['Q', '비 고'],
+  ]
+  for (const [col, label] of mainHdrs) {
+    const cell = ws.getCell(`${col}${r}`)
+    cell.value = label
+    cell.font = { size: 9, bold: true }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    cell.fill = grayBg
+    cell.border = { top: thin, bottom: thin, left: hair, right: hair }
+  }
+  // 원가분석 헤더 (테두리 없음 — 갑지와 동일)
+  const costHdrs: [string, string][] = [
+    ['T', '구분'], ['U', '반출가'], ['V', 'DC율'], ['W', '매입단가'], ['X', '매입총액'], ['Y', 'MG율'], ['Z', '제안가'], ['AA', '이윤'], ['AB', '장려금%'], ['AC', '장려금'],
+  ]
+  for (const [col, label] of costHdrs) {
+    const cell = ws.getCell(`${col}${r}`)
+    cell.value = label
+    cell.font = { size: 9, bold: true }
+    cell.alignment = { horizontal: 'center', vertical: 'middle' }
+  }
+  ws.getRow(r).height = 24; r++
+  const dataStartRow = r
+
+  // ── 데이터 행 ──
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    ws.getRow(r).height = 20
+    ws.mergeCells(`B${r}:F${r}`)
+    ws.mergeCells(`G${r}:I${r}`)
+    ws.mergeCells(`L${r}:N${r}`)
+    ws.mergeCells(`O${r}:P${r}`)
+    ws.mergeCells(`Q${r}:R${r}`)
+
+    // 본문
+    ws.getCell(`A${r}`).value = i + 1
+    ws.getCell(`B${r}`).value = item.item_name || null
+    ws.getCell(`G${r}`).value = item.specification || null
+    ws.getCell(`J${r}`).value = item.unit || null
+    ws.getCell(`K${r}`).value = item.quantity || null
+
+    if (item.retrieval_price < 0) {
+      ws.getCell(`L${r}`).value = item.retrieval_price
+    } else {
+      ws.getCell(`L${r}`).value = { formula: `ROUNDUP(Z${r},-3)` }
+    }
+    ws.getCell(`O${r}`).value = { formula: `L${r}*K${r}` }
+
+    // 본문 스타일
+    for (const col of ['A', 'B', 'G', 'J', 'K', 'L', 'O', 'Q']) {
+      const cell = ws.getCell(`${col}${r}`)
+      cell.font = { size: 9 }
+      cell.border = { top: hair, bottom: hair, left: col === 'A' ? thin : hair, right: hair }
+      cell.alignment = { vertical: 'middle', horizontal: ['A', 'J', 'K'].includes(col) ? 'center' : ['L', 'O'].includes(col) ? 'right' : 'left' }
+      if (['L', 'O'].includes(col)) cell.numFmt = '#,##0'
+    }
+    ws.getCell(`R${r}`).border = { top: hair, bottom: hair, right: thin }
+
+    // 원가분석
+    ws.getCell(`T${r}`).value = name.includes('장비') ? '장비' : '설치비'
+    ws.getCell(`U${r}`).value = item.retrieval_price || null
+    ws.getCell(`V${r}`).value = item.discount_rate ? item.discount_rate / 100 : null
+    ws.getCell(`Y${r}`).value = item.margin_rate ? item.margin_rate / 100 : null
+    if (item.retrieval_price < 0) {
+      ws.getCell(`W${r}`).value = 0
+      ws.getCell(`X${r}`).value = 0
+      ws.getCell(`Z${r}`).value = item.retrieval_price
+      ws.getCell(`AA${r}`).value = { formula: `O${r}` }
+    } else {
+      ws.getCell(`W${r}`).value = { formula: `U${r}-(U${r}*V${r})` }
+      ws.getCell(`X${r}`).value = { formula: `W${r}*K${r}` }
+      ws.getCell(`Z${r}`).value = { formula: `W${r}+(W${r}*Y${r})` }
+      ws.getCell(`AA${r}`).value = { formula: `O${r}-X${r}` }
+    }
+    ws.getCell(`AB${r}`).value = item.incentive_rate ? item.incentive_rate / 100 : null
+    ws.getCell(`AC${r}`).value = { formula: `X${r}*AB${r}` }
+
+    // 원가분석 스타일 (테두리 없이 값만 — 갑지 템플릿과 동일)
+    for (const col of ['T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'AB', 'AC']) {
+      const cell = ws.getCell(`${col}${r}`)
+      cell.font = { size: 9 }
+      cell.alignment = { vertical: 'middle', horizontal: col === 'T' ? 'center' : 'right' }
+      if (['U', 'W', 'X', 'Z', 'AA', 'AC'].includes(col)) cell.numFmt = '#,##0'
+      if (['V', 'Y', 'AB'].includes(col)) cell.numFmt = '0%'
+    }
+    r++
+  }
+  const lastDataRow = r - 1
+
+  // ── 소계 행 ──
+  ws.getRow(r).height = 26
+  ws.mergeCells(`A${r}:K${r}`)
+  ws.getCell(`A${r}`).value = `${name.replace(' 내역서', '')} 소계`
+  ws.getCell(`A${r}`).font = { size: 10, bold: true }
+  ws.getCell(`A${r}`).alignment = { horizontal: 'right', vertical: 'middle' }
+  ws.getCell(`A${r}`).border = { top: thin, bottom: thin }
+  ws.mergeCells(`L${r}:R${r}`)
+  ws.getCell(`L${r}`).value = { formula: `SUM(O${dataStartRow}:P${lastDataRow})` }
+  ws.getCell(`L${r}`).font = { size: 11, bold: true }
+  ws.getCell(`L${r}`).alignment = { horizontal: 'right', vertical: 'middle' }
+  ws.getCell(`L${r}`).numFmt = '#,##0'
+  ws.getCell(`L${r}`).border = { top: thin, bottom: thin }
+
+  // 이윤/장려금 합계
+  const medBdr = { style: 'medium' as const }
+  ws.getCell(`AA${r}`).value = { formula: `SUM(AA${dataStartRow}:AA${lastDataRow})` }
+  ws.getCell(`AA${r}`).numFmt = '#,##0'
+  ws.getCell(`AA${r}`).font = { size: 9, bold: true }
+  ws.getCell(`AA${r}`).border = { top: medBdr, bottom: medBdr, left: medBdr, right: medBdr }
+  ws.getCell(`AC${r}`).value = { formula: `SUM(AC${dataStartRow}:AC${lastDataRow})` }
+  ws.getCell(`AC${r}`).numFmt = '#,##0'
+  ws.getCell(`AC${r}`).font = { size: 9, bold: true }
+  ws.getCell(`AC${r}`).border = { top: medBdr, bottom: medBdr, left: medBdr, right: medBdr }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayBuffer> {
+  // 템플릿 파일 로드 (간이 견적서와 동일한 템플릿 사용)
+  let buf: ArrayBuffer
+  try {
+    const storageRes = await fetch('/api/quote-template')
+    if (storageRes.ok && storageRes.headers.get('content-type')?.includes('spreadsheet')) {
+      buf = await storageRes.arrayBuffer()
+    } else {
+      throw new Error('Storage 응답 실패')
+    }
+  } catch {
+    const localRes = await fetch('/templates/quote-template.xlsx')
+    buf = await localRes.arrayBuffer()
+  }
+
+  // 원본 drawing XML 보존 (도장 투명 배경 등)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const jszipMod = await import('jszip') as any
+  const JSZip = jszipMod.default || jszipMod
+  const origZip = await JSZip.loadAsync(buf)
+  const origDrawingXml = await origZip.file('xl/drawings/drawing1.xml')?.async('string') ?? null
+  const origDrawingRels = await origZip.file('xl/drawings/_rels/drawing1.xml.rels')?.async('string') ?? null
+  const origMedia: Record<string, Uint8Array> = {}
+  for (const [path, file] of Object.entries(origZip.files)) {
+    if (path.startsWith('xl/media/') && !(file as {dir:boolean}).dir) {
+      origMedia[path] = await (file as {async:(t:string)=>Promise<Uint8Array>}).async('uint8array')
+    }
+  }
+
+  await wb.xlsx.load(buf)
+
+  const ws = wb.getWorksheet('견적서')
+  if (!ws) throw new Error('템플릿에 "견적서" 시트가 없습니다')
+
+  // 갑지 아이템: 장비내역 + 설치비내역 + coverItems
+  const allItems = [
+    { item_name: d.coverEquipLabel.name, specification: d.coverEquipLabel.desc, unit: '식', quantity: 1, unit_price: d.equipTotal, _isFixed: true },
+    { item_name: d.coverInstallLabel.name, specification: d.coverInstallLabel.desc, unit: '식', quantity: 1, unit_price: d.installTotal, _isFixed: true },
+    ...d.coverItems.filter(hasData).map(ci => ({
+      item_name: ci.item_name, specification: ci.specification, unit: ci.unit || '식',
+      quantity: ci.quantity, unit_price: ci.unit_price, _isFixed: false,
+    })),
+  ]
+
+  // 행 삽입: 15행 초과 시 duplicateRow
+  const TEMPLATE_DATA_ROWS = 15
+  const extraRows = Math.max(0, allItems.length - TEMPLATE_DATA_ROWS)
+
+  if (extraRows > 0) {
+    ws.duplicateRow(30, extraRows, true)
+    const oldFooterMerges = [
+      'A31:K31', 'L31:R31', 'A32:K32', 'L32:R32',
+      'A33:K33', 'L33:R33', 'A35:E35', 'A36:R41',
+    ]
+    for (const m of oldFooterMerges) {
+      try { ws.unMergeCells(m) } catch { /* 무시 */ }
+    }
+    for (let i = 0; i < extraRows; i++) {
+      const r = 31 + i
+      ws.mergeCells(`B${r}:F${r}`)
+      ws.mergeCells(`G${r}:I${r}`)
+      ws.mergeCells(`L${r}:N${r}`)
+      ws.mergeCells(`O${r}:P${r}`)
+      ws.mergeCells(`Q${r}:R${r}`)
+    }
+    const lastDataRow = 30 + extraRows
+    const sumRow = 31 + extraRows
+    const vatRow = 32 + extraRows
+    const totalRow = 33 + extraRows
+    const noteLabelRow = 35 + extraRows
+    const noteStartRow = 36 + extraRows
+    const noteEndRow = 41 + extraRows
+    ws.mergeCells(`A${sumRow}:K${sumRow}`)
+    ws.mergeCells(`L${sumRow}:R${sumRow}`)
+    ws.mergeCells(`A${vatRow}:K${vatRow}`)
+    ws.mergeCells(`L${vatRow}:R${vatRow}`)
+    ws.mergeCells(`A${totalRow}:K${totalRow}`)
+    ws.mergeCells(`L${totalRow}:R${totalRow}`)
+    ws.mergeCells(`A${noteLabelRow}:E${noteLabelRow}`)
+    ws.mergeCells(`A${noteStartRow}:R${noteEndRow}`)
+    ws.getCell(`L${sumRow}`).value = { formula: `SUM(O16:P${lastDataRow})` }
+    ws.getCell(`L${vatRow}`).value = { formula: `L${sumRow}*0.1` }
+    ws.getCell(`L${totalRow}`).value = { formula: `SUM(L${sumRow}:R${vatRow})` }
+    ws.getCell('D13').value = { formula: `NUMBERSTRING(L${totalRow},1)` }
+    ws.getCell('M13').value = { formula: `L${totalRow}` }
+  }
+
+  // 헤더 정보 채우기 (간이 견적서와 동일)
+  ws.getCell('A6').value = `${d.receiver.companyName || ''} 귀하`
+  ws.getCell('D7').value = d.receiver.recipientName || ''
+  ws.getCell('M7').value = d.supplier.bizNumber || ''
+  ws.getCell('P7').value = d.supplier.ceoName || ''
+  ws.getCell('D8').value = `${d.deliveryDate || '협의 일정'} / ${d.deliveryPlace || '협의 장소'}`
+  ws.getCell('M8').value = d.supplier.address || ''
+  ws.getCell('D9').value = d.paymentCondition || '협의 조건'
+  ws.getCell('M9').value = d.supplier.managerPhone || ''
+  ws.getCell('D10').value = d.quotationDate || ''
+  ws.getCell('D11').value = d.validUntil || '견적 후 7일'
+  ws.getCell('M11').value = d.supplier.manager || ''
+  ws.getCell('P11').value = d.supplier.managerPhone || ''
+
+  // 특이사항
+  const notesRow = 36 + extraRows
+  if (d.notes) {
+    const notesCell = ws.getCell(`A${notesRow}`)
+    notesCell.value = d.notes
+    notesCell.alignment = { vertical: 'top', wrapText: true }
+  }
+
+  // 기존 데이터 행 초기화 (R16~R30+extraRows) — 본문만, 원가분석은 비워둠
+  const lastDataRow = 30 + extraRows
+  for (let r = 16; r <= lastDataRow; r++) {
+    for (const col of ['A', 'B', 'G', 'J', 'K', 'L', 'O', 'Q']) {
+      ws.getCell(`${col}${r}`).value = null
+    }
+    // 원가분석 영역도 비움 (갑지에는 원가분석 불필요)
+    for (const col of ['T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'AB', 'AC']) {
+      ws.getCell(`${col}${r}`).value = null
+    }
+  }
+
+  // 데이터 행 채우기 (장비/설치비 요약 + coverItems)
+  for (let i = 0; i < allItems.length; i++) {
+    const row = 16 + i
+    const item = allItems[i]
+    ws.getCell(`A${row}`).value = i + 1                          // 순번
+    ws.getCell(`B${row}`).value = item.item_name || null         // 품명
+    ws.getCell(`G${row}`).value = item.specification || null     // 모델/사양
+    ws.getCell(`J${row}`).value = item.unit || null              // 단위
+    ws.getCell(`K${row}`).value = item.quantity || null          // 수량
+    ws.getCell(`L${row}`).value = item.unit_price || null        // 단가 (직접 값)
+    ws.getCell(`O${row}`).value = { formula: `L${row}*K${row}` } // 공급가
+    // 원가분석 안 넣음 (갑지이므로)
+  }
+
+  // 합계 행 수식
+  const sumRow = 31 + extraRows
+  // 원가분석 합계는 불필요하므로 생략
+
+  // 테두리 보정
+  const thinBorder = { style: 'thin' as const }
+  const hairBorder = { style: 'hair' as const }
+  const vatRow = sumRow + 1
+  const totalRow = sumRow + 2
+  for (let r = 16; r <= lastDataRow; r++) {
+    const cellA = ws.getCell(`A${r}`)
+    cellA.border = { ...cellA.border, left: thinBorder }
+    const cellR = ws.getCell(`R${r}`)
+    cellR.border = { ...cellR.border, right: thinBorder }
+  }
+  ws.getCell(`R${sumRow}`).border = { ...ws.getCell(`R${sumRow}`).border, right: thinBorder, top: thinBorder, bottom: hairBorder }
+  ws.getCell(`R${vatRow}`).border = { ...ws.getCell(`R${vatRow}`).border, right: thinBorder, top: hairBorder, bottom: hairBorder }
+  ws.getCell(`R${totalRow}`).border = { ...ws.getCell(`R${totalRow}`).border, right: thinBorder, top: hairBorder, bottom: thinBorder }
+
+  const noteStartRow = totalRow + 3
+  const noteEndRow = totalRow + 8
+  for (let r = noteStartRow; r <= noteEndRow; r++) {
+    const cellR = ws.getCell(`R${r}`)
+    if (r === noteEndRow) {
+      cellR.border = { ...cellR.border, right: thinBorder, bottom: thinBorder }
+      for (let c = 1; c <= 17; c++) {
+        const cell = ws.getCell(r, c)
+        cell.border = { ...cell.border, bottom: thinBorder }
+      }
+    } else {
+      cellR.border = { ...cellR.border, right: thinBorder }
+    }
+  }
+
+  // 워크북 출력 → drawing XML 복원
+  const outArrayBuf = await wb.xlsx.writeBuffer()
+  if (origDrawingXml) {
+    const outZip = await JSZip.loadAsync(outArrayBuf)
+    outZip.file('xl/drawings/drawing1.xml', origDrawingXml)
+    if (origDrawingRels) {
+      outZip.file('xl/drawings/_rels/drawing1.xml.rels', origDrawingRels)
+    }
+    for (const [p, data] of Object.entries(origMedia)) {
+      outZip.file(p, data)
+    }
+    return await outZip.generateAsync({ type: 'arraybuffer' })
+  }
+  return outArrayBuf
+}
+
+/* ─────────────────────────────────────────────────────────
+   상세 견적서 — 갑지 시트 (구버전, 참조용 보존)
    ───────────────────────────────────────────────────────── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function xlBuildCoverSheet(wb: any, d: QuoteExportData, logoId: number | null, stampId: number | null) {
@@ -1525,16 +1897,8 @@ export async function buildQuoteExcelBuffer(data: QuoteExportData): Promise<Arra
   if (!validEquip.length && !validInstall.length) return null
 
   if (data.quoteType === 'detailed') {
-    xlBuildCoverSheet(wb, data, logoId, stampId)
-    if (validEquip.length) {
-      const ws = xlCreateItemsWs(wb, '장비 내역서')
-      xlRenderItemsTable(ws, validEquip, data, 1, true)
-    }
-    if (validInstall.length) {
-      const ws = xlCreateItemsWs(wb, '설치비 내역서')
-      xlRenderItemsTable(ws, validInstall, data, 1, true)
-    }
-    return await wb.xlsx.writeBuffer() as ArrayBuffer
+    // 상세 견적서: 갑지 + 장비내역서 + 설치비내역서 (모두 템플릿 기반)
+    return await xlBuildDetailedAllSheets(wb, data, validEquip, validInstall)
   } else {
     return await xlBuildSimpleFromTemplate(wb, data)
   }
