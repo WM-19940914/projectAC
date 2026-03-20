@@ -10,7 +10,9 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next()
 
   // API 라우트에만 JSON UTF-8 헤더 설정 (페이지에 설정하면 HTML이 깨짐)
-  if (request.nextUrl.pathname.startsWith('/api/')) {
+  // 파일 업로드/다운로드 API는 제외 (Content-Type 덮어쓰면 multipart/form-data가 깨짐)
+  const p = request.nextUrl.pathname
+  if (p.startsWith('/api/') && !p.startsWith('/api/quote-template') && !p.startsWith('/api/excel-to-pdf')) {
     response.headers.set('Content-Type', 'application/json; charset=utf-8')
   }
 

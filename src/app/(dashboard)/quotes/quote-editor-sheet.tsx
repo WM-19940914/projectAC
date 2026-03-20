@@ -12,6 +12,7 @@ import {
   Plus, Trash2, PanelRightOpen, PanelRightClose,
   Package, Wrench, Pencil, Check, Loader2, Building2, PenLine, ImageIcon,
   Search, List, Eraser, X as XIcon, FileText, Download, FileSpreadsheet,
+  Upload, Settings2,
 } from "lucide-react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -120,11 +121,28 @@ function emptyRow(): ItemRow {
 
 function recalcPricing(row: ItemRow, roundUp = true): ItemRow {
   const next = { ...row }
+
+  if (next.retrieval_price < 0) {
+    // 음수 반출가 = 단위절사/할인 항목: 실제 매입이 아니므로 매입=0, 금액만 차감
+    next.purchase_unit_price = 0
+    next.purchase_amount = 0
+    next.proposed_price = next.retrieval_price
+    next.unit_price = next.retrieval_price
+    next.amount = next.quantity * next.unit_price
+    next.profit = next.amount // 매입 없으므로 이윤 = 금액 그대로
+    return next
+  }
+
   next.purchase_unit_price = Math.round(next.retrieval_price * (1 - next.discount_rate / 100))
   next.purchase_amount = next.purchase_unit_price * next.quantity
   // 제안가 = 매입단가 + (매입단가 × MG율%) — 엑셀 템플릿 기준
   next.proposed_price = Math.round(next.purchase_unit_price + (next.purchase_unit_price * next.margin_rate / 100))
-  next.unit_price = roundUp ? Math.ceil(next.proposed_price / 1000) * 1000 : next.proposed_price
+  // 1000원 단위 올림
+  if (roundUp && next.proposed_price !== 0) {
+    next.unit_price = Math.ceil(next.proposed_price / 1000) * 1000
+  } else {
+    next.unit_price = next.proposed_price
+  }
   next.amount = next.quantity * next.unit_price
   next.profit = next.amount - next.purchase_amount
   return next
@@ -562,7 +580,7 @@ export default function QuoteEditorSheet({
       i.specification.trim() ||
       i.unit.trim() ||
       i.memo.trim() ||
-      i.quantity > 0 ||
+      i.quantity !== 0 ||
       i.unit_price > 0 ||
       i.retrieval_price > 0
     const validEquip = equipItems.filter(hasData)
@@ -854,7 +872,7 @@ export default function QuoteEditorSheet({
         {/* 헤더 */}
         <SheetHeader className={`px-6 pt-6 ${activeTab === "simple" ? "pb-4" : "pb-0"} border-b shrink-0`}>
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex items-center gap-3">
               <SheetTitle className="sr-only">견적서 편집</SheetTitle>
               <SheetDescription className="sr-only">견적서 편집</SheetDescription>
               {/* 간이 / 상세 메인 토글 (클릭 = 타입 설정 + 뷰 이동) */}
@@ -903,6 +921,49 @@ export default function QuoteEditorSheet({
                     <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-700">
                       <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
                     </span>
+                  )}
+                </button>
+              </div>
+              {/* Excel / PDF 내보내기 */}
+              <div className="flex items-center gap-1.5 ml-3">
+                <button
+                  onClick={() => {
+                    const exportData = buildExportData()
+                    if (!exportData) return
+                    exportQuoteExcel(exportData).catch((e) => console.error("Excel 내보내기 오류:", e))
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 transition-colors"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5" /> Excel 내보내기
+                </button>
+                <button
+                  disabled={pdfExporting}
+                  onClick={async () => {
+                    const exportData = buildExportData()
+                    if (!exportData) return
+                    setPdfExporting(true)
+                    try {
+                      const { buildQuoteExcelBuffer } = await import("@/lib/quote-export")
+                      const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
+                      if (!xlsxBuffer) return
+                      const res = await fetch("/api/excel-to-pdf", { method: "POST", body: xlsxBuffer })
+                      if (!res.ok) throw new Error(await res.text())
+                      const pdfBlob = await res.blob()
+                      const url = URL.createObjectURL(pdfBlob)
+                      const a = document.createElement("a")
+                      a.href = url
+                      a.download = `견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}.pdf`
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                      URL.revokeObjectURL(url)
+                    } catch (e) { console.error("PDF 내보내기 오류:", e) }
+                    finally { setPdfExporting(false) }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${pdfExporting ? "bg-red-50/50 text-red-400 border-red-200 cursor-wait" : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:border-red-300"}`}
+                >
+                  {pdfExporting ? (
+                    <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 변환중...</>
+                  ) : (
+                    <><FileText className="h-3.5 w-3.5" /> PDF 내보내기</>
                   )}
                 </button>
               </div>
@@ -1577,12 +1638,12 @@ export default function QuoteEditorSheet({
                           <input type="text" value={row.unit} onChange={(e) => updateItem(setCoverItems, idx, "unit", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-700" placeholder="단위" />
                         </div>
                         <div className="px-1 border-r border-gray-200 flex items-center">
-                          <input type="text" inputMode="numeric" value={row.quantity || ""} onChange={(e) => updateItem(setCoverItems, idx, "quantity", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-700 tabular-nums" placeholder="0" />
+                          <input type="text" inputMode="text" value={row.quantity || ""} onChange={(e) => updateItem(setCoverItems, idx, "quantity", e.target.value)} className="w-full text-center bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-700 tabular-nums" placeholder="0" />
                         </div>
                         <div className="px-1 border-r border-gray-200 flex items-center">
-                          <input type="text" inputMode="numeric" value={row.unit_price || ""} onChange={(e) => updateItem(setCoverItems, idx, "unit_price", e.target.value)} className="w-full text-right bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 text-gray-900 tabular-nums" placeholder="0" />
+                          <input type="text" inputMode="numeric" value={row.unit_price || ""} onChange={(e) => updateItem(setCoverItems, idx, "unit_price", e.target.value)} className={`w-full text-right bg-transparent border-0 focus:outline-none focus:ring-1 focus:ring-slate-300 rounded px-1 py-1 tabular-nums ${row.quantity < 0 ? "text-soft-blush font-medium" : "text-gray-900"}`} placeholder="0" />
                         </div>
-                        <div className="px-2 py-2.5 text-right border-r border-gray-200 tabular-nums font-medium text-gray-900 bg-gray-50/30">
+                        <div className={`px-2 py-2.5 text-right border-r border-gray-200 tabular-nums font-medium bg-gray-50/30 ${row.quantity < 0 ? "text-soft-blush" : "text-gray-900"}`}>
                           {formatCurrency(row.amount)}
                         </div>
                         <div className="flex justify-center items-center">
@@ -1914,47 +1975,54 @@ export default function QuoteEditorSheet({
 
         {/* 하단 액션 바 */}
         <div className="px-6 py-2.5 border-t bg-white shrink-0 flex items-center justify-between">
-          {/* 좌측: Excel / 우측에 PDF */}
           <div className="flex items-center gap-1.5">
+            {/* 템플릿 다운로드 버튼 */}
             <button
               onClick={() => {
-                const exportData = buildExportData()
-                if (!exportData) return
-                exportQuoteExcel(exportData).catch((e) => console.error("Excel 내보내기 오류:", e))
+                // 현재 템플릿 엑셀 파일 다운로드
+                const a = document.createElement("a")
+                a.href = "/api/quote-template"
+                a.download = "quote-template.xlsx"
+                document.body.appendChild(a); a.click(); document.body.removeChild(a)
               }}
               className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-700 hover:border-slate-300 transition-colors"
+              title="현재 견적서 템플릿 다운로드"
             >
-              <FileSpreadsheet className="h-3 w-3" /> Excel
+              <Settings2 className="h-3 w-3" /> Excel 템플릿 받기
             </button>
+
+            {/* 템플릿 업로드 버튼 */}
             <button
-              disabled={pdfExporting}
-              onClick={async () => {
-                const exportData = buildExportData()
-                if (!exportData) return
-                setPdfExporting(true)
-                try {
-                  const { buildQuoteExcelBuffer } = await import("@/lib/quote-export")
-                  const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
-                  if (!xlsxBuffer) return
-                  const res = await fetch("/api/excel-to-pdf", { method: "POST", body: xlsxBuffer })
-                  if (!res.ok) throw new Error(await res.text())
-                  const pdfBlob = await res.blob()
-                  const url = URL.createObjectURL(pdfBlob)
-                  const a = document.createElement("a")
-                  a.href = url
-                  a.download = `견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}.pdf`
-                  document.body.appendChild(a); a.click(); document.body.removeChild(a)
-                  URL.revokeObjectURL(url)
-                } catch (e) { console.error("PDF 내보내기 오류:", e) }
-                finally { setPdfExporting(false) }
+              onClick={() => {
+                // 숨겨진 file input 클릭
+                const input = document.createElement("input")
+                input.type = "file"
+                input.accept = ".xlsx"
+                input.onchange = async (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0]
+                  if (!file) return
+                  if (!confirm("현재 템플릿을 이 파일로 교체합니다.\n계속하시겠습니까?")) return
+                  const formData = new FormData()
+                  formData.append("file", file)
+                  try {
+                    const res = await fetch("/api/quote-template", { method: "POST", body: formData })
+                    const data = await res.json()
+                    if (res.ok) {
+                      alert("템플릿이 업데이트되었습니다!")
+                    } else {
+                      alert(`업로드 실패: ${data.error}`)
+                    }
+                  } catch (err) {
+                    console.error("템플릿 업로드 오류:", err)
+                    alert("템플릿 업로드 중 오류가 발생했습니다")
+                  }
+                }
+                input.click()
               }}
-              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border transition-colors ${pdfExporting ? "border-sky-aqua/50 text-sky-aqua bg-sky-aqua/5 cursor-wait" : "border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-700 hover:border-slate-300"}`}
+              className="flex items-center gap-1 px-2.5 py-1 text-[11px] rounded border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-slate-700 hover:border-slate-300 transition-colors"
+              title="수정한 템플릿 엑셀 업로드"
             >
-              {pdfExporting ? (
-                <><svg className="animate-spin h-3 w-3" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> PDF 변환중...</>
-              ) : (
-                <><Download className="h-3 w-3" /> PDF</>
-              )}
+              <Upload className="h-3 w-3" /> Excel 템플릿 올리기
             </button>
           </div>
           {/* 우측: 저장 상태 */}
@@ -2598,11 +2666,11 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
               <CellInput value={item.specification} onChange={(v) => updateItem(idx, "specification", v)} placeholder="모델/사양" center row={idx} col={1} />
               <CellInput value={item.unit} onChange={(v) => updateItem(idx, "unit", v)} placeholder="식" center row={idx} col={2} />
               <CellNumber value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} row={idx} col={3} />
-              <div className="flex items-center justify-end px-2 text-xs text-gray-900 tabular-nums bg-gray-50">
-                {item.unit_price > 0 ? item.unit_price.toLocaleString() : ""}
+              <div className={`flex items-center justify-end px-2 text-xs tabular-nums bg-gray-50 ${item.unit_price < 0 ? "text-soft-blush font-medium" : "text-gray-900"}`}>
+                {item.unit_price !== 0 ? item.unit_price.toLocaleString() : ""}
               </div>
-              <div className="flex items-center justify-end px-2 text-xs text-gray-900 tabular-nums bg-gray-50">
-                {item.quantity * item.unit_price > 0 ? (item.quantity * item.unit_price).toLocaleString() : ""}
+              <div className={`flex items-center justify-end px-2 text-xs tabular-nums bg-gray-50 ${item.quantity * item.unit_price < 0 ? "text-soft-blush font-medium" : "text-gray-900"}`}>
+                {item.quantity * item.unit_price !== 0 ? (item.quantity * item.unit_price).toLocaleString() : ""}
               </div>
               <CellInput value={item.memo} onChange={(v) => updateItem(idx, "memo", v)} placeholder="" center row={idx} col={4} />
             </div>
@@ -2719,18 +2787,18 @@ function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched
             </div>
             <CellNumber value={item.retrieval_price} onChange={(v) => updateItem(idx, "retrieval_price", v)} row={idx} col={0} />
             <CellPercent value={item.discount_rate} onChange={(v) => updateItem(idx, "discount_rate", v)} />
-            <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_unit_price > 0 ? item.purchase_unit_price.toLocaleString() : ""}</div>
-            <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_amount > 0 ? item.purchase_amount.toLocaleString() : ""}</div>
+            <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_unit_price !== 0 ? item.purchase_unit_price.toLocaleString() : ""}</div>
+            <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_amount !== 0 ? item.purchase_amount.toLocaleString() : ""}</div>
             <CellPercent value={item.margin_rate} onChange={(v) => updateItem(idx, "margin_rate", v)} />
-            <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.unit_price > 0 ? item.unit_price.toLocaleString() : ""}</div>
+            <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.unit_price !== 0 ? item.unit_price.toLocaleString() : ""}</div>
             <div className={`flex items-center justify-end px-1 text-xs font-semibold tabular-nums bg-gray-100/60 ${item.profit < 0 ? "text-red-500" : "text-green-600"}`}>{item.profit !== 0 ? item.profit.toLocaleString() : ""}</div>
             <CellPercent value={item.incentive_rate} onChange={(v) => updateItem(idx, "incentive_rate", v)} />
-            <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_amount > 0 && item.incentive_rate > 0 ? Math.round(item.purchase_amount * item.incentive_rate / 100).toLocaleString() : ""}</div>
+            <div className="flex items-center justify-end px-1 text-xs text-gray-900 tabular-nums bg-gray-100/60">{item.purchase_amount !== 0 && item.incentive_rate > 0 ? Math.round(item.purchase_amount * item.incentive_rate / 100).toLocaleString() : ""}</div>
           </div>
         )
       })}
       {/* 열 합계 */}
-      {items.some((r) => r.retrieval_price > 0) && (() => {
+      {items.some((r) => r.retrieval_price !== 0) && (() => {
         const sumRetrieval = items.reduce((s, r) => s + r.retrieval_price, 0)
         const sumPurchaseUnit = items.reduce((s, r) => s + r.purchase_unit_price, 0)
         const sumPurchaseAmt = items.reduce((s, r) => s + r.purchase_amount, 0)
@@ -2739,15 +2807,15 @@ function PricingRows({ items, updateItem, roundUp, onToggleRoundUp, isRowMatched
         return (
           <div className={`grid ${PRICING_COLS} border-t-2 border-gray-300 bg-gray-50 ${ROW_H}`}>
             <div className="flex items-center justify-center text-[10px] font-bold text-gray-500">Σ</div>
-            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumRetrieval > 0 ? sumRetrieval.toLocaleString() : ""}</div>
+            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumRetrieval !== 0 ? sumRetrieval.toLocaleString() : ""}</div>
             <div />
-            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumPurchaseUnit > 0 ? sumPurchaseUnit.toLocaleString() : ""}</div>
-            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumPurchaseAmt > 0 ? sumPurchaseAmt.toLocaleString() : ""}</div>
+            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumPurchaseUnit !== 0 ? sumPurchaseUnit.toLocaleString() : ""}</div>
+            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumPurchaseAmt !== 0 ? sumPurchaseAmt.toLocaleString() : ""}</div>
             <div />
-            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumUnitPrice > 0 ? sumUnitPrice.toLocaleString() : ""}</div>
+            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{sumUnitPrice !== 0 ? sumUnitPrice.toLocaleString() : ""}</div>
             <div className={`flex items-center justify-end px-1 text-xs font-bold tabular-nums ${sumProfit < 0 ? "text-red-500" : "text-green-600"}`}>{sumProfit !== 0 ? sumProfit.toLocaleString() : ""}</div>
             <div />
-            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{(() => { const s = items.reduce((a, r) => a + (r.purchase_amount > 0 && r.incentive_rate > 0 ? Math.round(r.purchase_amount * r.incentive_rate / 100) : 0), 0); return s > 0 ? s.toLocaleString() : ""; })()}</div>
+            <div className="flex items-center justify-end px-1 text-xs font-semibold text-gray-900 tabular-nums">{(() => { const s = items.reduce((a, r) => a + (r.purchase_amount !== 0 && r.incentive_rate > 0 ? Math.round(r.purchase_amount * r.incentive_rate / 100) : 0), 0); return s !== 0 ? s.toLocaleString() : ""; })()}</div>
           </div>
         )
       })()}
@@ -2825,17 +2893,31 @@ function CellInput({ value, onChange, placeholder, center, row, col }: {
 
 function CellNumber({ value, onChange, row, col }: { value: number; onChange: (v: number) => void; row?: number; col?: number }) {
   const ref = useRef<HTMLInputElement>(null)
-  const [displayVal, setDisplayVal] = useState(value > 0 ? value.toLocaleString() : "")
-  useEffect(() => { setDisplayVal(value > 0 ? value.toLocaleString() : "") }, [value])
+  // 음수도 표시 (0이면 빈칸)
+  const fmt = (v: number) => v !== 0 ? v.toLocaleString() : ""
+  const [displayVal, setDisplayVal] = useState(fmt(value))
+  useEffect(() => { setDisplayVal(fmt(value)) }, [value])
   return (
-    <input ref={ref} type="text" inputMode="numeric"
+    <input ref={ref} type="text" inputMode="text"
       value={displayVal}
       data-row={row} data-col={col}
       onChange={(e) => {
-        const raw = e.target.value.replace(/[^0-9]/g, "")
-        const formatted = raw ? Number(raw).toLocaleString() : ""
-        setDisplayVal(formatted)
-        onChange(Number(raw) || 0)
+        const text = e.target.value
+        // "-"만 입력 중인 경우 → 그대로 표시, 아직 onChange 호출 안 함
+        if (text === "-" || text === "-,") {
+          setDisplayVal("-")
+          return
+        }
+        // 숫자와 마이너스만 남김 (맨 앞 -는 유지)
+        const raw = text.replace(/[^0-9\-]/g, "").replace(/(?!^)-/g, "")
+        const num = Number(raw)
+        if (raw === "" || isNaN(num)) {
+          setDisplayVal("")
+          onChange(0)
+        } else {
+          setDisplayVal(num.toLocaleString())
+          onChange(num)
+        }
       }}
       onFocus={() => { setTimeout(() => ref.current?.select(), 0) }}
       className="w-full h-full px-2 text-xs text-right bg-white border-0 focus:outline-none focus:ring-1 focus:ring-gray-300 tabular-nums" />

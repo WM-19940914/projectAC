@@ -100,7 +100,7 @@ const TROP_TEAL_BG: [number, number, number] = [228, 244, 245] // tropical-teal/
 
 // 유효한 데이터가 있는 행인지 판단
 function hasData(r: ItemRow): boolean {
-  return !!(r.item_name.trim() || r.specification.trim() || r.unit.trim() || r.quantity > 0 || r.unit_price > 0 || r.retrieval_price > 0)
+  return !!(r.item_name.trim() || r.specification.trim() || r.unit.trim() || r.quantity !== 0 || r.unit_price > 0 || r.retrieval_price > 0)
 }
 
 // 숫자 → 천단위 콤마 문자열
@@ -410,7 +410,7 @@ function renderItemsTable(doc: jsPDF, startY: number, sectionTitle: string, item
       r.item_name,
       r.specification,
       r.unit,
-      r.quantity > 0 ? fmt(r.quantity) : "",
+      r.quantity !== 0 ? fmt(r.quantity) : "",
       r.unit_price > 0 ? fmt(r.unit_price) : "",
       r.amount > 0 ? fmt(r.amount) : "",
     ]),
@@ -645,7 +645,7 @@ function renderCoverPage(doc: jsPDF, data: QuoteExportData, logoData: string | n
       r.item_name,
       r.specification,
       r.unit,
-      r.quantity > 0 ? fmt(r.quantity) : "",
+      r.quantity !== 0 ? fmt(r.quantity) : "",
       r.unit_price > 0 ? fmt(r.unit_price) : "",
       r.amount > 0 ? fmt(r.amount) : "",
       r.memo || "",
@@ -798,7 +798,7 @@ function renderItemsPage(doc: jsPDF, title: string, items: ItemRow[], subtotal: 
       r.item_name,
       r.specification,
       r.unit,
-      r.quantity > 0 ? fmt(r.quantity) : "",
+      r.quantity !== 0 ? fmt(r.quantity) : "",
       r.unit_price > 0 ? fmt(r.unit_price) : "",
       r.amount > 0 ? fmt(r.amount) : "",
     ]),
@@ -1246,9 +1246,20 @@ function xlBuildCoverSheet(wb: any, d: QuoteExportData, logoId: number | null, s
    ───────────────────────────────────────────────────────── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<ArrayBuffer> {
-  // 템플릿 파일 로드
-  const res = await fetch('/templates/quote-template.xlsx')
-  const buf = await res.arrayBuffer()
+  // 템플릿 파일 로드 (Supabase Storage → 로컬 폴백)
+  let buf: ArrayBuffer
+  try {
+    const storageRes = await fetch('/api/quote-template')
+    if (storageRes.ok && storageRes.headers.get('content-type')?.includes('spreadsheet')) {
+      buf = await storageRes.arrayBuffer()
+    } else {
+      throw new Error('Storage 응답 실패')
+    }
+  } catch {
+    // API 실패 시 로컬 파일 폴백
+    const localRes = await fetch('/templates/quote-template.xlsx')
+    buf = await localRes.arrayBuffer()
+  }
 
   // ── 원본 템플릿의 drawing XML 보존 ──
   // ExcelJS가 로드/저장 과정에서 <a:clrChange> (도장 투명 배경) 등
@@ -1406,11 +1417,19 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<A
     ws.getCell(`V${row}`).value = item.discount_rate ? item.discount_rate / 100 : null        // DC율 (45 → 0.45, 셀 포맷 0%)
     ws.getCell(`Y${row}`).value = item.margin_rate ? item.margin_rate / 100 : null            // MG율 (10 → 0.10, 셀 포맷 0%)
 
-    // 원가분석 수식 — sharedFormula 깨짐 방지를 위해 명시적으로 설정
-    ws.getCell(`W${row}`).value = { formula: `U${row}-(U${row}*V${row})` }     // 매입단가
-    ws.getCell(`X${row}`).value = { formula: `W${row}*K${row}` }               // 매입총액
-    ws.getCell(`Z${row}`).value = { formula: `W${row}+(W${row}*Y${row})` }     // 제안가
-    ws.getCell(`AA${row}`).value = { formula: `O${row}-X${row}` }              // 이윤
+    if (item.retrieval_price < 0) {
+      // 음수 반출가 = 단위절사/할인 항목: 매입 없음, 금액만 차감
+      ws.getCell(`W${row}`).value = 0                                            // 매입단가 = 0
+      ws.getCell(`X${row}`).value = 0                                            // 매입총액 = 0
+      ws.getCell(`Z${row}`).value = item.retrieval_price                         // 제안가 = 반출가 그대로
+      ws.getCell(`AA${row}`).value = { formula: `O${row}` }                      // 이윤 = 공급가 (매입 없으므로)
+    } else {
+      // 원가분석 수식 — sharedFormula 깨짐 방지를 위해 명시적으로 설정
+      ws.getCell(`W${row}`).value = { formula: `U${row}-(U${row}*V${row})` }     // 매입단가
+      ws.getCell(`X${row}`).value = { formula: `W${row}*K${row}` }               // 매입총액
+      ws.getCell(`Z${row}`).value = { formula: `W${row}+(W${row}*Y${row})` }     // 제안가
+      ws.getCell(`AA${row}`).value = { formula: `O${row}-X${row}` }              // 이윤
+    }
     ws.getCell(`AB${row}`).value = item.incentive_rate ? item.incentive_rate / 100 : null  // 장려금% (6 → 0.06, 셀 포맷 0%)
     ws.getCell(`AC${row}`).value = { formula: `X${row}*AB${row}` }             // 장려금 금액
   }
