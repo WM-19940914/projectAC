@@ -925,18 +925,27 @@ export default function QuoteEditorSheet({
                   )}
                 </button>
               </div>
-              {/* Excel / PDF 내보내기 */}
-              <div className="flex items-center gap-1.5 ml-3">
+              {/* Excel / PDF / 이미지 내보내기 — 아이콘 중심 버튼 */}
+              <div className="flex items-center gap-2 ml-3">
+                {/* Excel 내보내기 */}
                 <button
                   onClick={() => {
                     const exportData = buildExportData()
                     if (!exportData) return
                     exportQuoteExcel(exportData).catch((e) => console.error("Excel 내보내기 오류:", e))
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 transition-colors"
+                  className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors group"
+                  title="Excel 내보내기"
                 >
-                  <FileSpreadsheet className="h-3.5 w-3.5" /> Excel 내보내기
+                  <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none">
+                    <path d="M28 4H18v24h10a2 2 0 002-2V6a2 2 0 00-2-2z" fill="#21A366"/>
+                    <path d="M18 4H6a2 2 0 00-2 2v20a2 2 0 002 2h12V4z" fill="#107C41"/>
+                    <path d="M22 10h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2z" fill="#fff" opacity=".6"/>
+                    <path d="M7.5 10l2.7 6-2.7 6h2.4l1.6-3.8L13.1 22h2.4l-2.7-6 2.7-6h-2.4l-1.6 3.8L9.9 10H7.5z" fill="#fff"/>
+                  </svg>
+                  <span className="text-[9px] text-gray-400 group-hover:text-gray-600">내보내기</span>
                 </button>
+                {/* PDF 내보내기 */}
                 <button
                   disabled={pdfExporting}
                   onClick={async () => {
@@ -959,14 +968,22 @@ export default function QuoteEditorSheet({
                     } catch (e) { console.error("PDF 내보내기 오류:", e) }
                     finally { setPdfExporting(false) }
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${pdfExporting ? "bg-red-50/50 text-red-400 border-red-200 cursor-wait" : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100 hover:border-red-300"}`}
+                  className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border transition-colors group ${pdfExporting ? "opacity-50 cursor-wait border-gray-200" : "border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}
+                  title="PDF 내보내기"
                 >
                   {pdfExporting ? (
-                    <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 변환중...</>
+                    <svg className="animate-spin w-6 h-6 text-red-400" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                   ) : (
-                    <><FileText className="h-3.5 w-3.5" /> PDF 내보내기</>
+                    <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none">
+                      <path d="M26 2H10a2 2 0 00-2 2v4H6a2 2 0 00-2 2v12a2 2 0 002 2h2v4a2 2 0 002 2h16a2 2 0 002-2V4a2 2 0 00-2-2z" fill="#E5E7EB"/>
+                      <path d="M6 10h18v12H6z" fill="#EF4444"/>
+                      <text x="15" y="20" textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="Arial">PDF</text>
+                      <path d="M22 2l6 6h-4a2 2 0 01-2-2V2z" fill="#D1D5DB"/>
+                    </svg>
                   )}
+                  <span className="text-[9px] text-gray-400 group-hover:text-gray-600">{pdfExporting ? "변환중" : "내보내기"}</span>
                 </button>
+                {/* 이미지(PNG) 내보내기 */}
                 <button
                   disabled={pngExporting}
                   onClick={async () => {
@@ -974,15 +991,12 @@ export default function QuoteEditorSheet({
                     if (!exportData) return
                     setPngExporting(true)
                     try {
-                      // 1) Excel 버퍼 생성
                       const { buildQuoteExcelBuffer } = await import("@/lib/quote-export")
                       const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
                       if (!xlsxBuffer) return
-                      // 2) Excel → PDF 변환 (검증된 서버 API)
                       const pdfRes = await fetch("/api/excel-to-pdf", { method: "POST", body: xlsxBuffer })
                       if (!pdfRes.ok) throw new Error(await pdfRes.text())
                       const pdfArrayBuf = await pdfRes.arrayBuffer()
-                      // 3) PDF → PNG (pdf.js CDN 로드 → canvas 렌더링)
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       let pdfjsLib = (window as any)["pdfjs-dist/build/pdf"]
                       if (!pdfjsLib) {
@@ -998,7 +1012,7 @@ export default function QuoteEditorSheet({
                       pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
                       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfArrayBuf) }).promise
                       const page = await pdf.getPage(1)
-                      const scale = 3 // 고해상도
+                      const scale = 3
                       const viewport = page.getViewport({ scale })
                       const canvas = document.createElement("canvas")
                       canvas.width = viewport.width
@@ -1007,7 +1021,6 @@ export default function QuoteEditorSheet({
                       ctx.fillStyle = "#FFFFFF"
                       ctx.fillRect(0, 0, canvas.width, canvas.height)
                       await page.render({ canvasContext: ctx, viewport }).promise
-                      // 4) Canvas → PNG 다운로드
                       canvas.toBlob((blob) => {
                         if (!blob) return
                         const url = URL.createObjectURL(blob)
@@ -1020,13 +1033,20 @@ export default function QuoteEditorSheet({
                     } catch (e) { console.error("PNG 내보내기 오류:", e) }
                     finally { setPngExporting(false) }
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${pngExporting ? "bg-blue-50/50 text-blue-400 border-blue-200 cursor-wait" : "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 hover:border-blue-300"}`}
+                  className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border transition-colors group ${pngExporting ? "opacity-50 cursor-wait border-gray-200" : "border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}
+                  title="이미지(PNG) 내보내기"
                 >
                   {pngExporting ? (
-                    <><svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> 변환중...</>
+                    <svg className="animate-spin w-6 h-6 text-blue-400" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                   ) : (
-                    <><ImageIcon className="h-3.5 w-3.5" /> 이미지 내보내기</>
+                    <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none">
+                      <path d="M26 2H10a2 2 0 00-2 2v4H6a2 2 0 00-2 2v12a2 2 0 002 2h2v4a2 2 0 002 2h16a2 2 0 002-2V4a2 2 0 00-2-2z" fill="#E5E7EB"/>
+                      <path d="M6 10h18v12H6z" fill="#3B82F6"/>
+                      <text x="15" y="20" textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="Arial">PNG</text>
+                      <path d="M22 2l6 6h-4a2 2 0 01-2-2V2z" fill="#D1D5DB"/>
+                    </svg>
                   )}
+                  <span className="text-[9px] text-gray-400 group-hover:text-gray-600">{pngExporting ? "변환중" : "내보내기"}</span>
                 </button>
               </div>
             </div>

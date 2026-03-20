@@ -16,10 +16,14 @@ import type { User } from "@supabase/supabase-js"
 /** 사용자 프로필 타입 */
 interface Profile {
   id: string
-  name: string
+  full_name: string
   email: string
   role: "admin" | "sales" | "viewer"
+  phone: string | null
+  avatar_url: string | null
+  is_active: boolean
   created_at: string
+  updated_at: string
 }
 
 /** 인증 컨텍스트 타입 */
@@ -34,6 +38,7 @@ interface AuthContextType {
     name: string
   ) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
+  refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -138,6 +143,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null }
   }
 
+  /** 프로필 새로고침 (아바타 변경 등) */
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfile(user.id)
+    }
+  }
+
   /** 로그아웃 */
   const signOut = async () => {
     await supabase.auth.signOut()
@@ -149,7 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, profile, loading, signIn, signUp, signOut }}
+      value={{ user, profile, loading, signIn, signUp, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

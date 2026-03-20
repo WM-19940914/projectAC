@@ -1094,29 +1094,40 @@ async function xlBuildDetailedAllSheets(wb: any, d: QuoteExportData, validEquip:
   const wb2 = new ExcelJS2.Workbook()
   await wb2.xlsx.load(coverBuf)
 
+  // 갑지 시트 페이지 나누기 미리보기
+  const coverWs = wb2.getWorksheet('견적서')
+  if (coverWs) {
+    coverWs.views = [{ showGridLines: false, style: 'pageBreakPreview' }]
+  }
+
+  // 로고 이미지 로드 → wb2에 추가
+  const logoDataUrl = d.logoUrl ? await loadImageDataUrl(d.logoUrl) : null
+  const logoId2 = xlAddImg(wb2, logoDataUrl)
+
   // 내역서 시트 생성 (갑지와 이질감 없는 깔끔한 스타일)
-  if (validEquip.length) xlBuildItemSheet(wb2, '장비 내역서', validEquip, d)
-  if (validInstall.length) xlBuildItemSheet(wb2, '설치비 내역서', validInstall, d)
+  if (validEquip.length) xlBuildItemSheet(wb2, '장비 내역서', validEquip, d, logoId2)
+  if (validInstall.length) xlBuildItemSheet(wb2, '설치비 내역서', validInstall, d, logoId2)
 
   return await wb2.xlsx.writeBuffer() as ArrayBuffer
 }
 
 /* ─────────────────────────────────────────────────────────
-   상세 견적서 — 내역서 시트 (ExcelJS 생성, 갑지와 통일감)
+   상세 견적서 — 내역서 시트 (최종 템플릿 0320 기준 100% 동일)
    ───────────────────────────────────────────────────────── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExportData) {
-  const ws = wb.addWorksheet(name, { views: [{ showGridLines: false }] })
+function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExportData, logoId: number | null = null) {
+  const ws = wb.addWorksheet(name, { views: [{ showGridLines: false, style: 'pageBreakPreview' }] })
 
-  // 컬럼 너비 — 갑지 템플릿과 유사하게
+  // 컬럼 너비 — 최종 템플릿과 동일
   const widths = [
-    4.5, 6, 6, 6, 6, 6,   // A~F (순번 + 품명 병합)
-    7.5, 5, 5,              // G~I (모델/사양 병합)
-    5, 6,                    // J~K (단위, 수량)
-    7, 5, 5.5,               // L~N (단가 병합)
-    7.5, 6,                  // O~P (공급가 병합)
-    5.5, 5.5,                // Q~R (비고 병합)
-    1,                       // S (구분선)
+    3.7,                       // A (순번)
+    5.7, 5.7, 5.7, 5.7, 5.7,  // B~F (품명 병합)
+    9.7, 9.7, 9.7,             // G~I (모델/사양 병합)
+    5.7, 5.7,                  // J~K (단위, 수량)
+    5.7, 5.7, 5.7,             // L~N (단가 병합)
+    8.7, 8.7,                  // O~P (공급가 병합)
+    5.5, 5.5,                  // Q~R (비고 병합)
+    1,                         // S (구분선)
     6, 10, 7, 10, 12, 7, 10, 12, 7, 12, // T~AC (원가분석)
   ]
   widths.forEach((w, i) => { ws.getColumn(i + 1).width = w })
@@ -1124,69 +1135,83 @@ function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExpor
   const thin = { style: 'thin' as const }
   const hair = { style: 'hair' as const }
   const grayBg = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFF3F4F6' } }
+  const whiteBg = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { theme: 0 } }
+  const bodyFont = { size: 9, name: '맑은 고딕' } as const
 
-  // ── Row 1~2: 제목 ──
-  let r = 1
-  ws.getRow(r).height = 8; r++
-  ws.mergeCells(`A${r}:R${r}`)
-  ws.getCell(`A${r}`).value = name
-  ws.getCell(`A${r}`).font = { size: 16, bold: true }
-  ws.getCell(`A${r}`).alignment = { horizontal: 'left', vertical: 'middle' }
-  ws.getRow(r).height = 28; r++
+  // ── Row 1~3: 대제목 (3행 병합) ──
+  ws.mergeCells('A1:R3')
+  ws.getCell('A1').value = '세   부   내   역   서 [ Statement ]'
+  ws.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF434343' }, name: 'Noto Sans KR' }
+  ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' }
+  ws.getCell('A1').fill = whiteBg
+  // 머지 후 master cell에 4면 테두리 → ExcelJS가 전체 머지 셀에 자동 전파
+  ws.getCell('A1').border = { left: thin, right: thin, top: thin, bottom: thin }
+  ws.getRow(1).height = 15
+  ws.getRow(2).height = 15
+  ws.getRow(3).height = 15
 
-  // 견적 메타
-  ws.mergeCells(`A${r}:R${r}`)
-  ws.getCell(`A${r}`).value = [`견적일: ${d.quotationDate}`, d.supplier.manager && `담당: ${d.supplier.manager}`].filter(Boolean).join('    |    ')
-  ws.getCell(`A${r}`).font = { size: 8, color: { argb: XL.GRAY500 } }
-  ws.getRow(r).height = 14; r++
+  // 로고 이미지 — 우측 상단 (O열 근처, 150×27px)
+  if (logoId !== null) {
+    ws.addImage(logoId, {
+      tl: { nativeCol: 14, nativeColOff: 595439, nativeRow: 0, nativeRowOff: 150480 },
+      ext: { width: 150.3, height: 26.6 },
+      editAs: 'oneCell',
+    })
+  }
 
-  // 구분선
-  ws.getRow(r).height = 4
-  for (let c = 1; c <= 18; c++) ws.getRow(r).getCell(c).border = { bottom: thin }
-  r++
+  // ── Row 4: 섹션 라벨 ──
+  const sectionNum = name.includes('장비') ? '1' : '2'
+  ws.getCell('A4').value = `  ${sectionNum}. ${name.replace(' 내역서', '')} 내역`
+  ws.getCell('A4').font = { bold: true, size: 11, name: '맑은 고딕' }
+  ws.getRow(4).height = 19.95
 
-  // ── 컬럼 헤더 (본문 + 원가분석 — 갑지와 동일한 톤) ──
-  ws.mergeCells(`B${r}:F${r}`)
-  ws.mergeCells(`G${r}:I${r}`)
-  ws.mergeCells(`L${r}:N${r}`)
-  ws.mergeCells(`O${r}:P${r}`)
-  ws.mergeCells(`Q${r}:R${r}`)
-  // 본문 헤더 (테두리 있음)
+  // ── Row 5: 빈 구분선 ──
+  ws.getRow(5).height = 4.8
+
+  // ── Row 6: 컬럼 헤더 ──
+  ws.mergeCells('B6:F6')
+  ws.mergeCells('G6:I6')
+  ws.mergeCells('L6:N6')
+  ws.mergeCells('O6:P6')
+  ws.mergeCells('Q6:R6')
+  // 본문 헤더 — 상하 thin + 좌우 hair (A만 좌 thin, Q는 좌 없음)
   const mainHdrs: [string, string][] = [
     ['A', '순번'], ['B', '품  명'], ['G', '모델/사양'], ['J', '단위'], ['K', '수량'], ['L', '단  가'], ['O', '공 급 가'], ['Q', '비 고'],
   ]
   for (const [col, label] of mainHdrs) {
-    const cell = ws.getCell(`${col}${r}`)
+    const cell = ws.getCell(`${col}6`)
     cell.value = label
-    cell.font = { size: 9, bold: true }
+    cell.font = { ...bodyFont, bold: true }
     cell.alignment = { horizontal: 'center', vertical: 'middle' }
     cell.fill = grayBg
-    cell.border = { top: thin, bottom: thin, left: hair, right: hair }
+    // 헤더 테두리는 마지막에 일괄 적용
   }
-  // 원가분석 헤더 (테두리 없음 — 갑지와 동일)
+  // 원가분석 헤더 (테두리 없음)
   const costHdrs: [string, string][] = [
     ['T', '구분'], ['U', '반출가'], ['V', 'DC율'], ['W', '매입단가'], ['X', '매입총액'], ['Y', 'MG율'], ['Z', '제안가'], ['AA', '이윤'], ['AB', '장려금%'], ['AC', '장려금'],
   ]
   for (const [col, label] of costHdrs) {
-    const cell = ws.getCell(`${col}${r}`)
+    const cell = ws.getCell(`${col}6`)
     cell.value = label
     cell.font = { size: 9, bold: true }
     cell.alignment = { horizontal: 'center', vertical: 'middle' }
   }
-  ws.getRow(r).height = 24; r++
-  const dataStartRow = r
+  ws.getRow(6).height = 19.95
 
-  // ── 데이터 행 ──
+  const dataStartRow = 7
+
+  // ── 데이터 행 (R7~) ──
+  let r = dataStartRow
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-    ws.getRow(r).height = 20
+    ws.getRow(r).height = 22.05
     ws.mergeCells(`B${r}:F${r}`)
     ws.mergeCells(`G${r}:I${r}`)
     ws.mergeCells(`L${r}:N${r}`)
     ws.mergeCells(`O${r}:P${r}`)
     ws.mergeCells(`Q${r}:R${r}`)
 
-    // 본문
+    // 본문 값
     ws.getCell(`A${r}`).value = i + 1
     ws.getCell(`B${r}`).value = item.item_name || null
     ws.getCell(`G${r}`).value = item.specification || null
@@ -1200,15 +1225,25 @@ function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExpor
     }
     ws.getCell(`O${r}`).value = { formula: `L${r}*K${r}` }
 
-    // 본문 스타일
-    for (const col of ['A', 'B', 'G', 'J', 'K', 'L', 'O', 'Q']) {
+    // 본문 스타일 (테두리는 마지막에 일괄 적용)
+    ws.getCell(`A${r}`).font = bodyFont
+    ws.getCell(`A${r}`).alignment = { horizontal: 'center', vertical: 'middle' }
+    for (const col of ['B', 'G']) {
       const cell = ws.getCell(`${col}${r}`)
-      cell.font = { size: 9 }
-      cell.border = { top: hair, bottom: hair, left: col === 'A' ? thin : hair, right: hair }
-      cell.alignment = { vertical: 'middle', horizontal: ['A', 'J', 'K'].includes(col) ? 'center' : ['L', 'O'].includes(col) ? 'right' : 'left' }
-      if (['L', 'O'].includes(col)) cell.numFmt = '#,##0'
+      cell.font = bodyFont
+      cell.alignment = { horizontal: 'center', vertical: 'middle' }
     }
-    ws.getCell(`R${r}`).border = { top: hair, bottom: hair, right: thin }
+    for (const col of ['J', 'K']) {
+      const cell = ws.getCell(`${col}${r}`)
+      cell.font = bodyFont
+      cell.alignment = { horizontal: 'center', vertical: 'middle' }
+    }
+    ws.getCell(`L${r}`).font = bodyFont
+    ws.getCell(`L${r}`).alignment = { horizontal: 'right', vertical: 'middle' }
+    ws.getCell(`L${r}`).numFmt = '#,##0'
+    ws.getCell(`O${r}`).font = bodyFont
+    ws.getCell(`O${r}`).alignment = { horizontal: 'right', vertical: 'middle' }
+    ws.getCell(`O${r}`).numFmt = '#,##0'
 
     // 원가분석
     ws.getCell(`T${r}`).value = name.includes('장비') ? '장비' : '설치비'
@@ -1229,10 +1264,16 @@ function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExpor
     ws.getCell(`AB${r}`).value = item.incentive_rate ? item.incentive_rate / 100 : null
     ws.getCell(`AC${r}`).value = { formula: `X${r}*AB${r}` }
 
-    // 원가분석 스타일 (테두리 없이 값만 — 갑지 템플릿과 동일)
+    // 원가분석 스타일 (테두리 없이 값만, MG율=파랑, 이윤/장려금=빨강)
     for (const col of ['T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'AB', 'AC']) {
       const cell = ws.getCell(`${col}${r}`)
-      cell.font = { size: 9 }
+      if (col === 'Y') {
+        cell.font = { ...bodyFont, color: { argb: 'FF0070C0' } } // MG율 — 파랑
+      } else if (['AA', 'AC'].includes(col)) {
+        cell.font = { ...bodyFont, color: { argb: 'FFFF0000' } } // 이윤/장려금 — 빨강
+      } else {
+        cell.font = bodyFont
+      }
       cell.alignment = { vertical: 'middle', horizontal: col === 'T' ? 'center' : 'right' }
       if (['U', 'W', 'X', 'Z', 'AA', 'AC'].includes(col)) cell.numFmt = '#,##0'
       if (['V', 'Y', 'AB'].includes(col)) cell.numFmt = '0%'
@@ -1242,29 +1283,89 @@ function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExpor
   const lastDataRow = r - 1
 
   // ── 소계 행 ──
-  ws.getRow(r).height = 26
+  const section = name.replace(' 내역서', '').replace('장비', '장 비').replace('설치비', '설 치 비')
+  ws.getRow(r).height = 28.05
   ws.mergeCells(`A${r}:K${r}`)
-  ws.getCell(`A${r}`).value = `${name.replace(' 내역서', '')} 소계`
-  ws.getCell(`A${r}`).font = { size: 10, bold: true }
-  ws.getCell(`A${r}`).alignment = { horizontal: 'right', vertical: 'middle' }
-  ws.getCell(`A${r}`).border = { top: thin, bottom: thin }
-  ws.mergeCells(`L${r}:R${r}`)
+  ws.getCell(`A${r}`).value = `${section} 소 계 `
+  ws.getCell(`A${r}`).font = { ...bodyFont, size: 11, bold: true }
+  ws.getCell(`A${r}`).alignment = { horizontal: 'center', vertical: 'middle' }
+
+  // 소계 금액 — L:P 병합
+  ws.mergeCells(`L${r}:P${r}`)
   ws.getCell(`L${r}`).value = { formula: `SUM(O${dataStartRow}:P${lastDataRow})` }
-  ws.getCell(`L${r}`).font = { size: 11, bold: true }
+  ws.getCell(`L${r}`).font = { ...bodyFont, size: 11, bold: true }
   ws.getCell(`L${r}`).alignment = { horizontal: 'right', vertical: 'middle' }
   ws.getCell(`L${r}`).numFmt = '#,##0'
-  ws.getCell(`L${r}`).border = { top: thin, bottom: thin }
+
+  // Q:R 별도 병합
+  ws.mergeCells(`Q${r}:R${r}`)
+  ws.getCell(`Q${r}`).font = { ...bodyFont, size: 11 }
 
   // 이윤/장려금 합계
   const medBdr = { style: 'medium' as const }
   ws.getCell(`AA${r}`).value = { formula: `SUM(AA${dataStartRow}:AA${lastDataRow})` }
   ws.getCell(`AA${r}`).numFmt = '#,##0'
-  ws.getCell(`AA${r}`).font = { size: 9, bold: true }
+  ws.getCell(`AA${r}`).font = { ...bodyFont, bold: true }
   ws.getCell(`AA${r}`).border = { top: medBdr, bottom: medBdr, left: medBdr, right: medBdr }
   ws.getCell(`AC${r}`).value = { formula: `SUM(AC${dataStartRow}:AC${lastDataRow})` }
   ws.getCell(`AC${r}`).numFmt = '#,##0'
-  ws.getCell(`AC${r}`).font = { size: 9, bold: true }
+  ws.getCell(`AC${r}`).font = { ...bodyFont, bold: true }
   ws.getCell(`AC${r}`).border = { top: medBdr, bottom: medBdr, left: medBdr, right: medBdr }
+
+  /* ══════ 테두리 일괄 적용 (인쇄 영역 A~R 전체) ══════ */
+
+  // R1~R3: master cell 4면 테두리로 재확인 (위에서 이미 설정됨)
+  ws.getCell('A1').border = { left: thin, right: thin, top: thin, bottom: thin }
+
+  // R4~R5: 좌우 thin 엣지만
+  for (let row = 4; row <= 5; row++) {
+    ws.getRow(row).getCell(1).border = { left: thin }
+    ws.getRow(row).getCell(18).border = { right: thin }
+  }
+
+  // R6: 헤더 — 모든 셀 상하 thin + 내부 좌우 hair + 양끝 thin
+  for (let c = 1; c <= 18; c++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bd: any = { top: thin, bottom: thin }
+    if (c === 1) { bd.left = thin; bd.right = hair }         // A
+    else if (c <= 16) { bd.left = hair; bd.right = hair }    // B~P
+    else if (c === 17) { bd.right = hair }                   // Q (좌 없음)
+    else { bd.right = thin }                                  // R
+    ws.getRow(6).getCell(c).border = bd
+  }
+
+  // R7~lastDataRow: 세로 구분선만 + 양끝 thin
+  for (let row = dataStartRow; row <= lastDataRow; row++) {
+    ws.getRow(row).getCell(1).border = { left: thin, right: hair }                  // A
+    for (let c = 2; c <= 9; c++) ws.getRow(row).getCell(c).border = { left: hair }  // B~I
+    ws.getRow(row).getCell(10).border = { left: hair, right: hair }                 // J
+    ws.getRow(row).getCell(11).border = { left: hair, right: hair }                 // K
+    for (let c = 12; c <= 15; c++) ws.getRow(row).getCell(c).border = { left: hair } // L~O
+    ws.getRow(row).getCell(16).border = { left: hair, right: hair }                  // P
+    // Q(17): 테두리 없음
+    ws.getRow(row).getCell(18).border = { right: thin }                              // R
+  }
+
+  // 마지막 데이터행: O(15)~P(16) 하단 thin 추가 (소계 상단 구분선)
+  if (lastDataRow >= dataStartRow) {
+    ws.getRow(lastDataRow).getCell(15).border = { left: hair, bottom: thin }
+    ws.getRow(lastDataRow).getCell(16).border = { left: hair, right: hair, bottom: thin }
+  }
+
+  // 소계행(r): 모든 셀 개별 테두리
+  for (let c = 1; c <= 10; c++) ws.getRow(r).getCell(c).border = { left: thin, top: thin, bottom: thin }  // A~J
+  ws.getRow(r).getCell(11).border = { left: thin, right: thin, top: thin, bottom: thin }                   // K
+  for (let c = 12; c <= 16; c++) ws.getRow(r).getCell(c).border = { right: thin, top: thin, bottom: thin } // L~P
+  ws.getRow(r).getCell(17).border = { left: thin, top: thin, bottom: thin }                                 // Q
+  ws.getRow(r).getCell(18).border = { left: thin, right: thin, top: thin, bottom: thin }                    // R
+
+  // 인쇄 설정 — xvf1.xlsx 기준 (scale 68%, fitToHeight 1, A4 용지)
+  ws.pageSetup.printArea = `A1:R${r}`
+  ws.pageSetup.fitToPage = true
+  ws.pageSetup.fitToWidth = 1
+  ws.pageSetup.fitToHeight = 1
+  ws.pageSetup.scale = 68
+  ws.pageSetup.paperSize = 9
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1389,6 +1490,11 @@ async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayB
     }
   }
 
+  // S~AF 열 헤더 값 제거 (갑지에는 원가분석 헤더 불필요)
+  for (let c = 19; c <= 32; c++) { // S(19) ~ AF(32)
+    ws.getRow(15).getCell(c).value = null
+  }
+
   // 데이터 행 채우기 (장비/설치비 요약 + coverItems)
   for (let i = 0; i < allItems.length; i++) {
     const row = 16 + i
@@ -1406,6 +1512,11 @@ async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayB
   // 합계 행 수식
   const sumRow = 31 + extraRows
   // 원가분석 합계는 불필요하므로 생략
+
+  // S~AF 합계행 값도 제거 (템플릿에 남아있는 원가분석 수식 제거)
+  for (let c = 19; c <= 32; c++) {
+    ws.getRow(sumRow).getCell(c).value = null
+  }
 
   // 테두리 보정
   const thinBorder = { style: 'thin' as const }
@@ -1436,6 +1547,9 @@ async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayB
       cellR.border = { ...cellR.border, right: thinBorder }
     }
   }
+
+  // 인쇄영역 — A~R 열만 (원가분석 제외)
+  ws.pageSetup.printArea = `A1:R${noteEndRow}`
 
   // 워크북 출력 → drawing XML 복원
   const outArrayBuf = await wb.xlsx.writeBuffer()
