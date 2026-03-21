@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAdminOrSales } from "@/lib/api-auth"
+import { logError } from "@/lib/logger"
 import { revalidatePath } from "next/cache"
 
 // GET /api/expenses?request_id=xxx — 의뢰별 지출 목록 조회
@@ -24,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data })
   } catch (e: unknown) {
-    console.error("[GET /api/expenses]", e)
+    logError("[GET /api/expenses]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
@@ -68,7 +70,7 @@ export async function POST(req: NextRequest) {
     revalidatePath("/requests")
     return NextResponse.json({ success: true, id: data.id })
   } catch (e: unknown) {
-    console.error("[POST /api/expenses]", e)
+    logError("[POST /api/expenses]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
@@ -108,7 +110,7 @@ export async function PATCH(req: NextRequest) {
     revalidatePath("/requests")
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    console.error("[PATCH /api/expenses]", e)
+    logError("[PATCH /api/expenses]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
@@ -116,6 +118,10 @@ export async function PATCH(req: NextRequest) {
 // DELETE /api/expenses — 지출 삭제
 export async function DELETE(req: NextRequest) {
   try {
+    // 역할 검증: admin 또는 sales만 삭제 가능
+    const denied = await requireAdminOrSales(req)
+    if (denied) return denied
+
     const { id } = await req.json()
 
     if (!id) {
@@ -132,7 +138,7 @@ export async function DELETE(req: NextRequest) {
     revalidatePath("/requests")
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    console.error("[DELETE /api/expenses]", e)
+    logError("[DELETE /api/expenses]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }

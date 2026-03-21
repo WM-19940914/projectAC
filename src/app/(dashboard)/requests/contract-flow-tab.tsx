@@ -12,6 +12,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatCurrency } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { toast } from "@/hooks/use-toast"
 import { AlertCircle, Banknote, CheckCircle2, Circle, CircleDollarSign, FileSignature, Plus, Unlink, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -920,7 +921,31 @@ export function ContractFlowTab({
       nextAmount = Number.isFinite(next) ? Math.max(0, Math.round(next)) : 0
       setVatTotalOverride(null)
     }
-    setDraft((prev) => (prev.contract_amount === nextAmount ? prev : { ...prev, contract_amount: nextAmount }))
+    setDraft((prev) => {
+      if (prev.contract_amount === nextAmount) return prev
+
+      // 계약금액이 바뀌면 정산 단계별 금액을 새 금액 기준으로 균등 재분배
+      const newTotalWithVat = amountInputMode === "incl"
+        ? (Number.isFinite(next) ? Math.max(0, next) : 0)
+        : nextAmount + Math.floor(nextAmount * 0.1)
+      const stages = selectedStages.length > 0 ? selectedStages : ["잔금" as SettlementStage]
+      const perStage = Math.floor(newTotalWithVat / stages.length)
+      const newRatios = { ...EMPTY_STAGE_RATIOS }
+      stages.forEach((stage, i) => {
+        newRatios[stage] = i === stages.length - 1
+          ? newTotalWithVat - perStage * (stages.length - 1)
+          : perStage
+      })
+      setStageRatios(newRatios)
+
+      // 입금예정일, 정산상태(입금내역)는 초기화
+      setStageScheduledDates({ ...EMPTY_STAGE_SCHEDULED_DATES })
+      setSettlementStatusMap({})
+
+      toast({ title: "알림", description: "계약금액이 변경되어 정산 구조가 초기화되었습니다" })
+
+      return { ...prev, contract_amount: nextAmount }
+    })
     setIsAmountModalOpen(false)
   }
 
@@ -1093,6 +1118,13 @@ export function ContractFlowTab({
       failedSnapshotRef.current = null
       setSaveMessage(mode === "manual" ? "즉시 저장됨" : "자동 저장됨")
       setTimeout(() => setSaveMessage(""), 1500)
+
+      // 신규 계약 생성 시 토스트 / 수동 즉시 저장 시 정산 상태 변경 토스트
+      if (!isUpdate) {
+        toast({ title: "완료", description: "계약이 생성되었습니다" })
+      } else if (mode === "manual") {
+        toast({ title: "완료", description: "정산 상태가 변경되었습니다" })
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "저장 실패"
       failedSnapshotRef.current = saveSnapshot
@@ -1181,6 +1213,7 @@ export function ContractFlowTab({
 
       setSaveMessage("연결 해제 및 삭제됨")
       setTimeout(() => setSaveMessage(""), 1500)
+      toast({ title: "완료", description: "계약이 해제되었습니다" })
     } catch (error) {
       const message = error instanceof Error ? error.message : "연결 해제/삭제 실패"
       setSaveMessage(`해제 실패: ${message}`)

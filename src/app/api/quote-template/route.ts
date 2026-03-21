@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { readFile } from "fs/promises"
 import path from "path"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { logError } from "@/lib/logger"
 
 // 로컬 기본 템플릿 (최초 업로드 전 폴백용)
 const LOCAL_FALLBACK = path.join(process.cwd(), "public", "templates", "quote-template.xlsx")
@@ -48,7 +49,7 @@ export async function GET() {
       },
     })
   } catch (e) {
-    console.error("템플릿 다운로드 오류:", e)
+    logError("템플릿 다운로드 오류:", e)
     return NextResponse.json({ error: "템플릿 파일을 찾을 수 없습니다" }, { status: 404 })
   }
 }
@@ -90,13 +91,13 @@ export async function POST(req: NextRequest) {
       })
 
     if (uploadError) {
-      console.error("Storage 업로드 오류:", uploadError.message)
+      logError("Storage 업로드 오류:", uploadError.message)
       return NextResponse.json({ error: "업로드 실패: " + uploadError.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, message: "템플릿이 업데이트되었습니다" })
   } catch (e) {
-    console.error("템플릿 업로드 오류:", e)
+    logError("템플릿 업로드 오류:", e)
     return NextResponse.json({ error: "템플릿 업로드에 실패했습니다" }, { status: 500 })
   }
 }

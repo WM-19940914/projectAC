@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import {
   Sheet,
   SheetContent,
@@ -932,7 +933,9 @@ export default function QuoteEditorSheet({
                   onClick={() => {
                     const exportData = buildExportData()
                     if (!exportData) return
-                    exportQuoteExcel(exportData).catch((e) => console.error("Excel 내보내기 오류:", e))
+                    exportQuoteExcel(exportData)
+                      .then(() => toast({ title: "완료", description: "Excel 파일이 다운로드되었습니다" }))
+                      .catch((e) => { console.error("Excel 내보내기 오류:", e); toast({ title: "오류", description: "Excel 내보내기에 실패했습니다", variant: "destructive" }) })
                   }}
                   className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors group"
                   title="Excel 내보내기"
@@ -965,7 +968,8 @@ export default function QuoteEditorSheet({
                       a.download = `견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}.pdf`
                       document.body.appendChild(a); a.click(); document.body.removeChild(a)
                       URL.revokeObjectURL(url)
-                    } catch (e) { console.error("PDF 내보내기 오류:", e) }
+                      toast({ title: "완료", description: "PDF 파일이 다운로드되었습니다" })
+                    } catch (e) { console.error("PDF 내보내기 오류:", e); toast({ title: "오류", description: "PDF 내보내기에 실패했습니다", variant: "destructive" }) }
                     finally { setPdfExporting(false) }
                   }}
                   className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border transition-colors group ${pdfExporting ? "opacity-50 cursor-wait border-gray-200" : "border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}
@@ -1030,8 +1034,9 @@ export default function QuoteEditorSheet({
                         a.download = `견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}.png`
                         document.body.appendChild(a); a.click(); document.body.removeChild(a)
                         URL.revokeObjectURL(url)
+                        toast({ title: "완료", description: "PNG 이미지가 다운로드되었습니다" })
                       }, "image/png")
-                    } catch (e) { console.error("PNG 내보내기 오류:", e) }
+                    } catch (e) { console.error("PNG 내보내기 오류:", e); toast({ title: "오류", description: "PNG 내보내기에 실패했습니다", variant: "destructive" }) }
                     finally { setPngExporting(false) }
                   }}
                   className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border transition-colors group ${pngExporting ? "opacity-50 cursor-wait border-gray-200" : "border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}
@@ -2054,13 +2059,13 @@ export default function QuoteEditorSheet({
                     const res = await fetch("/api/quote-template", { method: "POST", body: formData })
                     const data = await res.json()
                     if (res.ok) {
-                      alert("템플릿이 업데이트되었습니다!")
+                      toast({ title: "완료", description: "템플릿이 업데이트되었습니다!" })
                     } else {
-                      alert(`업로드 실패: ${data.error}`)
+                      toast({ title: "오류", description: `업로드 실패: ${data.error}`, variant: "destructive" })
                     }
                   } catch (err) {
                     console.error("템플릿 업로드 오류:", err)
-                    alert("템플릿 업로드 중 오류가 발생했습니다")
+                    toast({ title: "오류", description: "템플릿 업로드 중 오류가 발생했습니다", variant: "destructive" })
                   }
                 }
                 input.click()

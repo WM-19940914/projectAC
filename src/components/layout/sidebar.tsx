@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useRef, useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -88,6 +89,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               size="icon"
               className="h-6 w-6 text-gray-400 hover:text-gray-600"
               onClick={onToggle}
+              aria-label="사이드바 접기"
             >
               <PanelLeftClose className="h-3.5 w-3.5" />
             </Button>
@@ -101,6 +103,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               size="icon"
               className="h-7 w-7 text-gray-400 hover:text-gray-600"
               onClick={onToggle}
+              aria-label="사이드바 펼치기"
             >
               <PanelLeftOpen className="h-3.5 w-3.5" />
             </Button>
@@ -196,7 +199,7 @@ async function uploadAvatar(file: File, userId: string): Promise<string | null> 
 
   if (error) {
     console.error("아바타 업로드 실패:", error.message)
-    alert("사진 업로드에 실패했습니다: " + error.message)
+    toast({ title: "오류", description: "사진 업로드에 실패했습니다: " + error.message, variant: "destructive" })
     return null
   }
 
@@ -311,7 +314,7 @@ function SidebarUserProfile({ collapsed }: { collapsed: boolean }) {
       <div className="border-t border-slate-100 px-2 py-2">
         <Popover>
           <PopoverTrigger asChild>
-            <button className="flex h-8 w-full items-center justify-center rounded-md hover:bg-gray-50 transition-colors">
+            <button className="flex h-8 w-full items-center justify-center rounded-md hover:bg-gray-50 transition-colors" aria-label="프로필 메뉴 열기">
               {renderSmallAvatar("sm")}
             </button>
           </PopoverTrigger>
@@ -413,7 +416,7 @@ function MobileUserProfile({ onItemClick }: { onItemClick?: () => void }) {
       <button
         onClick={() => { signOut(); onItemClick?.() }}
         className="shrink-0 p-1 rounded text-gray-400 hover:text-red-500 transition-colors"
-        title="로그아웃"
+        aria-label="로그아웃"
       >
         <LogOut className="h-3.5 w-3.5" />
       </button>

@@ -287,6 +287,9 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
           {/* ===== 정산 탭 ===== */}
           {tab === "정산" && (
             <>
+              <p className="text-[10px] text-gray-400 mb-2 leading-relaxed">
+                입금예정일 초과 시 <span className="text-rose-400 font-medium">지연</span>, 일부만 입금 시 <span className="text-yellow-600 font-medium">부분입금</span>, 7일 이내 예정 시 <span className="text-sky-aqua font-medium">예정</span> 표시
+              </p>
               {settlementCount === 0 && (
                 <p className="text-sm text-gray-400 py-6 text-center">알림 없음</p>
               )}
@@ -332,6 +335,9 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
           {/* ===== 지출 탭 ===== */}
           {tab === "지출" && (
             <>
+              <p className="text-[10px] text-gray-400 mb-2 leading-relaxed">
+                <span className="text-rose-400 font-medium">미지급</span> 지출 내역과 <span className="text-yellow-600 font-medium">세금계산서</span> 마감 7일 이내 건을 표시합니다
+              </p>
               {expenseCount === 0 && (
                 <p className="text-sm text-gray-400 py-6 text-center">알림 없음</p>
               )}
@@ -395,6 +401,9 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
           {/* ===== 세금계산서 탭 (미발행) ===== */}
           {tab === "계산서" && (
             <>
+              <p className="text-[10px] text-gray-400 mb-2 leading-relaxed">
+                입금이 확인되었으나 <span className="text-rose-400 font-medium">세금계산서 미발행</span> 상태인 정산 단계를 표시합니다
+              </p>
               {taxInvoiceCount === 0 && (
                 <p className="text-sm text-gray-400 py-6 text-center">미발행 건 없음</p>
               )}
@@ -447,14 +456,11 @@ function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, reques
 }
 
 // ═══════════════════════════════════════
-// 메인 섹션: 좌측 노트 + 우측 알림
+// 메인 섹션: 알림 패널 (전체 너비)
 // ═══════════════════════════════════════
 export function SettlementExpenseSection({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, requestInfoMap }: Props) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
-      <AlertsPanel settlementAlerts={settlementAlerts} expenseAlerts={expenseAlerts} taxInvoiceAlerts={taxInvoiceAlerts} requestInfoMap={requestInfoMap} />
-      <WorkNotes />
-    </div>
+    <AlertsPanel settlementAlerts={settlementAlerts} expenseAlerts={expenseAlerts} taxInvoiceAlerts={taxInvoiceAlerts} requestInfoMap={requestInfoMap} />
   )
 }
 

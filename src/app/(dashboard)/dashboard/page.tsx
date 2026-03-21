@@ -3,7 +3,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { DashboardClient } from "./dashboard-client"
-import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, MonthlyProgressRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo } from "./dashboard-types"
+import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, MonthlyProgressRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo, DashboardKPI, CustomerVolume } from "./dashboard-types"
 
 // 캐시 비활성화 — 항상 최신 데이터
 export const dynamic = "force-dynamic"
@@ -748,11 +748,150 @@ export default async function DashboardPage() {
       }
     })
 
+  // ----- KPI 계산 -----
+
+  // 1. 정산 연체 총액 + 회수율: 모든 계약의 전체 예정 vs 입금 집계
+  let kpiTotalExpected = 0
+  let kpiTotalCollected = 0
+  let kpiOverdueTotal = 0
+
+  for (const c of contracts) {
+    const contractAmount = Number(c.contract_amount) || 0
+    if (contractAmount <= 0) continue
+    const meta = metaMap.get(c.id)
+    const statusMap = (meta?.settlement_status_map as Record<string, unknown>) || null
+    const stageRatios = (meta?.stage_ratios as Record<string, number>) || null
+    const stages = parseSettlementType(c.settlement_type)
+    if (stages.length === 0) continue
+
+    const safeSupply = Math.max(0, Math.round(contractAmount))
+    const amMode = stageRatios && typeof stageRatios === "object" && (stageRatios as Record<string, unknown>)._mode === "amount"
+    const middleInst = Math.max(1, Math.min(5, Math.round(Number(meta?.middle_installments) || 1)))
+
+    // 비율/금액 결정
+    const ratios: Record<string, number> = {}
+    for (const stage of stages) {
+      const fromMeta = Number(stageRatios?.[stage] ?? 0)
+      if (amMode) {
+        ratios[stage] = Math.max(0, Math.round(fromMeta))
+      } else {
+        ratios[stage] = fromMeta > 0 ? Math.max(0, Math.min(100, fromMeta)) : (100 / stages.length)
+      }
+    }
+
+    const totalVat = Math.floor(safeSupply * 0.1)
+    let usedS = 0, usedV = 0
+
+    // 정규화된 statusMap
+    const normalizedSM: Record<string, unknown> = {}
+    if (statusMap) {
+      for (const [key, value] of Object.entries(statusMap)) {
+        normalizedSM[normalizeStageKey(key)] = value
+      }
+    }
+
+    // 예정일 맵
+    const scheduledDates = (meta?.stage_scheduled_dates as Record<string, string>) || {}
+    const normalizedSD: Record<string, string> = {}
+    for (const [key, value] of Object.entries(scheduledDates)) {
+      normalizedSD[normalizeStageKey(key)] = value
+    }
+
+    stages.forEach((stage, idx) => {
+      const isLast = idx === stages.length - 1
+      let ss: number, sv: number
+      if (amMode) {
+        const total = ratios[stage]
+        ss = Math.round(total / 1.1)
+        sv = total - ss
+      } else {
+        const ratio = Math.max(0, Math.min(100, Number(ratios[stage] || 0)))
+        ss = isLast ? safeSupply - usedS : Math.round((safeSupply * ratio) / 100)
+        sv = isLast ? totalVat - usedV : Math.floor(ss * 0.1)
+      }
+      usedS += ss
+      usedV += sv
+
+      const processStage = (key: string, supply: number, vat: number) => {
+        const planned = supply + vat
+        const paid = getRowPaid(normalizedSM[key])
+        kpiTotalExpected += planned
+        kpiTotalCollected += Math.min(paid, planned)
+        // 연체: 예정일 < 오늘 & 미완납
+        const sched = normalizedSD[key] || normalizedSD[stage] || ""
+        if (sched && paid < planned) {
+          const schedDate = new Date(`${sched}T00:00:00`)
+          if (!isNaN(schedDate.getTime()) && schedDate.getTime() < todayMs) {
+            kpiOverdueTotal += planned - paid
+          }
+        }
+      }
+
+      if (stage === "중도금" && middleInst > 1) {
+        let usSplit = 0, usVatSplit = 0
+        for (let i = 1; i <= middleInst; i++) {
+          const last = i === middleInst
+          const splitS = last ? ss - usSplit : Math.round(ss / middleInst)
+          usSplit += splitS
+          const splitV = last ? sv - usVatSplit : Math.floor(splitS * 0.1)
+          usVatSplit += splitV
+          processStage(`middle-${i}`, splitS, splitV)
+        }
+      } else {
+        processStage(stage, ss, sv)
+      }
+    })
+  }
+
+  const kpiCollectionRate = kpiTotalExpected > 0 ? (kpiTotalCollected / kpiTotalExpected) * 100 : 0
+
+  // 2. 고객별 누적 거래액
+  const customerVolumeMap = new Map<string, CustomerVolume>()
+  for (const c of contracts) {
+    const contractAmount = Number(c.contract_amount) || 0
+    if (contractAmount <= 0) continue
+    const vatAmount = contractAmount + Math.floor(contractAmount * 0.1)
+    // 연결된 의뢰에서 고객 정보 찾기
+    const req = contractRequestMap.get(c.id)
+    if (!req?.customer_id) continue
+    const customerData = req.customer
+    const customerId = req.customer_id
+    const customerName = Array.isArray(customerData)
+      ? (customerData[0] as { company_name: string } | undefined)?.company_name || ""
+      : (customerData as { company_name: string } | null)?.company_name || ""
+    if (!customerName) continue
+
+    const existing = customerVolumeMap.get(customerId)
+    if (existing) {
+      existing.totalContractAmount += vatAmount
+      existing.contractCount += 1
+    } else {
+      customerVolumeMap.set(customerId, {
+        customerId,
+        customerName,
+        totalContractAmount: vatAmount,
+        contractCount: 1,
+      })
+    }
+  }
+  const topCustomers = Array.from(customerVolumeMap.values())
+    .sort((a, b) => b.totalContractAmount - a.totalContractAmount)
+    .slice(0, 10)
+
+  const dashboardKPI: DashboardKPI = {
+    overdueTotal: kpiOverdueTotal,
+    collectionRate: kpiCollectionRate,
+    totalExpected: kpiTotalExpected,
+    totalCollected: kpiTotalCollected,
+    topCustomers,
+  }
+
   return (
     <DashboardClient
       settlementAlerts={settlementAlerts}
       expenseAlerts={expenseAlerts}
       taxInvoiceAlerts={taxInvoiceAlerts}
+      kpi={dashboardKPI}
       allRevenueData={allRevenueData}
       revenueDetails={revenueDetails}
       availableYears={availableYears}

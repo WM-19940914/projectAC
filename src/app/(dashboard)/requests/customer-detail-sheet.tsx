@@ -3,6 +3,7 @@
 // ----- 고객 상세 Sheet (고객 페이지와 동일한 편집 패널) -----
 
 import { useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import { formatPhone } from "@/lib/format"
 import {
   Sheet,
@@ -43,10 +44,10 @@ export function CustomerDetailSheet({
         body: JSON.stringify({ id: customer.id, [field]: value }),
       })
       if (!res.ok) {
-        alert("저장 실패")
+        toast({ title: "오류", description: "저장 실패", variant: "destructive" })
       }
     } catch {
-      alert("저장 중 오류 발생")
+      toast({ title: "오류", description: "저장 중 오류 발생", variant: "destructive" })
     }
     setSaving(false)
   }

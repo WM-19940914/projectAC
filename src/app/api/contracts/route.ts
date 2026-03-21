@@ -1,6 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
+import { logError } from '@/lib/logger';
+import { requireAdminOrSales } from '@/lib/api-auth';
 
 type SupabaseAdminClient = ReturnType<typeof createAdminClient>;
 
@@ -36,43 +38,32 @@ function sanitizeContractMeta(input: unknown) {
     return Object.keys(next).length > 0 ? next : null;
 }
 
-function parseContractMemo(rawMemo: unknown) {
+// 기존 memo에 __sac_contract_meta JSON envelope이 있을 경우 순수 note만 추출
+// 새 코드에서는 meta를 memo에 저장하지 않으므로, 읽기 전용 호환 함수
+function extractNoteFromMemo(rawMemo: unknown): string {
     const memoText = typeof rawMemo === 'string' ? rawMemo : '';
-    if (!memoText.trim()) {
-        return { note: '', meta: null as Record<string, unknown> | null, hadEnvelope: false };
-    }
+    if (!memoText.trim()) return '';
 
     try {
         const parsed = JSON.parse(memoText) as Record<string, unknown>;
         if (parsed && typeof parsed === 'object' && '__sac_contract_meta' in parsed) {
-            return {
-                note: typeof parsed.note === 'string' ? parsed.note : '',
-                meta: sanitizeContractMeta(parsed.__sac_contract_meta),
-                hadEnvelope: true,
-            };
+            // 레거시 JSON envelope → note만 추출
+            return typeof parsed.note === 'string' ? parsed.note : '';
         }
     } catch {
         // 일반 텍스트 메모는 파싱 실패가 정상
     }
 
-    return { note: memoText, meta: null as Record<string, unknown> | null, hadEnvelope: false };
+    return memoText;
 }
 
-function buildContractMemo(note: string, meta: Record<string, unknown> | null) {
+// memo는 이제 순수 텍스트만 저장. meta는 contract_settlement_meta 테이블에만 저장.
+function buildPlainMemo(note: string): string | null {
     const trimmedNote = note.trim();
-    if (!meta) return trimmedNote || null;
-
-    const envelope: Record<string, unknown> = {
-        __sac_contract_meta: meta,
-    };
-    if (trimmedNote) envelope.note = trimmedNote;
-    return JSON.stringify(envelope);
+    return trimmedNote || null;
 }
 
-function toModernContractInput(
-    input: Record<string, unknown>,
-    options?: { existingMemo?: unknown }
-) {
+function toModernContractInput(input: Record<string, unknown>) {
     const mappedData: Record<string, unknown> = { ...input };
 
     // 레거시 필드명 호환
@@ -92,20 +83,19 @@ function toModernContractInput(
         mappedData.settlement_type = mappedData.settlement_type.join(',');
     }
 
-    const incomingMeta = sanitizeContractMeta(mappedData.contract_meta);
+    // contract_meta는 DB 컬럼이 아님 — contract_settlement_meta 테이블에 별도 저장
+    // 여기서는 제거만 하고, POST/PATCH 핸들러에서 saveContractMetaToTable() 호출
     delete mappedData.contract_meta;
 
-    const memoSource = mappedData.memo !== undefined ? mappedData.memo : options?.existingMemo;
-    const parsedMemo = parseContractMemo(memoSource);
-    const mergedMeta = incomingMeta
-        ? { ...(parsedMemo.meta ?? {}), ...incomingMeta }
-        : parsedMemo.meta;
-    const nextMemo = buildContractMemo(parsedMemo.note, mergedMeta);
-
-    if (nextMemo === null) {
-        delete mappedData.memo;
-    } else {
-        mappedData.memo = nextMemo;
+    // memo: 순수 텍스트만 저장. 기존 레거시 JSON envelope이 있으면 note만 추출
+    if (mappedData.memo !== undefined) {
+        const plainNote = extractNoteFromMemo(mappedData.memo);
+        const nextMemo = buildPlainMemo(plainNote);
+        if (nextMemo === null) {
+            delete mappedData.memo;
+        } else {
+            mappedData.memo = nextMemo;
+        }
     }
 
     return mappedData;
@@ -121,13 +111,9 @@ function normalizeContractOutput(data: Record<string, unknown>) {
         mappedData.contract_amount = mappedData.amount;
     }
 
-    const parsedMemo = parseContractMemo(mappedData.memo);
-    if (parsedMemo.meta) {
-        mappedData.contract_meta = parsedMemo.meta;
-    }
-    if (parsedMemo.hadEnvelope) {
-        mappedData.memo = parsedMemo.note;
-    }
+    // memo: 레거시 JSON envelope이 있으면 순수 note만 추출하여 노출
+    // meta는 contract_settlement_meta 테이블에서만 로드 (normalizeContractOutputWithTableMeta에서 처리)
+    mappedData.memo = extractNoteFromMemo(mappedData.memo);
 
     // settlement_type: DB TEXT 필드 → 프론트 배열로 복원
     // 가능한 저장 형태: "선금,잔금" (쉼표 구분) 또는 '["선금","잔금"]' (JSON 문자열)
@@ -174,35 +160,48 @@ function isMissingContractMetaTableError(error: unknown) {
     );
 }
 
+// contract_settlement_meta 테이블에서만 메타 로드
+// vat_total_override 컬럼이 없을 수 있으므로 기본 필드만 조회 후 확장 시도
 async function loadContractMetaFromTable(
     supabase: SupabaseAdminClient,
     contractId: string,
-    fallbackMemo?: unknown
 ) {
-    const fallbackMeta = parseContractMemo(fallbackMemo).meta;
-    const { data, error } = await supabase
+    // vat_total_override 포함 시도 → 컬럼 없으면 기본 필드만 재시도
+    let data: Record<string, unknown> | null = null;
+
+    const { data: fullData, error: fullError } = await supabase
         .from(CONTRACT_SETTLEMENT_META_TABLE)
-        .select('stage_ratios, middle_installments, stage_scheduled_dates, settlement_status_map')
+        .select('stage_ratios, middle_installments, stage_scheduled_dates, settlement_status_map, vat_total_override')
         .eq('contract_id', contractId)
         .maybeSingle();
 
-    if (error) {
-        if (isMissingContractMetaTableError(error)) return fallbackMeta;
-        throw error;
+    if (fullError) {
+        // vat_total_override 컬럼이 아직 없는 경우 (42703) → 기본 필드만 조회
+        const errCode = (fullError as { code?: string })?.code;
+        const errMsg = typeof fullError.message === 'string' ? fullError.message : '';
+        if (errCode === '42703' || errMsg.includes('vat_total_override')) {
+            const { data: basicData, error: basicError } = await supabase
+                .from(CONTRACT_SETTLEMENT_META_TABLE)
+                .select('stage_ratios, middle_installments, stage_scheduled_dates, settlement_status_map')
+                .eq('contract_id', contractId)
+                .maybeSingle();
+
+            if (basicError) {
+                if (isMissingContractMetaTableError(basicError)) return null;
+                throw basicError;
+            }
+            data = basicData as Record<string, unknown> | null;
+        } else if (isMissingContractMetaTableError(fullError)) {
+            return null;
+        } else {
+            throw fullError;
+        }
+    } else {
+        data = fullData as Record<string, unknown> | null;
     }
 
-    if (!data) {
-        if (fallbackMeta) {
-            await saveContractMetaToTable(supabase, contractId, fallbackMeta);
-        }
-        return fallbackMeta;
-    }
-    const tableMeta = sanitizeContractMeta(data as Record<string, unknown>) ?? fallbackMeta;
-    // vat_total_override는 테이블 컬럼이 아닌 memo(JSON)에만 저장됨 → fallback에서 복원
-    if (tableMeta && fallbackMeta && typeof fallbackMeta.vat_total_override === 'number' && fallbackMeta.vat_total_override > 0) {
-        tableMeta.vat_total_override = fallbackMeta.vat_total_override;
-    }
-    return tableMeta;
+    if (!data) return null;
+    return sanitizeContractMeta(data);
 }
 
 async function saveContractMetaToTable(
@@ -211,7 +210,15 @@ async function saveContractMetaToTable(
     meta: Record<string, unknown> | null
 ) {
     if (!meta) return;
-    const payload = {
+
+    // vat_total_override 값 정규화
+    const vatOverride = meta.vat_total_override !== undefined
+        ? (Number.isFinite(Number(meta.vat_total_override)) && Number(meta.vat_total_override) > 0
+            ? Number(meta.vat_total_override)
+            : null)
+        : undefined;
+
+    const payload: Record<string, unknown> = {
         contract_id: contractId,
         stage_ratios: meta.stage_ratios ?? {},
         middle_installments: Number.isFinite(Number(meta.middle_installments))
@@ -222,12 +229,30 @@ async function saveContractMetaToTable(
         updated_at: new Date().toISOString(),
     };
 
+    // vat_total_override가 명시적으로 전달된 경우에만 포함 (undefined면 기존 값 유지)
+    if (vatOverride !== undefined) {
+        payload.vat_total_override = vatOverride;
+    }
+
     const { error } = await supabase
         .from(CONTRACT_SETTLEMENT_META_TABLE)
         .upsert(payload, { onConflict: 'contract_id' });
 
-    if (error && !isMissingContractMetaTableError(error)) {
-        throw error;
+    if (error) {
+        // vat_total_override 컬럼이 아직 없는 경우 → 해당 필드 제거 후 재시도
+        const errCode = (error as { code?: string })?.code;
+        const errMsg = typeof error.message === 'string' ? error.message : '';
+        if ((errCode === '42703' || errMsg.includes('vat_total_override')) && 'vat_total_override' in payload) {
+            delete payload.vat_total_override;
+            const { error: retryError } = await supabase
+                .from(CONTRACT_SETTLEMENT_META_TABLE)
+                .upsert(payload, { onConflict: 'contract_id' });
+            if (retryError && !isMissingContractMetaTableError(retryError)) {
+                throw retryError;
+            }
+        } else if (!isMissingContractMetaTableError(error)) {
+            throw error;
+        }
     }
 }
 
@@ -239,7 +264,7 @@ async function normalizeContractOutputWithTableMeta(
     const contractId = typeof normalized.id === 'string' ? normalized.id : '';
     if (!contractId) return normalized;
 
-    const tableMeta = await loadContractMetaFromTable(supabase, contractId, data.memo);
+    const tableMeta = await loadContractMetaFromTable(supabase, contractId);
     if (tableMeta) {
         normalized.contract_meta = tableMeta;
     } else if ('contract_meta' in normalized) {
@@ -389,7 +414,7 @@ export async function GET(req: Request) {
         const normalized = await normalizeContractOutputWithTableMeta(supabase, data as Record<string, unknown>);
         return NextResponse.json({ success: true, data: normalized });
     } catch (error) {
-        console.error('계약 조회 오류:', error);
+        logError('계약 조회 오류:', error);
         return NextResponse.json(
             {
                 success: false,
@@ -436,8 +461,9 @@ export async function POST(req: Request) {
 
         const normalized = normalizeContractOutput(contract as Record<string, unknown>);
         const contractId = typeof normalized.id === 'string' ? normalized.id : '';
-        const contractMeta = sanitizeContractMeta(normalized.contract_meta);
-        if (contractId) {
+        // meta는 원본 요청 데이터에서 추출 (memo가 아닌 contract_meta 필드)
+        const contractMeta = sanitizeContractMeta(data.contract_meta);
+        if (contractId && contractMeta) {
             await saveContractMetaToTable(supabase, contractId, contractMeta);
         }
         const normalizedWithTableMeta = contractId
@@ -448,7 +474,7 @@ export async function POST(req: Request) {
         revalidatePath('/requests');
         return NextResponse.json({ success: true, data: normalizedWithTableMeta });
     } catch (error) {
-        console.error('계약 생성 오류:', error);
+        logError('계약 생성 오류:', error);
         return NextResponse.json(
             {
                 success: false,
@@ -470,25 +496,11 @@ export async function PATCH(req: Request) {
             );
         }
         const supabase = createAdminClient();
-        let existingMemo: unknown = undefined;
 
-        if (
-            updateData &&
-            typeof updateData === 'object' &&
-            'contract_meta' in updateData &&
-            !('memo' in updateData)
-        ) {
-            const existing = await supabase
-                .from('contracts')
-                .select('memo')
-                .eq('id', id)
-                .single();
-            if (!existing.error) {
-                existingMemo = (existing.data as { memo?: unknown } | null)?.memo;
-            }
-        }
+        // meta는 원본 요청 데이터에서 추출 (contract_settlement_meta 테이블에 별도 저장)
+        const incomingMeta = sanitizeContractMeta(updateData.contract_meta);
 
-        let attemptPayload = toModernContractInput(updateData, { existingMemo });
+        let attemptPayload = toModernContractInput(updateData);
 
         let contract: Record<string, unknown> | null = null;
         let error: unknown = null;
@@ -518,9 +530,9 @@ export async function PATCH(req: Request) {
 
         const normalized = contract ? normalizeContractOutput(contract as Record<string, unknown>) : null;
         const contractId = typeof normalized?.id === 'string' ? normalized.id : '';
-        const contractMeta = sanitizeContractMeta(normalized?.contract_meta);
-        if (contractId) {
-            await saveContractMetaToTable(supabase, contractId, contractMeta);
+        // meta는 원본 요청에서 추출한 것을 테이블에 저장
+        if (contractId && incomingMeta) {
+            await saveContractMetaToTable(supabase, contractId, incomingMeta);
         }
         const normalizedWithTableMeta = (contract && contractId)
             ? await normalizeContractOutputWithTableMeta(supabase, contract as Record<string, unknown>)
@@ -530,7 +542,7 @@ export async function PATCH(req: Request) {
         revalidatePath('/requests');
         return NextResponse.json({ success: true, data: normalizedWithTableMeta });
     } catch (error) {
-        console.error('계약 수정 오류:', error);
+        logError('계약 수정 오류:', error);
         return NextResponse.json(
             { success: false, error: extractErrorMessage(error) },
             { status: 500 }
@@ -538,8 +550,13 @@ export async function PATCH(req: Request) {
     }
 }
 
-export async function DELETE(req: Request) {
+// 계약 삭제 (트랜잭션 보호: RPC 우선, 폴백 순차 삭제)
+export async function DELETE(req: NextRequest) {
     try {
+        // 역할 검증: admin 또는 sales만 삭제 가능
+        const denied = await requireAdminOrSales(req)
+        if (denied) return denied
+
         const { searchParams } = new URL(req.url);
         const id = searchParams.get('id');
 
@@ -551,6 +568,37 @@ export async function DELETE(req: Request) {
         }
 
         const supabase = createAdminClient();
+
+        // RPC 호출 시도 — 단일 트랜잭션으로 안전하게 삭제
+        const { data: rpcResult, error: rpcError } = await supabase.rpc(
+            'delete_contract_cascade',
+            { p_contract_id: id }
+        );
+
+        if (!rpcError && rpcResult) {
+            const result = typeof rpcResult === 'string' ? JSON.parse(rpcResult) : rpcResult;
+            if (result.success) {
+                revalidatePath('/contracts');
+                revalidatePath('/requests');
+                return NextResponse.json({ success: true });
+            }
+            logError('계약 삭제 RPC 오류:', result.error);
+            return NextResponse.json(
+                { success: false, error: result.error || '삭제 실패' },
+                { status: 500 }
+            );
+        }
+
+        // RPC 함수 미존재(42883) → 기존 순차 삭제로 폴백
+        if (rpcError && rpcError.code !== '42883') {
+            logError('계약 삭제 RPC 오류:', rpcError.message);
+            return NextResponse.json(
+                { success: false, error: extractErrorMessage(rpcError) },
+                { status: 500 }
+            );
+        }
+
+        // ── 폴백: 순차 삭제 (RPC 마이그레이션 전 호환용) ──
         const nowIso = new Date().toISOString();
 
         // 연결된 요청 카드 참조 해제
@@ -585,7 +633,7 @@ export async function DELETE(req: Request) {
         revalidatePath('/requests');
         return NextResponse.json({ success: true });
     } catch (error) {
-        console.error('계약 삭제 오류:', error);
+        logError('계약 삭제 오류:', error);
         return NextResponse.json(
             { success: false, error: extractErrorMessage(error) },
             { status: 500 }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import { Search, Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import SalesTabNav from "@/components/layout/sales-tab-nav"
@@ -124,7 +125,7 @@ export function ContractKanbanBoard({
       router.refresh()
     } catch (error) {
       console.error(error)
-      alert("삭제 중 오류가 발생했습니다.")
+      toast({ title: "오류", description: "삭제 중 오류가 발생했습니다.", variant: "destructive" })
     }
   }
 

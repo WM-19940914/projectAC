@@ -66,15 +66,28 @@ export async function middleware(request: NextRequest) {
   }
 
   // ── 페이지 라우트: Supabase 세션 기반 리다이렉트 ──
+
+  // 인증 콜백 경로 — 세션 유무와 무관하게 항상 통과
+  if (pathname.startsWith("/auth/callback")) {
+    return supabaseResponse
+  }
+
+  // 로그인 불필요 페이지 (로그인, 회원가입, 비밀번호 찾기)
   const isAuthPage =
-    pathname === "/login" || pathname === "/signup"
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password"
+
+  // 비밀번호 재설정 페이지 — 이메일 링크를 통해 세션이 생성된 후 접근하므로
+  // 로그인 상태여도 대시보드로 리다이렉트하지 않음
+  const isResetPasswordPage = pathname === "/reset-password"
 
   // 비로그인 + 보호된 페이지 → 로그인으로
-  if (!session && !isAuthPage) {
+  if (!session && !isAuthPage && !isResetPasswordPage) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
-  // 로그인 상태 + 인증 페이지 → 대시보드로
+  // 로그인 상태 + 인증 페이지 → 대시보드로 (비밀번호 재설정은 제외)
   if (session && isAuthPage) {
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }

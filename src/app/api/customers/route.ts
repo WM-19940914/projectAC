@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAdminOrSales } from "@/lib/api-auth"
+import { logError } from "@/lib/logger"
 import { jsonWithUTF8, sanitizeDBResponse } from "@/lib/utf8-response"
 import { revalidatePath } from "next/cache"
 import { NextRequest } from "next/server"
@@ -35,7 +37,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) {
-      console.error("[POST /api/customers]", error.message)
+      logError("[POST /api/customers]", error.message)
       return jsonWithUTF8({ error: "고객 등록에 실패했습니다" }, { status: 500 })
     }
 
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
     // UTF-8로 정제된 응답 반환
     return jsonWithUTF8({ data: sanitizeDBResponse(data) })
   } catch (e: unknown) {
-    console.error("[POST /api/customers]", e)
+    logError("[POST /api/customers]", e)
     return jsonWithUTF8({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
@@ -74,7 +76,7 @@ export async function PATCH(req: NextRequest) {
     const { error } = await supabase.from("customers").update(updateData).eq("id", id)
 
     if (error) {
-      console.error("[PATCH /api/customers]", error.message)
+      logError("[PATCH /api/customers]", error.message)
       return jsonWithUTF8({ error: "고객 수정에 실패했습니다" }, { status: 500 })
     }
 
@@ -84,7 +86,7 @@ export async function PATCH(req: NextRequest) {
     revalidatePath("/quotes")
     return jsonWithUTF8({ success: true })
   } catch (e: unknown) {
-    console.error("[PATCH /api/customers]", e)
+    logError("[PATCH /api/customers]", e)
     return jsonWithUTF8({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
@@ -92,6 +94,10 @@ export async function PATCH(req: NextRequest) {
 // 고객 삭제 API (소프트 삭제)
 export async function DELETE(req: NextRequest) {
   try {
+    // 역할 검증: admin 또는 sales만 삭제 가능
+    const denied = await requireAdminOrSales(req)
+    if (denied) return denied
+
     const { id } = await req.json()
 
     if (!id) {
@@ -105,7 +111,7 @@ export async function DELETE(req: NextRequest) {
       .eq("id", id)
 
     if (error) {
-      console.error("[DELETE /api/customers]", error.message)
+      logError("[DELETE /api/customers]", error.message)
       return jsonWithUTF8({ error: "고객 삭제에 실패했습니다" }, { status: 500 })
     }
 
@@ -113,7 +119,7 @@ export async function DELETE(req: NextRequest) {
     revalidatePath("/requests")
     return jsonWithUTF8({ success: true })
   } catch (e: unknown) {
-    console.error("[DELETE /api/customers]", e)
+    logError("[DELETE /api/customers]", e)
     return jsonWithUTF8({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }

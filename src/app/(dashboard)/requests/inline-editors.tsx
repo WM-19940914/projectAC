@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
+import { Pencil } from "lucide-react"
 
 // ----- 인라인 제목 편집 컴포넌트 -----
 export function InlineTitle({
@@ -76,12 +77,13 @@ export function InlineTitle({
     <h2
       onClick={() => setIsEditing(true)}
       className={cn(
-        "text-left cursor-pointer rounded px-1 -mx-1 hover:bg-slate-50 transition-colors truncate",
+        "group/title text-left cursor-pointer rounded px-1 -mx-1 hover:bg-slate-50 transition-colors truncate flex items-center gap-1.5",
         compact ? "font-heading text-lg font-bold tracking-tight py-0.5" : "font-sans text-2xl font-semibold py-1"
       )}
       title={value}
     >
       {value}
+      <Pencil className="h-3 w-3 shrink-0 text-gray-300 opacity-0 group-hover/title:opacity-100 transition-opacity" />
     </h2>
   )
 }
@@ -332,13 +334,14 @@ export function InlineEditField({
       ref={wrapperRef}
       onClick={() => { setTempValue(value); setIsEditing(true) }}
       className={cn(
-        "relative flex-1 cursor-pointer rounded hover:bg-slate-50 transition-colors py-1 px-2 -mx-2",
+        "group/field relative flex-1 cursor-pointer rounded hover:bg-slate-50 transition-colors py-1 px-2 -mx-2",
         align === "right" && "text-right",
         !value && "border-b border-dashed border-gray-300"
       )}
     >
-      <span className={cn(value ? "text-gray-900" : "text-gray-400", textClass)}>
+      <span className={cn(value ? "text-gray-900" : "text-gray-400", textClass, "flex items-center gap-1")}>
         {value || placeholder}
+        <Pencil className="h-2.5 w-2.5 shrink-0 text-gray-300 opacity-0 group-hover/field:opacity-100 transition-opacity" />
       </span>
 
       {isEditing && (
@@ -419,11 +422,12 @@ export function InlineEditMemo({
       <div
         onClick={() => { setTempValue(value); setIsEditing(true) }}
         className={cn(
-          "cursor-pointer py-1 px-1 -mx-1 rounded hover:bg-slate-50 transition-colors text-sm min-h-[60px] whitespace-pre-wrap",
+          "group/memo cursor-pointer py-1 px-1 -mx-1 rounded hover:bg-slate-50 transition-colors text-sm min-h-[60px] whitespace-pre-wrap relative",
           value ? "text-gray-900" : "text-gray-400 border-b border-dashed border-gray-300"
         )}
       >
         {value || placeholder}
+        <Pencil className="absolute top-1 right-1 h-2.5 w-2.5 text-gray-300 opacity-0 group-hover/memo:opacity-100 transition-opacity" />
       </div>
       {isEditing && (
         <div onClick={(e) => e.stopPropagation()} className="absolute top-full left-0 mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-2.5 min-w-[300px]">

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import { FileText, Search, Plus, Building2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -156,7 +157,7 @@ export default function QuotesList({ quotations, customers }: Props) {
         setIsSheetOpen(true)
       }
     } catch {
-      alert("견적서 데이터를 불러올 수 없습니다.")
+      toast({ title: "오류", description: "견적서 데이터를 불러올 수 없습니다.", variant: "destructive" })
     }
   }, [])
 
@@ -184,7 +185,7 @@ export default function QuotesList({ quotations, customers }: Props) {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        alert("견적서 생성 실패: " + (err.error || res.status))
+        toast({ title: "오류", description: "견적서 생성 실패: " + (err.error || res.status), variant: "destructive" })
         return
       }
       const result = await res.json()
@@ -202,7 +203,7 @@ export default function QuotesList({ quotations, customers }: Props) {
         router.refresh()
       }
     } catch {
-      alert("견적서 생성 중 오류가 발생했습니다.")
+      toast({ title: "오류", description: "견적서 생성 중 오류가 발생했습니다.", variant: "destructive" })
     }
   }, [requests, selectedRequestId, router])
 
@@ -218,7 +219,7 @@ export default function QuotesList({ quotations, customers }: Props) {
         body: JSON.stringify(createRequestForm),
       })
       const reqResult = await reqRes.json()
-      if (!reqRes.ok) { alert("의뢰 생성 실패: " + (reqResult.error || "")); return }
+      if (!reqRes.ok) { toast({ title: "오류", description: "의뢰 생성 실패: " + (reqResult.error || ""), variant: "destructive" }); return }
 
       // 2. 견적서 즉시 생성 (의뢰에 연결)
       const quotePayload = {
@@ -235,7 +236,7 @@ export default function QuotesList({ quotations, customers }: Props) {
       })
       if (!quoteRes.ok) {
         const err = await quoteRes.json().catch(() => ({}))
-        alert("견적서 생성 실패: " + (err.error || quoteRes.status))
+        toast({ title: "오류", description: "견적서 생성 실패: " + (err.error || quoteRes.status), variant: "destructive" })
         return
       }
       const quoteResult = await quoteRes.json()
@@ -256,7 +257,7 @@ export default function QuotesList({ quotations, customers }: Props) {
         router.refresh()
       }
     } catch {
-      alert("의뢰 생성 중 오류가 발생했습니다")
+      toast({ title: "오류", description: "의뢰 생성 중 오류가 발생했습니다", variant: "destructive" })
     } finally {
       setIsCreatingRequest(false)
     }
@@ -715,10 +716,10 @@ export default function QuotesList({ quotations, customers }: Props) {
                         setIsCustomerCreateMode(false)
                         setCustomerCreateForm({ company_name: "", contact_name: "", phone: "" })
                       } else {
-                        alert("고객 생성 실패: " + (result.error || ""))
+                        toast({ title: "오류", description: "고객 생성 실패: " + (result.error || ""), variant: "destructive" })
                       }
                     } catch {
-                      alert("고객 생성 중 오류가 발생했습니다")
+                      toast({ title: "오류", description: "고객 생성 중 오류가 발생했습니다", variant: "destructive" })
                     }
                     setIsCreatingCustomer(false)
                   }}

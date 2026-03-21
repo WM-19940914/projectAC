@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useMemo, useRef, useEffect } from "react"
+import { useState, useMemo, useRef, useEffect, useCallback } from "react"
 import { formatShortDate, formatPhone } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -32,9 +33,11 @@ import {
   X,
   FileText,
   Save,
+  Pencil,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import SalesTabNav from "@/components/layout/sales-tab-nav"
+import { toast } from "@/hooks/use-toast"
 
 // ----- 타입 -----
 interface CustomerItem {
@@ -138,7 +141,7 @@ function InlineEdit({
       ref={wrapperRef}
       onClick={handleOpen}
       className={cn(
-        "relative flex-1 cursor-pointer rounded hover:bg-slate-50 transition-colors py-1 px-2 -mx-2",
+        "group/edit relative flex-1 cursor-pointer rounded hover:bg-slate-50 transition-colors py-1 px-2 -mx-2",
         align === "right" && "text-right",
         !value && "border-b border-dashed border-gray-300"
       )}
@@ -147,10 +150,12 @@ function InlineEdit({
       <span
         className={cn(
           value ? "text-gray-900" : "text-gray-400",
-          className
+          className,
+          "inline-flex items-center gap-1"
         )}
       >
         {value || placeholder}
+        <Pencil className="h-2.5 w-2.5 shrink-0 text-gray-300 opacity-0 group-hover/edit:opacity-100 transition-opacity" />
       </span>
 
       {/* 미니 입력 팝업 */}
@@ -297,6 +302,10 @@ export function CustomerList({ customers: initialCustomers }: Props) {
   // 삭제 다이얼로그
   const [deleteTarget, setDeleteTarget] = useState<CustomerItem | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  // 일괄 선택/삭제
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
+  const [bulkDeleteProgress, setBulkDeleteProgress] = useState("")
 
   const router = useRouter()
 
@@ -313,6 +322,101 @@ export function CustomerList({ customers: initialCustomers }: Props) {
         c.address?.toLowerCase().includes(q)
     )
   }, [customers, searchQuery])
+
+  // ----- 일괄 선택 핸들러 -----
+
+  // 개별 체크박스 토글
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }, [])
+
+  // 전체 선택 / 해제 (현재 필터링된 목록 기준)
+  const handleToggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      const filteredIds = filteredCustomers.map((c) => c.id)
+      const allSelected = filteredIds.length > 0 && filteredIds.every((id) => prev.has(id))
+      if (allSelected) {
+        // 전체 해제
+        return new Set()
+      } else {
+        // 전체 선택
+        return new Set(filteredIds)
+      }
+    })
+  }, [filteredCustomers])
+
+  // 전체 선택 상태 계산
+  const isAllSelected = filteredCustomers.length > 0 && filteredCustomers.every((c) => selectedIds.has(c.id))
+  const isSomeSelected = filteredCustomers.some((c) => selectedIds.has(c.id))
+
+  // 선택 해제
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set())
+  }, [])
+
+  // 일괄 삭제 처리
+  const handleBulkDelete = async () => {
+    const idsToDelete = Array.from(selectedIds)
+    if (idsToDelete.length === 0) return
+
+    setIsBulkDeleting(true)
+    let successCount = 0
+    let failCount = 0
+
+    for (let i = 0; i < idsToDelete.length; i++) {
+      setBulkDeleteProgress(`삭제 중... (${i + 1}/${idsToDelete.length})`)
+
+      try {
+        const res = await fetch("/api/customers", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: idsToDelete[i] }),
+        })
+
+        if (res.ok) {
+          successCount++
+        } else {
+          failCount++
+        }
+      } catch {
+        failCount++
+      }
+    }
+
+    // 삭제 성공한 항목을 로컬 상태에서 제거
+    if (successCount > 0) {
+      const deletedSet = new Set(idsToDelete)
+      setCustomers((prev) => prev.filter((c) => !deletedSet.has(c.id)))
+      router.refresh()
+    }
+
+    // 선택 해제 및 진행상황 초기화
+    setSelectedIds(new Set())
+    setIsBulkDeleting(false)
+    setBulkDeleteProgress("")
+
+    // 결과 토스트 알림
+    if (failCount === 0) {
+      toast({
+        title: "완료",
+        description: `${successCount}건의 고객이 삭제되었습니다.`,
+      })
+    } else {
+      toast({
+        title: "오류",
+        description: `${successCount}건 삭제 성공, ${failCount}건 삭제 실패`,
+        variant: "destructive",
+      })
+    }
+  }
 
   // 고객 클릭 → 수정 패널 열기
   const handleSelectCustomer = (customer: CustomerItem) => {
@@ -387,6 +491,11 @@ export function CustomerList({ customers: initialCustomers }: Props) {
   const handleSave = async () => {
     if (!editForm.company_name?.trim()) {
       setSaveMessage("회사명을 입력해주세요")
+      toast({
+        title: "오류",
+        description: "회사명을 입력해주세요.",
+        variant: "destructive",
+      })
       return
     }
     setIsSaving(true)
@@ -401,9 +510,18 @@ export function CustomerList({ customers: initialCustomers }: Props) {
 
     if (!res.ok) {
       setSaveMessage("저장 실패: " + result.error)
+      toast({
+        title: "오류",
+        description: "고객 등록에 실패했습니다: " + result.error,
+        variant: "destructive",
+      })
     } else {
       setSaveMessage("등록 완료!")
       setCustomers((prev) => [result.data, ...prev])
+      toast({
+        title: "완료",
+        description: `"${editForm.company_name}" 고객이 등록되었습니다.`,
+      })
       setTimeout(() => {
         setIsAddMode(false)
         setSaveMessage("")
@@ -419,7 +537,14 @@ export function CustomerList({ customers: initialCustomers }: Props) {
     setIsDeleting(true)
 
     const targetId = deleteTarget.id
+    const targetName = deleteTarget.company_name
     setCustomers((prev) => prev.filter((c) => c.id !== targetId))
+    // 선택 목록에서도 제거
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(targetId)
+      return next
+    })
     setDeleteTarget(null)
 
     // admin API로 삭제 + 캐시 갱신
@@ -431,8 +556,17 @@ export function CustomerList({ customers: initialCustomers }: Props) {
 
     if (!res.ok) {
       setCustomers(initialCustomers)
+      toast({
+        title: "오류",
+        description: `"${targetName}" 삭제에 실패했습니다.`,
+        variant: "destructive",
+      })
     } else {
       router.refresh()
+      toast({
+        title: "완료",
+        description: `"${targetName}"이(가) 삭제되었습니다.`,
+      })
     }
     setIsDeleting(false)
   }
@@ -471,11 +605,44 @@ export function CustomerList({ customers: initialCustomers }: Props) {
         </div>
       </div>
 
+      {/* 일괄 선택 액션 툴바 */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-10 flex items-center gap-3 px-6 py-2.5 bg-slate-50 border-b">
+          <span className="text-sm font-medium text-slate-700">
+            {selectedIds.size}건 선택됨
+          </span>
+          <button
+            onClick={handleBulkDelete}
+            disabled={isBulkDeleting}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md bg-soft-blush text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {isBulkDeleting ? bulkDeleteProgress : "선택 삭제"}
+          </button>
+          <button
+            onClick={handleClearSelection}
+            disabled={isBulkDeleting}
+            className="px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-50"
+          >
+            선택 해제
+          </button>
+        </div>
+      )}
+
       {/* 테이블 */}
       <div>
         <table className="w-full">
           <thead className="bg-gray-50 sticky top-0 z-[5]">
             <tr className="text-left text-sm text-gray-500 font-medium">
+              {/* 전체 선택 체크박스 */}
+              <th className="pl-6 pr-2 py-3 w-[40px]">
+                <Checkbox
+                  checked={isAllSelected ? true : isSomeSelected ? "indeterminate" : false}
+                  onCheckedChange={handleToggleSelectAll}
+                  aria-label="전체 선택"
+                  className="border-gray-300 data-[state=checked]:bg-sky-aqua data-[state=checked]:border-sky-aqua data-[state=indeterminate]:bg-sky-aqua data-[state=indeterminate]:border-sky-aqua"
+                />
+              </th>
               <th className="px-6 py-3">회사명</th>
               <th className="px-6 py-3">담당자</th>
               <th className="px-6 py-3">연락처</th>
@@ -485,58 +652,74 @@ export function CustomerList({ customers: initialCustomers }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {filteredCustomers.map((customer) => (
-              <tr
-                key={customer.id}
-                onClick={() => handleSelectCustomer(customer)}
-                className="group hover:bg-slate-50 cursor-pointer transition-colors"
-              >
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                      <Building2 className="h-4 w-4 text-slate-700" />
+            {filteredCustomers.map((customer) => {
+              const isSelected = selectedIds.has(customer.id)
+              return (
+                <tr
+                  key={customer.id}
+                  onClick={() => handleSelectCustomer(customer)}
+                  className={cn(
+                    "group hover:bg-slate-50 cursor-pointer transition-colors",
+                    isSelected && "bg-slate-50/80"
+                  )}
+                >
+                  {/* 개별 체크박스 */}
+                  <td className="pl-6 pr-2 py-4 w-[40px]">
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => handleToggleSelect(customer.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`${customer.company_name} 선택`}
+                      className="border-gray-300 data-[state=checked]:bg-sky-aqua data-[state=checked]:border-sky-aqua"
+                    />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                        <Building2 className="h-4 w-4 text-slate-700" />
+                      </div>
+                      <span className="text-[15px] font-medium text-gray-900">
+                        {customer.company_name}
+                      </span>
                     </div>
-                    <span className="text-[15px] font-medium text-gray-900">
-                      {customer.company_name}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-[15px] text-gray-900">
+                      {customer.contact_name || <span className="text-gray-300">-</span>}
                     </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-[15px] text-gray-900">
-                    {customer.contact_name || <span className="text-gray-300">-</span>}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-[15px] text-gray-600">
-                    {customer.phone ? formatPhone(customer.phone) : <span className="text-gray-300">-</span>}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-[15px] text-gray-600">
-                    {customer.email || <span className="text-gray-300">-</span>}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-[15px] text-gray-500">
-                    {formatShortDate(customer.created_at)}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setDeleteTarget(customer)
-                    }}
-                    className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-red-500 hover:bg-red-600 text-white"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-[15px] text-gray-600">
+                      {customer.phone ? formatPhone(customer.phone) : <span className="text-gray-300">-</span>}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-[15px] text-gray-600">
+                      {customer.email || <span className="text-gray-300">-</span>}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-[15px] text-gray-500">
+                      {formatShortDate(customer.created_at)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDeleteTarget(customer)
+                      }}
+                      className="p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-all bg-red-500 hover:bg-red-600 text-white"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
             {filteredCustomers.length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center py-16 text-sm text-gray-400">
+                <td colSpan={7} className="text-center py-16 text-sm text-gray-400">
                   {searchQuery ? "검색 결과가 없습니다" : "등록된 고객이 없습니다"}
                 </td>
               </tr>
@@ -646,19 +829,22 @@ export function CustomerList({ customers: initialCustomers }: Props) {
                 )}
               </div>
 
-              {/* 회사명 */}
+              {/* 회사명 (필수) */}
               <SheetHeader className="mb-6">
                 <SheetTitle className="sr-only">
                   {isAddMode ? "고객 추가" : "고객 수정"}
                 </SheetTitle>
                 <SheetDescription className="sr-only">고객 정보를 입력하세요</SheetDescription>
-                <InlineEdit
-                  value={editForm.company_name}
-                  placeholder="회사명을 입력하세요"
-                  onConfirm={(v) => updateField("company_name", v)}
-                  className="font-sans text-2xl font-semibold"
-                  align="left"
-                />
+                <div className="flex items-center gap-1">
+                  <span className="text-red-500 text-sm font-bold">*</span>
+                  <InlineEdit
+                    value={editForm.company_name}
+                    placeholder="회사명을 입력하세요"
+                    onConfirm={(v) => updateField("company_name", v)}
+                    className="font-sans text-2xl font-semibold"
+                    align="left"
+                  />
+                </div>
               </SheetHeader>
 
               <Separator className="mb-6" />

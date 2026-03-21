@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { logError } from "@/lib/logger"
 import { NextResponse } from "next/server"
 
 // 의뢰 목록 조회 (견적서 생성 시 의뢰 선택용)
@@ -13,7 +14,7 @@ export async function GET() {
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("[GET /api/requests/list]", error.message)
+      logError("[GET /api/requests/list]", error.message)
       return NextResponse.json({ error: "의뢰 목록 조회 실패" }, { status: 500 })
     }
 
@@ -26,7 +27,7 @@ export async function GET() {
 
     return NextResponse.json({ data: cleaned })
   } catch (e: unknown) {
-    console.error("[GET /api/requests/list]", e)
+    logError("[GET /api/requests/list]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }

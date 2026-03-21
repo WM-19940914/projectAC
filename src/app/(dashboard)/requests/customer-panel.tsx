@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { formatPhone } from "@/lib/format"
 import {
@@ -81,7 +82,7 @@ export function CustomerPanel({
       })
       closeModal()
     } catch {
-      alert("고객 생성에 실패했습니다.")
+      toast({ title: "오류", description: "고객 생성에 실패했습니다.", variant: "destructive" })
     }
     setIsCreating(false)
   }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import { toast } from "@/hooks/use-toast"
 import { Search, X, Plus, Edit2, Trash2, Check } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { formatCurrency } from "@/lib/format"
@@ -62,7 +63,7 @@ export default function PriceList({ items }: PriceListProps) {
         setEditingId(null)
         router.refresh()
       } else {
-        alert("수정 실패")
+        toast({ title: "오류", description: "수정 실패", variant: "destructive" })
       }
     } catch { }
   }
@@ -80,14 +81,14 @@ export default function PriceList({ items }: PriceListProps) {
         if (editingId === id) setEditingId(null)
         router.refresh()
       } else {
-        alert("삭제 실패")
+        toast({ title: "오류", description: "삭제 실패", variant: "destructive" })
       }
     } catch { }
   }
 
   // 추가 핸들러
   const saveAdd = async () => {
-    if (!addForm.product_name) return alert("상품명을 입력해주세요.")
+    if (!addForm.product_name) { toast({ title: "알림", description: "상품명을 입력해주세요." }); return }
     try {
       const res = await fetch("/api/price-list", {
         method: "POST",
@@ -99,7 +100,7 @@ export default function PriceList({ items }: PriceListProps) {
         setAddForm({ sub_category: "", product_name: "", specification: "", unit: "식", unit_price: 0 })
         router.refresh()
       } else {
-        alert("추가 실패")
+        toast({ title: "오류", description: "추가 실패", variant: "destructive" })
       }
     } catch { }
   }

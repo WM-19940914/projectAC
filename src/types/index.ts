@@ -43,7 +43,7 @@ export interface Customer {
 }
 
 // ----- 의뢰 -----
-export type RequestStatus = '견적서 작성중' | '계약 진행' | '계약 체결' | '주문·배송 진행' | '완료';
+export type RequestStatus = '견적 문의' | '영업중' | '계약 성공' | '수주 실패' | '숨김';
 
 export interface Request {
   id: string;

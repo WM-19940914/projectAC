@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAdmin } from "@/lib/api-auth"
+import { logError } from "@/lib/logger"
 import { NextRequest, NextResponse } from "next/server"
 
 // 우리 회사 기본 정보 조회
@@ -12,13 +14,13 @@ export async function GET() {
       .single()
 
     if (error) {
-      console.error("[/api/settings]", error.message)
+      logError("[/api/settings]", error.message)
       return NextResponse.json({ error: "설정 조회 실패" }, { status: 500 })
     }
 
     return NextResponse.json({ data })
   } catch (e: unknown) {
-    console.error("[/api/settings]", e)
+    logError("[/api/settings]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
@@ -26,6 +28,10 @@ export async function GET() {
 // 우리 회사 기본 정보 수정
 export async function PATCH(req: NextRequest) {
   try {
+    // 역할 검증: admin만 설정 변경 가능
+    const denied = await requireAdmin(req)
+    if (denied) return denied
+
     const body = await req.json()
     const supabase = createAdminClient()
 
@@ -72,7 +78,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    console.error("[/api/settings]", e)
+    logError("[/api/settings]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }

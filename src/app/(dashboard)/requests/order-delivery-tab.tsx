@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import {
   Dialog,
   DialogContent,
@@ -557,7 +558,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
       setIsEditorOpen(true)
     } catch (error) {
       const message = error instanceof Error ? error.message : "생성 중 오류가 발생했습니다."
-      alert(message)
+      toast({ title: "오류", description: message, variant: "destructive" })
     } finally {
       setIsCreating(false)
     }
@@ -606,7 +607,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
     } catch (error) {
       const message = error instanceof Error ? error.message : "저장 중 오류가 발생했습니다."
       setSaveMessage("저장 실패")
-      alert(message)
+      toast({ title: "오류", description: message, variant: "destructive" })
       return false
     } finally {
       setIsSaving(false)
@@ -715,7 +716,7 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "삭제에 실패했습니다."
-      alert(message)
+      toast({ title: "오류", description: message, variant: "destructive" })
     } finally {
       setIsDeleting(false)
     }
@@ -949,80 +950,39 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
     openEditor(item)
   }
 
+  // 요약용: 주문의 의미 있는 라인 가져오기
+  const getMeaningfulLines = (item: OrderDeliveryItem) =>
+    (item.lines ?? []).filter(isMeaningfulOrderDeliveryLine)
+
   return (
     <div className="flex flex-col gap-3">
-      {/* 상단: 주문 선택 탭 + 생성 버튼 */}
-      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-        <div className="flex items-center justify-between bg-slate-50 border-b border-slate-100 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-              <Truck className="h-3.5 w-3.5 text-slate-500" />주문 내역
-            </p>
-            {saveMessage && (
-              <span className={`text-[10px] ${saveMessage.includes("실패") ? "text-red-500" : "text-gray-400"}`}>
-                {isSaving ? "저장 중..." : saveMessage}
-              </span>
-            )}
-            {isSaving && !saveMessage && (
-              <span className="text-[10px] text-gray-400">저장 중...</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {/* 현재 주문 삭제 버튼 */}
-            {draft?.id && (
-              <button
-                type="button"
-                onClick={() => openDeleteConfirm(draft.id, true)}
-                disabled={isDeleting}
-                className="inline-flex h-8 items-center justify-center gap-1 rounded-md border border-red-200 px-2.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 disabled:opacity-40"
-              >
-                <Trash2 className="h-3 w-3" />
-                삭제
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => { void handleCreate() }}
-              disabled={isCreating}
-              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-slate-700 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {isCreating ? "생성 중..." : "+주문 생성"}
-            </button>
-          </div>
+      {/* 상단: 타이틀 + 저장 상태 + 생성 버튼 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+            <Truck className="h-3.5 w-3.5 text-slate-500" />주문 내역
+          </p>
+          {saveMessage && (
+            <span className={`text-[10px] ${saveMessage.includes("실패") ? "text-red-500" : "text-gray-400"}`}>
+              {isSaving ? "저장 중..." : saveMessage}
+            </span>
+          )}
+          {isSaving && !saveMessage && (
+            <span className="text-[10px] text-gray-400">저장 중...</span>
+          )}
         </div>
-
-        {/* 주문이 1개 이상이면 탭으로 표시 */}
-        {sortedItems.length > 0 && (
-          <div className="flex items-center gap-1 px-4 py-2 border-b border-gray-100 overflow-x-auto">
-            {sortedItems.map((item, idx) => {
-              const isActive = draft?.id === item.id
-              const summary = getDeliveryCardSummary(item)
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => { void switchToItem(item) }}
-                  className={`relative shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                    isActive
-                      ? "bg-slate-700 text-white"
-                      : "text-gray-500 hover:bg-gray-100"
-                  }`}
-                >
-                  주문 {idx + 1}
-                  <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
-                    isActive ? "bg-white/20 text-white" : summary.progressBadgeClassName
-                  }`}>
-                    {summary.completedCount}/{summary.totalCount}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => { void handleCreate() }}
+          disabled={isCreating}
+          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md bg-slate-700 px-3 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {isCreating ? "생성 중..." : "+주문 생성"}
+        </button>
       </div>
 
-      {/* 인라인 에디터 영역 */}
+      {/* 로딩/빈 상태 */}
       {isLoading ? (
         <div className="rounded-lg border border-dashed border-gray-200 bg-white px-4 py-10 text-center">
           <p className="text-sm font-medium text-gray-500">주문 내역을 불러오는 중입니다.</p>
@@ -1032,245 +992,359 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
           <p className="text-sm font-medium text-gray-500">등록된 주문 내역이 없습니다.</p>
           <p className="mt-1 text-xs text-gray-400">위의 +주문 생성 버튼으로 추가하세요.</p>
         </div>
-      ) : draft ? (
-        <div className="flex flex-col gap-2">
-          {/* 헤더 필드 (현장명, 옵티명, 옵티번호, 계약번호) */}
-          <section className="rounded-xl border border-gray-200 bg-gray-50/60 p-3">
-            <div className="grid grid-cols-1 gap-2 lg:grid-cols-4">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-500">현장명</p>
-                <Input
-                  value={draft.site_name}
-                  onChange={(event) => handleHeaderChange("site_name", event.target.value)}
-                  onFocus={handleFieldFocus}
-                  onBlur={handleFieldBlur}
-                  placeholder="현장명을 입력하세요"
-                  className="h-9 bg-white text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-500">옵티명</p>
-                <Input
-                  value={draft.opti_name}
-                  onChange={(event) => handleHeaderChange("opti_name", event.target.value)}
-                  onFocus={handleFieldFocus}
-                  onBlur={handleFieldBlur}
-                  placeholder="옵티명을 입력하세요"
-                  className="h-9 bg-white text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-500">옵티번호</p>
-                <Input
-                  value={draft.opti_number}
-                  onChange={(event) => handleHeaderChange("opti_number", event.target.value)}
-                  onFocus={handleFieldFocus}
-                  onBlur={handleFieldBlur}
-                  placeholder="옵티번호를 입력하세요"
-                  className="h-9 bg-white text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-gray-500">계약번호</p>
-                <Input
-                  value={draft.contract_number}
-                  onChange={(event) => handleHeaderChange("contract_number", event.target.value)}
-                  onFocus={handleFieldFocus}
-                  onBlur={handleFieldBlur}
-                  placeholder="계약번호를 입력하세요"
-                  className="h-9 bg-white text-sm"
-                />
-              </div>
-            </div>
-          </section>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {/* ── 모든 주문을 펼쳐서 카드로 표시 ── */}
+          {sortedItems.map((item, idx) => {
+            const isActive = draft?.id === item.id
+            const summary = getDeliveryCardSummary(item)
+            const meaningfulLines = getMeaningfulLines(item)
+            const headerSiteName = toInputValue(item.site_name).trim()
+            const headerOptiName = toInputValue(item.opti_name).trim()
+            const headerContractNumber = toInputValue(item.contract_number).trim()
 
-          {/* 테이블 + 행 액션 */}
-          <section className="flex flex-col rounded-xl border border-gray-200 bg-white" style={{ maxHeight: "60vh" }}>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white/95 px-3 py-2 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleAddRows(1)}
-                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+            return (
+              <div
+                key={item.id}
+                className={`rounded-xl border overflow-hidden transition-colors ${
+                  isActive ? "border-slate-400 ring-1 ring-slate-200" : "border-gray-200"
+                }`}
+              >
+                {/* 주문 헤더 (클릭 가능): 주문 N + 상태 배지 + 진행 카운트 + 메타 미리보기 + 삭제 버튼 */}
+                <div
+                  className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${
+                    isActive ? "bg-slate-700 text-white" : "bg-slate-50 hover:bg-slate-100"
+                  }`}
+                  onClick={() => { void switchToItem(item) }}
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  행 추가
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddRows(5)}
-                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
-                >
-                  +5행
-                </button>
-                <button
-                  type="button"
-                  onClick={handleTrimEmptyRows}
-                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
-                >
-                  빈 행 정리
-                </button>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {/* 확정 견적서 보기 */}
-                {confirmedQuoteId && onEditQuote && (
-                  <button
-                    type="button"
-                    onClick={() => onEditQuote(confirmedQuoteId)}
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-                  >
-                    <ClipboardList className="h-3.5 w-3.5" />
-                    확정 견적서 보기
-                  </button>
-                )}
-              </div>
-            </div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`text-xs font-semibold ${isActive ? "text-white" : "text-slate-800"}`}>
+                      주문 {idx + 1}
+                    </span>
+                    <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                      isActive ? "border-white/30 bg-white/15 text-white" : summary.badgeClassName
+                    }`}>
+                      {summary.status}
+                    </span>
+                    <span className={`inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                      isActive ? "bg-white/20 text-white" : summary.progressBadgeClassName
+                    }`}>
+                      {summary.completedCount}/{summary.totalCount}
+                    </span>
+                    {/* 현장명/옵티명/계약번호 간략 표시 */}
+                    {!isActive && (headerSiteName || headerOptiName || headerContractNumber) && (
+                      <span className="truncate text-[10px] text-gray-400 ml-1">
+                        {[headerSiteName, headerOptiName, headerContractNumber].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isActive && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openDeleteConfirm(item.id, true) }}
+                        disabled={isDeleting}
+                        className="inline-flex h-6 items-center gap-1 rounded px-2 text-[10px] font-medium text-red-300 hover:bg-red-500/20 hover:text-red-200 disabled:opacity-40"
+                      >
+                        <Trash2 className="h-3 w-3" />삭제
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div>
-                <div className="w-full">
-                  <table className="w-full table-fixed border-separate border-spacing-0">
-                    <thead className="sticky top-0 z-20">
-                      <tr className="bg-gray-100">
-                        {ORDER_DELIVERY_LINE_COLUMNS.map((column) => (
-                          <th
-                            key={column.key}
-                            className={`border-b border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-500 ${
-                              column.key === "quantity"
-                                ? "text-center"
-                                : "text-left"
-                            }`}
-                            style={{ width: column.width }}
-                          >
-                            {column.label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {draft.lines.map((line, rowIndex) => (
-                        <tr
-                          key={`${line.id ?? "new"}-${rowIndex}`}
-                          className={`group/row relative ${rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}
-                        >
-                          {ORDER_DELIVERY_LINE_COLUMNS.map((column) => {
-                            const value =
-                              column.type === "number"
-                                ? typeof line[column.key] === "number"
-                                  ? String(line[column.key])
-                                  : ""
-                                : String(line[column.key] ?? "")
-
-                            const isLastColumn = column.key === "delivery_place"
-                            return (
-                              <td key={column.key} className={`border-b ${isLastColumn ? "" : "border-r"} border-gray-200 p-0 align-middle ${isLastColumn ? "relative" : ""}`}>
-                                <div className="relative">
-                                  <Input
-                                    type={column.type === "number" ? "number" : "text"}
-                                    min={column.type === "number" ? 0 : undefined}
-                                    inputMode={column.type === "number" ? "numeric" : undefined}
-                                    value={value}
-                                    onFocus={handleFieldFocus}
-                                    onChange={(event) => handleLineChange(rowIndex, column.key, event.target.value)}
-                                    onBlur={() => {
-                                      handleLineBlur(rowIndex, column.key)
-                                      handleFieldBlur()
-                                    }}
-                                    onPaste={(event) => {
-                                      event.preventDefault()
-                                      handleLinePaste(
-                                        rowIndex,
-                                        column.key,
-                                        event.clipboardData.getData("text/plain")
-                                      )
-                                    }}
-                                    placeholder={column.placeholder}
-                                    className={`h-8 rounded-none border-0 bg-transparent px-1.5 text-[11px] placeholder:text-[10px] placeholder:font-normal placeholder:text-gray-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-300 ${
-                                      column.type === "number"
-                                        ? column.key === "quantity"
-                                          ? "text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                          : "text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                        : ""
-                                    } ${
-                                      column.type === "date"
-                                        ? value
-                                          ? "pr-7 text-gray-700"
-                                          : "pr-7 text-gray-300"
-                                        : "text-gray-700"
-                                    }`}
-                                  />
-                                  {column.type === "date" && (
-                                    <Popover>
-                                      <PopoverTrigger asChild>
-                                        <button
-                                          type="button"
-                                          aria-label={`${column.label} 달력 열기`}
-                                          className="absolute right-1 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-500"
-                                          onMouseDown={(event) => event.preventDefault()}
-                                        >
-                                          <Calendar className="h-3.5 w-3.5" />
-                                        </button>
-                                      </PopoverTrigger>
-                                      <PopoverContent align="end" className="w-auto p-0">
-                                        <CalendarPicker
-                                          mode="single"
-                                          selected={parseIsoDateToDate(value)}
-                                          onSelect={(date) => handleDateSelect(rowIndex, column.key, date)}
-                                          initialFocus
-                                        />
-                                      </PopoverContent>
-                                    </Popover>
-                                  )}
-                                </div>
-                                {/* 마지막 컬럼 오른쪽에 hover 시 떠오르는 액션 버튼 */}
-                                {isLastColumn && (
-                                  <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 z-10">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleClearRow(rowIndex)}
-                                      className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/90 text-gray-400 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-vanilla-custard/40 hover:text-yellow-700 hover:ring-vanilla-custard/60"
-                                      aria-label={`${rowIndex + 1}행 비우기`}
-                                      title="행 비우기"
-                                    >
-                                      <Eraser className="h-3 w-3" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteRow(rowIndex)}
-                                      className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/90 text-gray-400 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-soft-blush/40 hover:text-red-400 hover:ring-soft-blush/60"
-                                      aria-label={`${rowIndex + 1}행 삭제`}
-                                      title="행 삭제"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                )}
-                              </td>
-                            )
-                          })}
+                {/* 요약 테이블 — 비편집 모드에서 의미 있는 라인이 있을 때 표시 */}
+                {!isActive && meaningfulLines.length > 0 && (
+                  <div className="bg-white">
+                    <table className="w-full text-[11px]">
+                      <thead>
+                        <tr className="border-b border-gray-100 bg-gray-50/60">
+                          <th className="px-2 py-1.5 text-left font-medium text-gray-400 w-[22%]">모델명</th>
+                          <th className="px-2 py-1.5 text-center font-medium text-gray-400 w-[8%]">수량</th>
+                          <th className="px-2 py-1.5 text-left font-medium text-gray-400 w-[14%]">매입처</th>
+                          <th className="px-2 py-1.5 text-left font-medium text-gray-400 w-[14%]">배송요청일</th>
+                          <th className="px-2 py-1.5 text-left font-medium text-gray-400 w-[14%]">배송예정일</th>
+                          <th className="px-2 py-1.5 text-left font-medium text-gray-400 w-[14%]">배송확정일</th>
+                          <th className="px-2 py-1.5 text-left font-medium text-gray-400 w-[14%]">인도처</th>
                         </tr>
-                      ))}
-                      {/* 행 추가 버튼 행 */}
-                      <tr>
-                        <td colSpan={9} className="p-0">
+                      </thead>
+                      <tbody>
+                        {meaningfulLines.map((line, lineIdx) => {
+                          const confirmedDate = normalizeFlexibleDateInput(toInputValue(line.delivery_confirmed_date))
+                          const today = formatDateFromDate(new Date())
+                          const isDelivered = Boolean(confirmedDate) && confirmedDate <= today
+                          return (
+                            <tr key={line.id ?? lineIdx} className={`border-b border-gray-50 ${isDelivered ? "bg-green-50/30" : ""}`}>
+                              <td className="px-2 py-1 text-gray-700 truncate">{toInputValue(line.model_name) || "-"}</td>
+                              <td className="px-2 py-1 text-center tabular-nums text-gray-700">{toNumberValue(line.quantity) || "-"}</td>
+                              <td className="px-2 py-1 text-gray-500 truncate">{toInputValue(line.supplier) || "-"}</td>
+                              <td className="px-2 py-1 text-gray-500 tabular-nums">{toInputValue(line.delivery_request_date) || "-"}</td>
+                              <td className="px-2 py-1 text-gray-500 tabular-nums">{toInputValue(line.delivery_expected_date) || "-"}</td>
+                              <td className={`px-2 py-1 tabular-nums ${isDelivered ? "text-green-600 font-medium" : "text-gray-500"}`}>
+                                {toInputValue(line.delivery_confirmed_date) || "-"}
+                              </td>
+                              <td className="px-2 py-1 text-gray-500 truncate">{toInputValue(line.delivery_place) || "-"}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* 비편집 모드에서 빈 주문 안내 */}
+                {!isActive && meaningfulLines.length === 0 && (
+                  <div className="bg-white px-4 py-3">
+                    <p className="text-[11px] text-gray-400">배송 항목이 없습니다. 클릭하여 편집하세요.</p>
+                  </div>
+                )}
+
+                {/* ── 선택된 주문: 전체 에디터 (인라인) ── */}
+                {isActive && draft && (
+                  <div className="flex flex-col gap-2 bg-white p-3">
+                    {/* 헤더 필드 (현장명, 옵티명, 옵티번호, 계약번호) */}
+                    <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+                      <div className="grid grid-cols-1 gap-2 lg:grid-cols-4">
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-gray-500">현장명</p>
+                          <Input
+                            value={draft.site_name}
+                            onChange={(event) => handleHeaderChange("site_name", event.target.value)}
+                            onFocus={handleFieldFocus}
+                            onBlur={handleFieldBlur}
+                            placeholder="현장명을 입력하세요"
+                            className="h-9 bg-white text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-gray-500">옵티명</p>
+                          <Input
+                            value={draft.opti_name}
+                            onChange={(event) => handleHeaderChange("opti_name", event.target.value)}
+                            onFocus={handleFieldFocus}
+                            onBlur={handleFieldBlur}
+                            placeholder="옵티명을 입력하세요"
+                            className="h-9 bg-white text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-gray-500">옵티번호</p>
+                          <Input
+                            value={draft.opti_number}
+                            onChange={(event) => handleHeaderChange("opti_number", event.target.value)}
+                            onFocus={handleFieldFocus}
+                            onBlur={handleFieldBlur}
+                            placeholder="옵티번호를 입력하세요"
+                            className="h-9 bg-white text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-gray-500">계약번호</p>
+                          <Input
+                            value={draft.contract_number}
+                            onChange={(event) => handleHeaderChange("contract_number", event.target.value)}
+                            onFocus={handleFieldFocus}
+                            onBlur={handleFieldBlur}
+                            placeholder="계약번호를 입력하세요"
+                            className="h-9 bg-white text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 스프레드시트 테이블 에디터 + 행 액션 도구 */}
+                    <div className="flex flex-col rounded-lg border border-gray-200 bg-white" style={{ maxHeight: "50vh" }}>
+                      {/* 도구 모음: 행 추가/정리 + 확정 견적서 보기 */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white/95 px-3 py-2 shrink-0">
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => handleAddRows(1)}
-                            className="flex w-full items-center justify-center gap-1 bg-gray-50 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
                           >
-                            <Plus className="h-3 w-3" />
+                            <Plus className="h-3.5 w-3.5" />
                             행 추가
                           </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAddRows(5)}
+                            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                          >
+                            +5행
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleTrimEmptyRows}
+                            className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                          >
+                            빈 행 정리
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {/* 확정 견적서 보기 */}
+                          {confirmedQuoteId && onEditQuote && (
+                            <button
+                              type="button"
+                              onClick={() => onEditQuote(confirmedQuoteId)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+                            >
+                              <ClipboardList className="h-3.5 w-3.5" />
+                              확정 견적서 보기
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 스프레드시트 테이블 본문 */}
+                      <div className="min-h-0 flex-1 overflow-y-auto">
+                        <div>
+                          <div className="w-full">
+                            <table className="w-full table-fixed border-separate border-spacing-0">
+                              <thead className="sticky top-0 z-20">
+                                <tr className="bg-gray-100">
+                                  {ORDER_DELIVERY_LINE_COLUMNS.map((column) => (
+                                    <th
+                                      key={column.key}
+                                      className={`border-b border-r border-gray-200 px-1.5 py-1.5 text-[11px] font-semibold text-gray-500 ${
+                                        column.key === "quantity"
+                                          ? "text-center"
+                                          : "text-left"
+                                      }`}
+                                      style={{ width: column.width }}
+                                    >
+                                      {column.label}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {draft.lines.map((line, rowIndex) => (
+                                  <tr
+                                    key={`${line.id ?? "new"}-${rowIndex}`}
+                                    className={`group/row relative ${rowIndex % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}
+                                  >
+                                    {ORDER_DELIVERY_LINE_COLUMNS.map((column) => {
+                                      const value =
+                                        column.type === "number"
+                                          ? typeof line[column.key] === "number"
+                                            ? String(line[column.key])
+                                            : ""
+                                          : String(line[column.key] ?? "")
+
+                                      const isLastColumn = column.key === "delivery_place"
+                                      return (
+                                        <td key={column.key} className={`border-b ${isLastColumn ? "" : "border-r"} border-gray-200 p-0 align-middle ${isLastColumn ? "relative" : ""}`}>
+                                          <div className="relative">
+                                            <Input
+                                              type={column.type === "number" ? "number" : "text"}
+                                              min={column.type === "number" ? 0 : undefined}
+                                              inputMode={column.type === "number" ? "numeric" : undefined}
+                                              value={value}
+                                              onFocus={handleFieldFocus}
+                                              onChange={(event) => handleLineChange(rowIndex, column.key, event.target.value)}
+                                              onBlur={() => {
+                                                handleLineBlur(rowIndex, column.key)
+                                                handleFieldBlur()
+                                              }}
+                                              onPaste={(event) => {
+                                                event.preventDefault()
+                                                handleLinePaste(
+                                                  rowIndex,
+                                                  column.key,
+                                                  event.clipboardData.getData("text/plain")
+                                                )
+                                              }}
+                                              placeholder={column.placeholder}
+                                              className={`h-8 rounded-none border-0 bg-transparent px-1.5 text-[11px] placeholder:text-[10px] placeholder:font-normal placeholder:text-gray-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-300 ${
+                                                column.type === "number"
+                                                  ? column.key === "quantity"
+                                                    ? "text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                    : "text-right tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                  : ""
+                                              } ${
+                                                column.type === "date"
+                                                  ? value
+                                                    ? "pr-7 text-gray-700"
+                                                    : "pr-7 text-gray-300"
+                                                  : "text-gray-700"
+                                              }`}
+                                            />
+                                            {column.type === "date" && (
+                                              <Popover>
+                                                <PopoverTrigger asChild>
+                                                  <button
+                                                    type="button"
+                                                    aria-label={`${column.label} 달력 열기`}
+                                                    className="absolute right-1 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-gray-300 transition-colors hover:bg-gray-100 hover:text-gray-500"
+                                                    onMouseDown={(event) => event.preventDefault()}
+                                                  >
+                                                    <Calendar className="h-3.5 w-3.5" />
+                                                  </button>
+                                                </PopoverTrigger>
+                                                <PopoverContent align="end" className="w-auto p-0">
+                                                  <CalendarPicker
+                                                    mode="single"
+                                                    selected={parseIsoDateToDate(value)}
+                                                    onSelect={(date) => handleDateSelect(rowIndex, column.key, date)}
+                                                    initialFocus
+                                                  />
+                                                </PopoverContent>
+                                              </Popover>
+                                            )}
+                                          </div>
+                                          {/* 마지막 컬럼 오른쪽에 hover 시 떠오르는 행 액션 버튼 */}
+                                          {isLastColumn && (
+                                            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 z-10">
+                                              <button
+                                                type="button"
+                                                onClick={() => handleClearRow(rowIndex)}
+                                                className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/90 text-gray-400 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-vanilla-custard/40 hover:text-yellow-700 hover:ring-vanilla-custard/60"
+                                                aria-label={`${rowIndex + 1}행 비우기`}
+                                                title="행 비우기"
+                                              >
+                                                <Eraser className="h-3 w-3" />
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleDeleteRow(rowIndex)}
+                                                className="inline-flex h-5 w-5 items-center justify-center rounded bg-white/90 text-gray-400 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-soft-blush/40 hover:text-red-400 hover:ring-soft-blush/60"
+                                                aria-label={`${rowIndex + 1}행 삭제`}
+                                                title="행 삭제"
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </button>
+                                            </div>
+                                          )}
+                                        </td>
+                                      )
+                                    })}
+                                  </tr>
+                                ))}
+                                {/* 행 추가 버튼 행 */}
+                                <tr>
+                                  <td colSpan={9} className="p-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddRows(1)}
+                                      className="flex w-full items-center justify-center gap-1 bg-gray-50 py-1.5 text-[11px] text-gray-400 transition-colors hover:bg-slate-50 hover:text-slate-700"
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                      행 추가
+                                    </button>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          </section>
+            )
+          })}
         </div>
-      ) : null}
+      )}
 
       {/* 카드 삭제 확인 Dialog */}
       <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>

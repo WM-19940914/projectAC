@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { logError } from "@/lib/logger"
+import { requireAdminOrSales } from "@/lib/api-auth"
 import { revalidatePath } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -26,14 +28,14 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) {
-      console.error("[POST /api/requests]", error.message)
+      logError("[POST /api/requests]", error.message)
       return NextResponse.json({ error: "Failed to create request" }, { status: 500 })
     }
 
     revalidatePath("/requests")
     return NextResponse.json({ success: true, data })
   } catch (e: unknown) {
-    console.error("[POST /api/requests]", e)
+    logError("[POST /api/requests]", e)
     return NextResponse.json({ error: "Server error" }, { status: 500 })
   }
 }
@@ -80,21 +82,25 @@ export async function PATCH(req: NextRequest) {
       .eq("id", id)
 
     if (error) {
-      console.error("[PATCH /api/requests]", error.message)
+      logError("[PATCH /api/requests]", error.message)
       return NextResponse.json({ error: "Failed to update request" }, { status: 500 })
     }
 
     revalidatePath("/requests")
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    console.error("[PATCH /api/requests]", e)
+    logError("[PATCH /api/requests]", e)
     return NextResponse.json({ error: "Server error" }, { status: 500 })
   }
 }
 
-// Delete request + linked contract
+// Delete request + linked contract (트랜잭션 보호: RPC 우선, 폴백 순차 삭제)
 export async function DELETE(req: NextRequest) {
   try {
+    // 역할 검증: admin 또는 sales만 삭제 가능
+    const denied = await requireAdminOrSales(req)
+    if (denied) return denied
+
     const { id } = await req.json()
 
     if (!id) {
@@ -102,6 +108,32 @@ export async function DELETE(req: NextRequest) {
     }
 
     const supabase = createAdminClient()
+
+    // RPC 호출 시도 — 단일 트랜잭션으로 안전하게 삭제
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      "delete_request_cascade",
+      { p_request_id: id }
+    )
+
+    if (!rpcError && rpcResult) {
+      const result = typeof rpcResult === "string" ? JSON.parse(rpcResult) : rpcResult
+      if (result.success) {
+        revalidatePath("/requests")
+        revalidatePath("/contracts")
+        return NextResponse.json({ success: true })
+      }
+      // RPC 내부 에러 (의뢰 없음 등)
+      logError("[DELETE /api/requests] rpc", result.error)
+      return NextResponse.json({ error: result.error || "삭제 실패" }, { status: 500 })
+    }
+
+    // RPC 함수가 없는 경우 (42883) — 기존 순차 삭제로 폴백
+    if (rpcError && rpcError.code !== "42883") {
+      logError("[DELETE /api/requests] rpc", rpcError.message)
+      return NextResponse.json({ error: "삭제 실패" }, { status: 500 })
+    }
+
+    // ── 폴백: 순차 삭제 (RPC 마이그레이션 전 호환용) ──
     const { data: targetRequest, error: requestFetchError } = await supabase
       .from("requests")
       .select("id, contract_id")
@@ -109,7 +141,7 @@ export async function DELETE(req: NextRequest) {
       .single()
 
     if (requestFetchError) {
-      console.error("[DELETE /api/requests] fetch", requestFetchError.message)
+      logError("[DELETE /api/requests] fetch", requestFetchError.message)
       return NextResponse.json({ error: "Request not found" }, { status: 404 })
     }
 
@@ -120,7 +152,7 @@ export async function DELETE(req: NextRequest) {
       .select("id")
       .eq("request_id", id)
     if (quotationsFetchError) {
-      console.error("[DELETE /api/requests] quotations fetch", quotationsFetchError.message)
+      logError("[DELETE /api/requests] quotations fetch", quotationsFetchError.message)
       return NextResponse.json({ error: "Failed to fetch linked quotations" }, { status: 500 })
     }
 
@@ -131,7 +163,7 @@ export async function DELETE(req: NextRequest) {
         .update({ confirmed_quote_id: null })
         .in("confirmed_quote_id", quotationIds)
       if (clearConfirmedQuoteError) {
-        console.error("[DELETE /api/requests] clear confirmed_quote_id", clearConfirmedQuoteError.message)
+        logError("[DELETE /api/requests] clear confirmed_quote_id", clearConfirmedQuoteError.message)
         return NextResponse.json({ error: "Failed to clear confirmed quote references" }, { status: 500 })
       }
 
@@ -140,7 +172,7 @@ export async function DELETE(req: NextRequest) {
         .update({ confirmed_quotation_id: null })
         .in("confirmed_quotation_id", quotationIds)
       if (clearConfirmedQuotationError) {
-        console.error("[DELETE /api/requests] clear confirmed_quotation_id", clearConfirmedQuotationError.message)
+        logError("[DELETE /api/requests] clear confirmed_quotation_id", clearConfirmedQuotationError.message)
         return NextResponse.json({ error: "Failed to clear confirmed quotation references" }, { status: 500 })
       }
 
@@ -149,7 +181,7 @@ export async function DELETE(req: NextRequest) {
         .delete()
         .in("quotation_id", quotationIds)
       if (quotationItemsDeleteError) {
-        console.error("[DELETE /api/requests] quotation_items", quotationItemsDeleteError.message)
+        logError("[DELETE /api/requests] quotation_items", quotationItemsDeleteError.message)
         return NextResponse.json({ error: "Failed to delete linked quotation items" }, { status: 500 })
       }
 
@@ -158,7 +190,7 @@ export async function DELETE(req: NextRequest) {
         .delete()
         .in("id", quotationIds)
       if (quotationsDeleteError) {
-        console.error("[DELETE /api/requests] quotations", quotationsDeleteError.message)
+        logError("[DELETE /api/requests] quotations", quotationsDeleteError.message)
         return NextResponse.json({ error: "Failed to delete linked quotations" }, { status: 500 })
       }
     }
@@ -169,11 +201,11 @@ export async function DELETE(req: NextRequest) {
         .update({ contract_id: null })
         .eq("contract_id", contractId)
       if (unlinkError) {
-        console.error("[DELETE /api/requests] unlink", unlinkError.message)
+        logError("[DELETE /api/requests] unlink", unlinkError.message)
         return NextResponse.json({ error: "Failed to unlink contract" }, { status: 500 })
       }
 
-      const relatedTables = ["settlements", "expenses", "transactions"] as const
+      const relatedTables = ["contract_settlement_meta", "settlements", "expenses", "transactions"] as const
       for (const table of relatedTables) {
         const { error: relatedDeleteError } = await supabase
           .from(table)
@@ -182,7 +214,7 @@ export async function DELETE(req: NextRequest) {
 
         // 42P01: table does not exist in this environment
         if (relatedDeleteError && relatedDeleteError.code !== "42P01") {
-          console.error(`[DELETE /api/requests] ${table}`, relatedDeleteError.message)
+          logError(`[DELETE /api/requests] ${table}`, relatedDeleteError.message)
           return NextResponse.json({ error: "Failed to clean linked contract data" }, { status: 500 })
         }
       }
@@ -193,14 +225,14 @@ export async function DELETE(req: NextRequest) {
         .eq("id", contractId)
 
       if (contractDeleteError) {
-        console.error("[DELETE /api/requests] contract", contractDeleteError.message)
+        logError("[DELETE /api/requests] contract", contractDeleteError.message)
         return NextResponse.json({ error: "Failed to delete linked contract" }, { status: 500 })
       }
     }
 
     const { error } = await supabase.from("requests").delete().eq("id", id)
     if (error) {
-      console.error("[DELETE /api/requests]", error.message)
+      logError("[DELETE /api/requests]", error.message)
       return NextResponse.json({ error: "Failed to delete request" }, { status: 500 })
     }
 
@@ -208,7 +240,7 @@ export async function DELETE(req: NextRequest) {
     revalidatePath("/contracts")
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    console.error("[DELETE /api/requests]", e)
+    logError("[DELETE /api/requests]", e)
     return NextResponse.json({ error: "Server error" }, { status: 500 })
   }
 }

@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAdminOrSales } from "@/lib/api-auth"
+import { logError } from "@/lib/logger"
 import { revalidatePath } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -75,7 +77,7 @@ export async function GET(req: NextRequest) {
         .single()
 
       if (error) {
-        console.error("[/api/quotes]", error.message)
+        logError("[/api/quotes]", error.message)
         return NextResponse.json({ error: "견적서 처리에 실패했습니다" }, { status: 500 })
       }
       return NextResponse.json({ data })
@@ -99,13 +101,13 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query
 
     if (error) {
-      console.error("[/api/quotes]", error.message)
+      logError("[/api/quotes]", error.message)
       return NextResponse.json({ error: "견적서 처리에 실패했습니다" }, { status: 500 })
     }
 
     return NextResponse.json({ data: data || [] })
   } catch (e: unknown) {
-    console.error("[/api/quotes]", e)
+    logError("[/api/quotes]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
@@ -248,7 +250,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, data: quotation })
   } catch (e: unknown) {
-    console.error("[/api/quotes]", e)
+    logError("[/api/quotes]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
@@ -389,7 +391,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    console.error("[/api/quotes]", e)
+    logError("[/api/quotes]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }
@@ -397,6 +399,10 @@ export async function PATCH(req: NextRequest) {
 // 견적서 삭제 (CASCADE로 items 자동 삭제)
 export async function DELETE(req: NextRequest) {
   try {
+    // 역할 검증: admin 또는 sales만 삭제 가능
+    const denied = await requireAdminOrSales(req)
+    if (denied) return denied
+
     const { id } = await req.json()
 
     if (!id) {
@@ -407,7 +413,7 @@ export async function DELETE(req: NextRequest) {
     const { error } = await supabase.from("quotations").delete().eq("id", id)
 
     if (error) {
-      console.error("[/api/quotes]", error.message)
+      logError("[/api/quotes]", error.message)
       return NextResponse.json({ error: "견적서 처리에 실패했습니다" }, { status: 500 })
     }
 
@@ -416,7 +422,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
-    console.error("[/api/quotes]", e)
+    logError("[/api/quotes]", e)
     return NextResponse.json({ error: "서버 오류가 발생했습니다" }, { status: 500 })
   }
 }

@@ -1,7 +1,8 @@
 // 가격표 API - UTF-8 강제
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireAdminOrSales } from "@/lib/api-auth"
 import { jsonWithUTF8, sanitizeDBResponse } from "@/lib/utf8-response"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
 
 export async function GET() {
@@ -60,9 +61,13 @@ export async function PATCH(req: Request) {
   }
 }
 
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   const supabase = createAdminClient()
   try {
+    // 역할 검증: admin 또는 sales만 삭제 가능
+    const denied = await requireAdminOrSales(req)
+    if (denied) return denied
+
     const body = await req.json()
     const { id } = body
     if (!id) return jsonWithUTF8({ error: "id is required" }, { status: 400 })

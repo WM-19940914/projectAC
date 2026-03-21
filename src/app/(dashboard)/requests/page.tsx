@@ -323,7 +323,6 @@ export default async function RequestsPage() {
   if (contractIds.length > 0) {
     // 2단계: 계약 + 정산 메타를 병렬 조회
     const [contractsResult, metasResult] = await Promise.all([
-      // 모든 컬럼 조회 — DB 스키마에 따라 contract_amount 또는 amount 컬럼일 수 있음
       supabase.from("contracts").select("*").in("id", contractIds),
       supabase.from("contract_settlement_meta").select("contract_id, settlement_status_map, stage_ratios, middle_installments").in("contract_id", contractIds),
     ])

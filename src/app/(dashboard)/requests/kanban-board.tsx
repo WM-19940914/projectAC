@@ -3,7 +3,8 @@
 // ----- 의뢰 칸반보드 메인 컴포넌트 -----
 // 역할별로 분리된 하위 파일들을 조립하는 파일
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd"
 import { formatDate, formatDateTime, formatCurrency } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -413,7 +414,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         setIsQuoteSheetOpen(true)
       }
     } catch {
-      alert("견적서 데이터를 불러올 수 없습니다.")
+      toast({ title: "오류", description: "견적서 데이터를 불러올 수 없습니다.", variant: "destructive" })
     }
   }, [])
 
@@ -436,7 +437,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       if (!res.ok) {
         const err = await res.json().catch(() => ({} as { error?: string }))
         const errorMessage = err?.error || String(res.status)
-        alert("견적서 생성 실패: " + errorMessage)
+        toast({ title: "오류", description: "견적서 생성 실패: " + errorMessage, variant: "destructive" })
         if (res.status === 400) {
           setSelectedItem(null)
           setIsQuoteSheetOpen(false)
@@ -455,7 +456,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         loadQuotations(selectedItem.id)
       }
     } catch {
-      alert("견적서 생성 중 오류가 발생했습니다.")
+      toast({ title: "오류", description: "견적서 생성 중 오류가 발생했습니다.", variant: "destructive" })
     }
   }, [selectedItem, loadQuotations, router])
 
@@ -558,7 +559,12 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     if (!selectedItem) return
     const nextConfirmedQuoteId = selectedItem.confirmed_quote_id === quote.id ? null : quote.id
     await updateRequestField("confirmed_quote_id", nextConfirmedQuoteId)
-  }, [selectedItem, updateRequestField])
+    // 확정 견적 설정/해제 토스트
+    toast({
+      title: "완료",
+      description: nextConfirmedQuoteId ? "확정 견적서가 설정되었습니다" : "확정 견적서가 해제되었습니다",
+    })
+  }, [selectedItem, updateRequestField, toast])
   // 컬럼별 정렬 상태: "asc"(오름차순=오래된순) ↔ "desc"(내림차순=최신순) 토글
   const [sortOrder, setSortOrder] = useState<Record<string, "asc" | "desc">>({})
 
@@ -571,8 +577,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     })
   }
 
-  // 착수일(contract.start_date) 기준 정렬 — 기본은 최신순(desc)
-  const getSortedItems = (col: KanbanColumn) => {
+  // 착수일(contract.start_date) 기준 정렬 — 기본은 최신순(desc), 메모이제이션으로 불필요한 재정렬 방지
+  const getSortedItems = useCallback((col: KanbanColumn) => {
     const order = sortOrder[col.status] || "desc"
 
     return [...col.items].sort((a, b) => {
@@ -588,7 +594,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       const timeB = new Date(dateB).getTime()
       return order === "asc" ? timeA - timeB : timeB - timeA
     })
-  }
+  }, [sortOrder])
 
   // ----- 헤더 필터 state -----
   // 검색어 (의뢰 제목 / 고객명)
@@ -599,8 +605,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   // 기간 필터 패널 열림/닫힘
   const [isDateFilterOpen, setIsDateFilterOpen] = useState(false)
 
-  // 필터가 적용된 컬럼 데이터 — 검색어 + 기간 필터를 모두 반영
-  const filteredColumns = columns.map((col) => {
+  // 필터가 적용된 컬럼 데이터 — 검색어 + 기간 필터를 모두 반영 (메모이제이션)
+  const filteredColumns = useMemo(() => columns.map((col) => {
     let items = col.items
 
     // 검색어 필터
@@ -621,7 +627,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     }
 
     return { ...col, items, count: items.length }
-  })
+  }), [columns, searchQuery, dateFrom, dateTo])
 
   // 필터링된 총 건수
   const filteredTotalCount = filteredColumns.reduce((sum, col) => sum + col.count, 0)
@@ -686,6 +692,8 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       if (!res.ok) {
         // 실패 시 직전 상태로 되돌리기
         setColumns(prevColumns)
+      } else {
+        toast({ title: "완료", description: "상태가 변경되었습니다" })
       }
     } catch {
       setColumns(prevColumns)
@@ -722,12 +730,14 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       const result = await res.json()
 
       if (!res.ok) {
-        alert("삭제 실패: " + (result.error || "알 수 없는 오류"))
+        toast({ title: "오류", description: "삭제 실패: " + (result.error || "알 수 없는 오류"), variant: "destructive" })
         setColumns(prevColumns)
         setFailedItems(prevFailed)
+      } else {
+        toast({ title: "완료", description: "의뢰가 삭제되었습니다" })
       }
     } catch {
-      alert("삭제 중 오류가 발생했습니다")
+      toast({ title: "오류", description: "삭제 중 오류가 발생했습니다", variant: "destructive" })
       setColumns(prevColumns)
       setFailedItems(prevFailed)
     }
@@ -824,15 +834,16 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       const result = await res.json()
 
       if (!res.ok) {
-        alert("생성 실패: " + (result.error || "알 수 없는 오류"))
+        toast({ title: "오류", description: "생성 실패: " + (result.error || "알 수 없는 오류"), variant: "destructive" })
       } else {
         // 폼 초기화 & 다이얼로그 닫기
         setCreateForm({ title: "", customer_id: "", inquiry_date: new Date().toLocaleDateString("sv-SE"), memo: "" })
         setIsCreateOpen(false)
+        toast({ title: "완료", description: "의뢰가 생성되었습니다" })
         router.refresh()
       }
     } catch {
-      alert("의뢰 생성 중 오류가 발생했습니다")
+      toast({ title: "오류", description: "의뢰 생성 중 오류가 발생했습니다", variant: "destructive" })
     }
     setIsCreating(false)
   }
@@ -1922,10 +1933,10 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         setIsCreateCustomerMode(false)
                         setCreateCustomerForm({ company_name: "", contact_name: "", phone: "" })
                       } else {
-                        alert("고객 생성 실패: " + (result.error || ""))
+                        toast({ title: "오류", description: "고객 생성 실패: " + (result.error || ""), variant: "destructive" })
                       }
                     } catch {
-                      alert("고객 생성 중 오류가 발생했습니다")
+                      toast({ title: "오류", description: "고객 생성 중 오류가 발생했습니다", variant: "destructive" })
                     }
                     setIsCreatingCustomer(false)
                   }}

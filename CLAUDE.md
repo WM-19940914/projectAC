@@ -73,13 +73,10 @@ npm run export:data        # 데이터 내보내기
 
 ### 의뢰 상태 — 이중 시스템 주의
 
-**칸반 컬럼용** (`src/lib/constants.ts`의 `REQUEST_STATUSES`):
-`견적 문의` → `영업중` → `계약 성공` / `수주 실패` / `숨김`
+**칸반 컬럼용** (`src/lib/constants.ts`의 `REQUEST_STATUSES`) + **TypeScript 타입** (`src/types/index.ts`의 `RequestStatus`):
+`견적 문의` | `영업중` | `계약 성공` | `수주 실패` | `숨김`
 
-**TypeScript 타입** (`src/types/index.ts`의 `RequestStatus`):
-`견적서 작성중` | `계약 진행` | `계약 체결` | `주문·배송 진행` | `완료`
-
-칸반 보드는 `constants.ts`의 상태를 사용한다. 두 정의가 혼용되므로 수정 시 양쪽 모두 확인할 것.
+두 정의가 통일됨. 수정 시 양쪽 모두 확인할 것.
 
 ### 의뢰 칸반보드 (핵심 모듈)
 
@@ -108,7 +105,7 @@ npm run export:data        # 데이터 내보내기
 **단계:** `선금` → `중도금` (1~5차 분할 가능) → `잔금`
 - DB: `contracts.settlement_type` (텍스트, 예: "선금,중도금,잔금")
 - DB: `contract_settlement_meta` 테이블 → `stage_ratios`, `settlement_status_map`, `middle_installments`, `stage_scheduled_dates`, `vat_total_override`
-- 메타데이터는 `contract_settlement_meta` 테이블과 `contracts.memo` (JSON)에 이중 저장됨
+- 메타데이터는 `contract_settlement_meta` 테이블이 단일 진실 공급원 (memo에는 순수 텍스트만 저장)
 
 **계산 흐름:**
 ```
@@ -180,28 +177,12 @@ sum(confirmed payment_entries) → 실제 입금액
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase anon key
 - `SUPABASE_SERVICE_ROLE_KEY` — Supabase admin key (서버 전용, 비공개)
 
-## TODO: 배포 전 남은 보안/품질 수정 (2026-03-21 기준)
+## 보안/품질 — 전체 완료 (2026-03-21)
 
-> 아래 5건은 배포 전 검토에서 발견되었으나 미완료. "남은 보안/품질 이슈 이어서" 라고 하면 됨.
+> 5건 모두 완료. RPC 마이그레이션(`scripts/migrations/002-delete-cascade-rpc.sql`)만 Supabase SQL 에디터에서 실행하면 트랜잭션 보호 활성화.
 
-### 1. [높음] requests/contracts DELETE 트랜잭션 보호
-- 의뢰/계약 삭제 시 관련 테이블 순차 삭제 → 중간 실패 시 고아 데이터
-- `src/app/api/requests/route.ts` DELETE, `src/app/api/contracts/route.ts` DELETE
-- Supabase RPC(stored procedure)로 트랜잭션 래핑 필요
-
-### 2. [높음] Role 기반 접근 제어 (admin/sales/viewer)
-- 미들웨어에서 세션만 확인, 역할 안 봄 → viewer도 DELETE 가능
-- `src/lib/api-auth.ts`에 getAuthProfile/requireAdmin 추가, 삭제/설정 API에 가드
-
-### 3. [중간] console.error에 NODE_ENV 가드
-- 프로덕션에서 DB 에러가 서버 로그에 그대로 노출
-- 모든 API route의 console.error → NODE_ENV 체크 또는 구조화된 로거
-
-### 4. [중간] 파일 업로드 MIME 매직넘버 검증
-- logo/stamp 업로드에서 file.type만 확인 → 위장 가능
-- `src/app/api/settings/logo/route.ts`, `stamp/route.ts`
-- 파일 시작 바이트 확인 (PNG: 89504E47, JPEG: FFD8FF)
-
-### 5. [낮음] 사이드바/아이콘 접근성
-- 아이콘 버튼에 aria-label 없음
-- `src/components/layout/sidebar.tsx`, `src/app/globals.css`
+- ✅ DELETE 트랜잭션 보호 — RPC 우선 + 폴백 순차 삭제
+- ✅ Role 기반 접근 제어 — `src/lib/api-auth.ts` (`requireAdmin`, `requireAdminOrSales`)
+- ✅ console.error NODE_ENV 가드 — `src/lib/logger.ts` (`logError`)
+- ✅ MIME 매직넘버 검증 — logo/stamp route에 바이트 헤더 확인
+- ✅ 사이드바 접근성 — aria-label 4곳 추가

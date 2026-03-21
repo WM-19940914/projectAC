@@ -86,6 +86,23 @@ export interface ContributionData {
   rate: number
 }
 
+// 고객별 누적 거래액
+export interface CustomerVolume {
+  customerId: string
+  customerName: string
+  totalContractAmount: number  // 계약금액 합계 (VAT포함)
+  contractCount: number        // 계약 건수
+}
+
+// KPI 요약 (대시보드 상단 카드)
+export interface DashboardKPI {
+  overdueTotal: number         // 정산 연체 총액 (미수금, VAT포함)
+  collectionRate: number       // 정산 회수율 (%) = 총입금 / 총예정 × 100
+  totalExpected: number        // 총 예정 금액
+  totalCollected: number       // 총 입금 금액
+  topCustomers: CustomerVolume[] // 고객별 누적 거래액 (상위)
+}
+
 // 계약별 공헌이익 항목
 export interface ContractContribution {
   contractId: string

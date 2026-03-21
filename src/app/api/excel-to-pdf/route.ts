@@ -1,6 +1,7 @@
 // Excel → PDF 변환 API
 // Windows Excel COM 자동화를 사용하여 실제 Excel 인쇄와 동일한 PDF 생성
 import { NextRequest, NextResponse } from "next/server"
+import { logError } from "@/lib/logger"
 import { writeFile, readFile, unlink, mkdir } from "fs/promises"
 import { existsSync } from "fs"
 import { join } from "path"
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (e) {
-    console.error("Excel → PDF 변환 오류:", e)
+    logError("Excel → PDF 변환 오류:", e)
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "PDF 변환 실패" },
       { status: 500 }

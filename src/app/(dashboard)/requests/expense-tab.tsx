@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import {
   Dialog,
   DialogContent,
@@ -129,13 +130,9 @@ function ExpenseDialog({
   // VAT 포함 금액 자동 계산
   const vatIncluded = rawAmount > 0 ? calcVatIncluded(rawAmount) : 0
 
-  // Dialog 닫힐 때 자동 저장 — 금액이 입력되어 있으면 저장 후 닫기
+  // Dialog 닫힐 때 — 저장하지 않고 닫기만 (저장은 추가하기/수정하기 버튼에서만)
   const handleOpenChange = (next: boolean) => {
     if (!next) {
-      const amount = Number.isFinite(rawAmount) ? Math.max(0, Math.round(rawAmount)) : 0
-      if (amount > 0) {
-        onSave({ ...form, category, amount }, editingItem?.id)
-      }
       onClose()
     }
   }
@@ -714,34 +711,59 @@ export default function ExpenseTab({
   }, [requestId])
 
   const handleAdd = async (item: Omit<ExpenseItem, "id">) => {
-    const res = await fetch("/api/expenses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ request_id: requestId, ...item }),
-    })
-    const json = await res.json()
-    if (json.id) {
-      setExpenses((prev) => [...prev, { ...item, id: json.id }])
+    try {
+      const res = await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: requestId, ...item }),
+      })
+      const json = await res.json()
+      if (json.id) {
+        setExpenses((prev) => [...prev, { ...item, id: json.id }])
+        toast({ title: "완료", description: "지출이 추가되었습니다" })
+      } else {
+        toast({ title: "오류", description: "지출 추가에 실패했습니다", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "오류", description: "지출 추가에 실패했습니다", variant: "destructive" })
     }
   }
 
   const handleUpdate = async (id: string, item: Omit<ExpenseItem, "id">) => {
-    await fetch("/api/expenses", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...item }),
-    })
-    setExpenses((prev) => prev.map((e) => (e.id === id ? { ...item, id } : e)))
+    try {
+      const res = await fetch("/api/expenses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...item }),
+      })
+      if (res.ok) {
+        setExpenses((prev) => prev.map((e) => (e.id === id ? { ...item, id } : e)))
+        toast({ title: "완료", description: "지출이 수정되었습니다" })
+      } else {
+        toast({ title: "오류", description: "지출 수정에 실패했습니다", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "오류", description: "지출 수정에 실패했습니다", variant: "destructive" })
+    }
   }
 
   const handleDelete = async (id: string) => {
     // 낙관적 업데이트: UI 먼저 반영 후 API 호출
     setExpenses((prev) => prev.filter((e) => e.id !== id))
-    await fetch("/api/expenses", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    })
+    try {
+      const res = await fetch("/api/expenses", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      if (res.ok) {
+        toast({ title: "완료", description: "지출이 삭제되었습니다" })
+      } else {
+        toast({ title: "오류", description: "지출 삭제에 실패했습니다", variant: "destructive" })
+      }
+    } catch {
+      toast({ title: "오류", description: "지출 삭제에 실패했습니다", variant: "destructive" })
+    }
   }
 
   // 지출일자 오름차순 정렬 (과거 → 현재)

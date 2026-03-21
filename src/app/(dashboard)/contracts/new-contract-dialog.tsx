@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { toast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 import {
   Dialog,
@@ -63,7 +64,7 @@ export default function NewContractDialog({ open, onOpenChange, customers }: New
   }
 
   const handleCreate = async () => {
-    if (!formData.name.trim()) return alert("계약명을 입력해주세요.")
+    if (!formData.name.trim()) { toast({ title: "알림", description: "계약명을 입력해주세요." }); return }
 
     setIsCreating(true)
     try {
@@ -94,7 +95,7 @@ export default function NewContractDialog({ open, onOpenChange, customers }: New
     } catch (e) {
       console.error(e)
       const msg = e instanceof Error ? e.message : "알 수 없는 오류"
-      alert(`저장 중 오류가 발생했습니다: ${msg}`)
+      toast({ title: "오류", description: `저장 중 오류가 발생했습니다: ${msg}`, variant: "destructive" })
     } finally {
       setIsCreating(false)
     }
