@@ -1409,8 +1409,8 @@ async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayB
 
   // 갑지 아이템: 장비내역 + 설치비내역 + coverItems
   const allItems = [
-    { item_name: d.coverEquipLabel.name, specification: d.coverEquipLabel.desc, unit: '식', quantity: 1, unit_price: d.equipTotal, _isFixed: true },
-    { item_name: d.coverInstallLabel.name, specification: d.coverInstallLabel.desc, unit: '식', quantity: 1, unit_price: d.installTotal, _isFixed: true },
+    { item_name: d.coverEquipLabel.name, specification: d.coverEquipLabel.desc, unit: '식', quantity: 1, unit_price: d.equipTotal, memo: '', _isFixed: true },
+    { item_name: d.coverInstallLabel.name, specification: d.coverInstallLabel.desc, unit: '식', quantity: 1, unit_price: d.installTotal, memo: '', _isFixed: true },
     ...d.coverItems.filter(hasData).map(ci => ({
       item_name: ci.item_name, specification: ci.specification, unit: ci.unit || '식',
       quantity: ci.quantity, unit_price: ci.unit_price, memo: ci.memo, _isFixed: false,

@@ -3,7 +3,6 @@
 // ----- 섹션: 진행 매출 그래프 (계약 착수일~종료일 기간 안분) -----
 
 import { useState, useMemo, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { BarChart3, ChevronLeft, ChevronRight, Info } from "lucide-react"
 import {
@@ -74,11 +73,11 @@ export function ProgressRevenueSection({ allProgressData, availableYears, curren
   }, [])
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-2">
+    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="px-6 pt-5 pb-2">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <CardTitle className="text-lg font-heading flex items-center gap-2">
+            <h3 className="text-lg font-heading flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-sky-aqua" />
               진행 매출
               <span className="text-xs font-sans font-normal text-sky-aqua ml-1">계약기간 안분 기준</span>
@@ -95,7 +94,7 @@ export function ProgressRevenueSection({ allProgressData, availableYears, curren
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-            </CardTitle>
+            </h3>
             <p className="text-xs text-gray-400 mt-0.5">계약금액을 한 번에 잡지 않고, 실제 진행된 기간에 맞춰 각 월에 나누어 표시한 매출입니다.</p>
           </div>
 
@@ -120,9 +119,9 @@ export function ProgressRevenueSection({ allProgressData, availableYears, curren
             </button>
           </div>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="pt-0">
+      <div className="px-6 pb-5">
         {/* 요약 카드 */}
         <div className="flex items-center gap-6 mb-4 mt-1">
           <div>
@@ -195,7 +194,7 @@ export function ProgressRevenueSection({ allProgressData, availableYears, curren
             </ResponsiveContainer>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

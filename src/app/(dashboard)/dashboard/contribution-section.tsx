@@ -4,7 +4,6 @@
 // 계약 제목 클릭 → 칸반보드와 동일한 전체 패널을 대시보드 위에 Sheet으로 표시
 
 import { useState, useMemo } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TrendingUp, ChevronLeft, ChevronRight, Info } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { RequestDetailSheet } from "./request-detail-sheet"
@@ -84,9 +83,9 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
 
   return (
     <>
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-heading flex items-center gap-2">
+      <div className="rounded-xl border border-gray-200 bg-white">
+        <div className="px-6 pt-5 pb-3">
+          <h3 className="text-lg font-heading flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-tropical-teal" />
             공헌 이익
             <TooltipProvider delayDuration={200}>
@@ -102,9 +101,9 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+          </h3>
+        </div>
+        <div className="px-6 pb-6 space-y-4">
           {/* 손해 메시지 + 월/연 컨트롤 */}
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <h2 className="text-xl font-heading font-bold text-gray-900">
@@ -291,8 +290,8 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* ----- 의뢰 상세 Sheet (칸반보드와 동일한 전체 패널) ----- */}
       <RequestDetailSheet

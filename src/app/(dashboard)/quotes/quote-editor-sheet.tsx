@@ -24,7 +24,47 @@ import {
   AlertDialogDescription, AlertDialogFooter,
 } from "@/components/ui/alert-dialog"
 import { formatCurrency } from "@/lib/format"
-import { exportQuotePDF, exportQuoteExcel, type QuoteExportData } from "@/lib/quote-export"
+import { exportQuotePDF, exportQuoteExcel, buildQuoteExcelBuffer, type QuoteExportData } from "@/lib/quote-export"
+
+// 내보내기 내역 타입
+interface ExportRecord {
+  id: string
+  file_type: "pdf" | "excel" | "png"
+  file_name: string
+  storage_path: string
+  file_size: number
+  created_at: string
+  confirmed: boolean
+}
+
+// 동일 이름 파일 자동 번호 붙이기 (견적서_A.pdf → 견적서_A_02.pdf → ...)
+function getNumberedName(baseName: string, ext: string, history: ExportRecord[]): string {
+  const fullName = `${baseName}.${ext}`
+  if (!history.some(e => e.file_name === fullName)) return fullName
+  for (let i = 2; i <= 99; i++) {
+    const numbered = `${baseName}_${String(i).padStart(2, "0")}.${ext}`
+    if (!history.some(e => e.file_name === numbered)) return numbered
+  }
+  return `${baseName}_${Date.now()}.${ext}`
+}
+
+// Storage 공개 URL 생성
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+function getExportUrl(storagePath: string): string {
+  return `${SUPABASE_URL}/storage/v1/object/public/quote-exports/${storagePath}`
+}
+
+// 시간 경과 표시 (N분 전, N시간 전, N일 전)
+function getTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return "방금"
+  if (mins < 60) return `${mins}분 전`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}시간 전`
+  const days = Math.floor(hours / 24)
+  return `${days}일 전`
+}
 import type { QuotationWithItems, QuotationItem } from "@/types"
 import { Input } from "@/components/ui/input"
 
@@ -239,6 +279,74 @@ export default function QuoteEditorSheet({
   const [paymentCondition, setPaymentCondition] = useState("협의 조건")
   const [validUntil, setValidUntil] = useState("견적 후 7일")
   const [faxNumber, setFaxNumber] = useState("02) 711-7807")
+  // 내보내기 내역
+  const [exportHistory, setExportHistory] = useState<ExportRecord[]>([])
+  const [showExportHistory, setShowExportHistory] = useState(false)
+  const [exportDeleteTarget, setExportDeleteTarget] = useState<ExportRecord | null>(null)
+  const [exportLoadingId, setExportLoadingId] = useState<string | null>(null)
+
+  // 내보내기 내역 로드
+  const loadExportHistory = useCallback(async (qId?: string) => {
+    const id = qId || quotation?.id || savedIdRef.current
+    if (!id) return
+    try {
+      const res = await fetch(`/api/quote-exports?quotation_id=${id}`)
+      const result = await res.json()
+      if (result.data) setExportHistory(result.data)
+    } catch { /* 무시 */ }
+  }, [quotation?.id])
+
+  // 파일 업로드 + URL 반환 (raw binary + 커스텀 헤더)
+  const uploadExport = useCallback(async (blob: Blob, fileType: string, fileName: string, mimeType: string): Promise<string | null> => {
+    const qId = quotation?.id || savedIdRef.current
+    if (!qId) {
+      toast({ title: "알림", description: "견적서를 먼저 저장해주세요" })
+      return null
+    }
+    const res = await fetch("/api/quote-exports", {
+      method: "POST",
+      headers: {
+        "Content-Type": mimeType,
+        "X-Quotation-Id": qId,
+        "X-File-Type": fileType,
+        "X-File-Name": encodeURIComponent(fileName),
+      },
+      body: blob,
+    })
+    const result = await res.json()
+    if (!res.ok) throw new Error(result.error || "업로드 실패")
+    await loadExportHistory(qId)
+    setShowExportHistory(true)
+    return getExportUrl(result.data.storage_path)
+  }, [quotation?.id, loadExportHistory])
+
+  // 내보내기 내역 삭제
+  const deleteExport = useCallback(async (id: string) => {
+    try {
+      await fetch(`/api/quote-exports?id=${id}`, { method: "DELETE" })
+      setExportHistory(prev => prev.filter(e => e.id !== id))
+    } catch { /* 무시 */ }
+  }, [])
+
+  // 확정 토글
+  const toggleConfirmed = useCallback(async (id: string, current: boolean) => {
+    // 낙관적 UI
+    setExportHistory(prev => prev.map(e => e.id === id ? { ...e, confirmed: !current } : e))
+    try {
+      await fetch("/api/quote-exports", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, confirmed: !current }),
+      })
+    } catch {
+      // 실패 시 롤백
+      setExportHistory(prev => prev.map(e => e.id === id ? { ...e, confirmed: current } : e))
+    }
+  }, [])
+
+  // 초기 로드
+  useEffect(() => { loadExportHistory() }, [loadExportHistory])
+
   // 견적서 뷰 탭 (네비게이션 전용, autoSave 트리거 안 함)
   const [activeTab, setActiveTab] = useState<string>("simple")
   const activeTabRef = useRef<string>("simple")
@@ -930,12 +1038,25 @@ export default function QuoteEditorSheet({
               <div className="flex items-center gap-2 ml-3">
                 {/* Excel 내보내기 */}
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const exportData = buildExportData()
                     if (!exportData) return
-                    exportQuoteExcel(exportData)
-                      .then(() => toast({ title: "완료", description: "Excel 파일이 다운로드되었습니다" }))
-                      .catch((e) => { console.error("Excel 내보내기 오류:", e); toast({ title: "오류", description: "Excel 내보내기에 실패했습니다", variant: "destructive" }) })
+                    try {
+                      const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
+                      if (!xlsxBuffer) return
+                      const typeTag = exportData.quoteType === "detailed" ? "상세" : "간이"
+                      const baseName = `${typeTag}_견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}`
+                      const fileName = getNumberedName(baseName, "xlsx", exportHistory)
+                      const blob = new Blob([xlsxBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+                      // Storage에 업로드 (내역 관리용)
+                      await uploadExport(blob, "excel", fileName, blob.type)
+                      // 로컬 blob으로 다운로드 (브라우저에서 xlsx를 열 수 없으므로)
+                      const localUrl = URL.createObjectURL(blob)
+                      const a = document.createElement("a"); a.href = localUrl; a.download = fileName
+                      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                      URL.revokeObjectURL(localUrl)
+                      toast({ title: "완료", description: "Excel 파일이 다운로드되었습니다" })
+                    } catch (e) { console.error("Excel 내보내기 오류:", e); toast({ title: "오류", description: "Excel 내보내기에 실패했습니다", variant: "destructive" }) }
                   }}
                   className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors group"
                   title="Excel 내보내기"
@@ -956,19 +1077,20 @@ export default function QuoteEditorSheet({
                     if (!exportData) return
                     setPdfExporting(true)
                     try {
-                      const { buildQuoteExcelBuffer } = await import("@/lib/quote-export")
                       const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
                       if (!xlsxBuffer) return
                       const res = await fetch("/api/excel-to-pdf", { method: "POST", body: xlsxBuffer })
                       if (!res.ok) throw new Error(await res.text())
                       const pdfBlob = await res.blob()
-                      const url = URL.createObjectURL(pdfBlob)
-                      const a = document.createElement("a")
-                      a.href = url
-                      a.download = `견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}.pdf`
-                      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-                      URL.revokeObjectURL(url)
-                      toast({ title: "완료", description: "PDF 파일이 다운로드되었습니다" })
+                      const typeTag = exportData.quoteType === "detailed" ? "상세" : "간이"
+                      const baseName = `${typeTag}_견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}`
+                      const fileName = getNumberedName(baseName, "pdf", exportHistory)
+                      // Storage에 업로드 (내역 관리용)
+                      await uploadExport(pdfBlob, "pdf", fileName, "application/pdf")
+                      // 로컬 blob으로 새 탭 열기
+                      const localUrl = URL.createObjectURL(pdfBlob)
+                      window.open(localUrl, "_blank")
+                      toast({ title: "완료", description: "PDF가 새 탭에서 열렸습니다" })
                     } catch (e) { console.error("PDF 내보내기 오류:", e); toast({ title: "오류", description: "PDF 내보내기에 실패했습니다", variant: "destructive" }) }
                     finally { setPdfExporting(false) }
                   }}
@@ -995,13 +1117,12 @@ export default function QuoteEditorSheet({
                     if (!exportData) return
                     setPngExporting(true)
                     try {
-                      const { buildQuoteExcelBuffer } = await import("@/lib/quote-export")
                       const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
                       if (!xlsxBuffer) return
                       const pdfRes = await fetch("/api/excel-to-pdf", { method: "POST", body: xlsxBuffer })
                       if (!pdfRes.ok) throw new Error(await pdfRes.text())
                       const pdfArrayBuf = await pdfRes.arrayBuffer()
-                      // pdf.js를 CDN에서 로드 (브라우저 전용, window 캐싱)
+                      // pdf.js CDN 로드
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       let pdfjsLib = (window as any)["pdfjs-dist/build/pdf"]
                       if (!pdfjsLib) {
@@ -1016,26 +1137,56 @@ export default function QuoteEditorSheet({
                       }
                       pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
                       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfArrayBuf) }).promise
-                      const page = await pdf.getPage(1)
                       const scale = 3
-                      const viewport = page.getViewport({ scale })
-                      const canvas = document.createElement("canvas")
-                      canvas.width = viewport.width
-                      canvas.height = viewport.height
-                      const ctx = canvas.getContext("2d")!
-                      ctx.fillStyle = "#FFFFFF"
-                      ctx.fillRect(0, 0, canvas.width, canvas.height)
-                      await page.render({ canvasContext: ctx, viewport }).promise
-                      canvas.toBlob((blob) => {
-                        if (!blob) return
-                        const url = URL.createObjectURL(blob)
-                        const a = document.createElement("a")
-                        a.href = url
-                        a.download = `견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}.png`
+                      const numPages = pdf.numPages
+                      const typeTag = exportData.quoteType === "detailed" ? "상세" : "간이"
+                      const baseTitle = `${typeTag}_견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}`
+                      if (numPages === 1) {
+                        // 1장: 단일 PNG
+                        const page = await pdf.getPage(1)
+                        const viewport = page.getViewport({ scale })
+                        const canvas = document.createElement("canvas")
+                        canvas.width = viewport.width; canvas.height = viewport.height
+                        const ctx = canvas.getContext("2d")!
+                        ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, canvas.width, canvas.height)
+                        await page.render({ canvasContext: ctx, viewport }).promise
+                        const pngBlob = await new Promise<Blob>((resolve, reject) => {
+                          canvas.toBlob(b => b ? resolve(b) : reject(new Error("PNG 변환 실패")), "image/png")
+                        })
+                        const fileName = getNumberedName(baseTitle, "png", exportHistory)
+                        await uploadExport(pngBlob, "png", fileName, "image/png")
+                        const localUrl = URL.createObjectURL(pngBlob)
+                        window.open(localUrl, "_blank")
+                        toast({ title: "완료", description: "PNG가 새 탭에서 열렸습니다" })
+                      } else {
+                        // 여러 장: 페이지별 PNG → ZIP 묶기
+                        const { default: JSZip } = await import("jszip")
+                        const zip = new JSZip()
+                        const pageLabels = ["갑지", "장비내역서", "설치비내역서"]
+                        for (let p = 1; p <= numPages; p++) {
+                          const page = await pdf.getPage(p)
+                          const viewport = page.getViewport({ scale })
+                          const canvas = document.createElement("canvas")
+                          canvas.width = viewport.width; canvas.height = viewport.height
+                          const ctx = canvas.getContext("2d")!
+                          ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, canvas.width, canvas.height)
+                          await page.render({ canvasContext: ctx, viewport }).promise
+                          const pngBlob = await new Promise<Blob>((resolve, reject) => {
+                            canvas.toBlob(b => b ? resolve(b) : reject(new Error("PNG 변환 실패")), "image/png")
+                          })
+                          const label = pageLabels[p - 1] || `p${p}`
+                          zip.file(`${baseTitle}_${label}.png`, pngBlob)
+                        }
+                        const zipBlob = await zip.generateAsync({ type: "blob" })
+                        const fileName = getNumberedName(baseTitle, "zip", exportHistory)
+                        await uploadExport(zipBlob, "png", fileName, "application/zip")
+                        // ZIP은 다운로드
+                        const localUrl = URL.createObjectURL(zipBlob)
+                        const a = document.createElement("a"); a.href = localUrl; a.download = fileName
                         document.body.appendChild(a); a.click(); document.body.removeChild(a)
-                        URL.revokeObjectURL(url)
-                        toast({ title: "완료", description: "PNG 이미지가 다운로드되었습니다" })
-                      }, "image/png")
+                        URL.revokeObjectURL(localUrl)
+                        toast({ title: "완료", description: `PNG ${numPages}장이 ZIP으로 다운로드되었습니다` })
+                      }
                     } catch (e) { console.error("PNG 내보내기 오류:", e); toast({ title: "오류", description: "PNG 내보내기에 실패했습니다", variant: "destructive" }) }
                     finally { setPngExporting(false) }
                   }}
@@ -1055,6 +1206,18 @@ export default function QuoteEditorSheet({
                   <span className="text-[9px] text-gray-400 group-hover:text-gray-600">{pngExporting ? "변환중" : "내보내기"}</span>
                 </button>
               </div>
+              {/* 내보내기 내역 토글 */}
+              {exportHistory.length > 0 && (
+                <button
+                  onClick={() => setShowExportHistory(!showExportHistory)}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border text-[11px] transition-colors ml-1 ${
+                    showExportHistory ? "bg-gray-100 border-gray-300 text-gray-700" : "border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  <List className="h-3.5 w-3.5" />
+                  <span>{exportHistory.length}</span>
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2 mr-6">
               {(quotation || savedIdRef.current) && (
@@ -1178,11 +1341,131 @@ export default function QuoteEditorSheet({
           )}
         </SheetHeader>
 
+        {/* ── 내보내기 내역 패널 (좌측 견적서 영역에만 표시) ── */}
+        {showExportHistory && exportHistory.length > 0 && (
+          <div className={`px-6 py-3 border-b border-gray-100 bg-gray-50/50 ${pricingOpen ? "w-[842px]" : ""}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-semibold text-gray-500">내보내기 내역</span>
+              <button onClick={() => setShowExportHistory(false)} className="p-0.5 rounded hover:bg-gray-200 transition-colors">
+                <XIcon className="h-3 w-3 text-gray-400" />
+              </button>
+            </div>
+            <div className="space-y-1 max-h-[160px] overflow-y-auto scrollbar-thin">
+              {[...exportHistory].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map(record => {
+                const d = new Date(record.created_at)
+                const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+                const fileUrl = getExportUrl(record.storage_path)
+                return (
+                  <div key={record.id} className="flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-white transition-colors">
+                    {/* 견적 유형 배지 (간이/상세) */}
+                    <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                      record.file_name.includes("상세") ? "bg-slate-200 text-slate-600" : "bg-sky-100 text-sky-700"
+                    }`}>
+                      {record.file_name.includes("상세") ? "상세" : "간이"}
+                    </span>
+                    {/* 파일 타입 아이콘 */}
+                    {record.file_type === "excel" ? (
+                      <svg className="w-5 h-5 shrink-0" viewBox="0 0 32 32" fill="none">
+                        <path d="M28 4H18v24h10a2 2 0 002-2V6a2 2 0 00-2-2z" fill="#21A366"/>
+                        <path d="M18 4H6a2 2 0 00-2 2v20a2 2 0 002 2h12V4z" fill="#107C41"/>
+                        <path d="M22 10h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2z" fill="#fff" opacity=".6"/>
+                        <path d="M7.5 10l2.7 6-2.7 6h2.4l1.6-3.8L13.1 22h2.4l-2.7-6 2.7-6h-2.4l-1.6 3.8L9.9 10H7.5z" fill="#fff"/>
+                      </svg>
+                    ) : record.file_type === "pdf" ? (
+                      <svg className="w-5 h-5 shrink-0" viewBox="0 0 32 32" fill="none">
+                        <path d="M26 2H10a2 2 0 00-2 2v4H6a2 2 0 00-2 2v12a2 2 0 002 2h2v4a2 2 0 002 2h16a2 2 0 002-2V4a2 2 0 00-2-2z" fill="#E5E7EB"/>
+                        <path d="M6 10h18v12H6z" fill="#EF4444"/>
+                        <text x="15" y="20" textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="Arial">PDF</text>
+                        <path d="M22 2l6 6h-4a2 2 0 01-2-2V2z" fill="#D1D5DB"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5 shrink-0" viewBox="0 0 32 32" fill="none">
+                        <path d="M26 2H10a2 2 0 00-2 2v4H6a2 2 0 00-2 2v12a2 2 0 002 2h2v4a2 2 0 002 2h16a2 2 0 002-2V4a2 2 0 00-2-2z" fill="#E5E7EB"/>
+                        <path d="M6 10h18v12H6z" fill="#3B82F6"/>
+                        <text x="15" y="20" textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="Arial">PNG</text>
+                        <path d="M22 2l6 6h-4a2 2 0 01-2-2V2z" fill="#D1D5DB"/>
+                      </svg>
+                    )}
+                    <button
+                      disabled={exportLoadingId === record.id}
+                      onClick={async () => {
+                        setExportLoadingId(record.id)
+                        try {
+                          const res = await fetch(fileUrl)
+                          const blob = await res.blob()
+                          const mimeMap: Record<string, string> = { pdf: "application/pdf", png: "image/png", excel: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+                          const typedBlob = new Blob([blob], { type: mimeMap[record.file_type] || blob.type })
+                          const localUrl = URL.createObjectURL(typedBlob)
+                          const isDownload = record.file_type === "excel" || record.file_name.endsWith(".zip")
+                          if (isDownload) {
+                            const a = document.createElement("a"); a.href = localUrl; a.download = record.file_name
+                            document.body.appendChild(a); a.click(); document.body.removeChild(a)
+                            URL.revokeObjectURL(localUrl)
+                          } else {
+                            window.open(localUrl, "_blank")
+                          }
+                        } finally { setExportLoadingId(null) }
+                      }}
+                      className="text-[11px] text-gray-700 truncate flex-1 text-left hover:text-sky-aqua hover:underline transition-colors disabled:opacity-50"
+                    >
+                      {exportLoadingId === record.id ? (
+                        <span className="flex items-center gap-1 text-gray-400">
+                          <Loader2 className="h-3 w-3 animate-spin" /> 로딩중...
+                        </span>
+                      ) : record.file_name.replace(/^(간이|상세)_/, "")}
+                    </button>
+                    <span className="text-[10px] text-gray-400 shrink-0 tabular-nums">
+                      {record.file_size > 0 && `${record.file_size >= 1048576 ? `${(record.file_size / 1048576).toFixed(1)}MB` : `${Math.round(record.file_size / 1024)}KB`} · `}{dateStr}
+                    </span>
+                    <button
+                      onClick={() => setExportDeleteTarget(record)}
+                      className="p-0.5 text-gray-300 hover:text-red-400 transition-colors shrink-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 내보내기 삭제 확인 다이얼로그 */}
+        <AlertDialog open={!!exportDeleteTarget} onOpenChange={open => !open && setExportDeleteTarget(null)}>
+          <AlertDialogContent className="max-w-[340px]">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-sm">파일 삭제</AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-gray-500">
+                <span className="font-medium text-gray-700">{exportDeleteTarget?.file_name}</span>
+                <br />파일을 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <button
+                onClick={() => setExportDeleteTarget(null)}
+                className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  if (exportDeleteTarget) {
+                    deleteExport(exportDeleteTarget.id)
+                    setExportDeleteTarget(null)
+                  }
+                }}
+                className="px-3 py-1.5 text-xs rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                삭제
+              </button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* 스크롤 본문 - 가로/세로 스크롤 모두 가능 */}
         <div className="flex-1 overflow-auto relative">
           {/* 원가 분석 패널 토글 버튼 */}
           {pricingOpen ? (
-            // 열린 상태: 견적서와 원가 분석 사이 중앙에 원형 버튼
             <button
               onClick={() => setPricingOpen(false)}
               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 w-7 h-7 bg-white hover:bg-slate-100 border border-slate-300 rounded-full transition-all flex items-center justify-center shadow-sm"
@@ -1193,7 +1476,6 @@ export default function QuoteEditorSheet({
               </svg>
             </button>
           ) : (
-            // 닫힌 상태: 우측 가장자리 반원
             <button
               onClick={() => setPricingOpen(true)}
               className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-5 h-14 bg-slate-100 hover:bg-slate-100 border border-r-0 border-slate-300 rounded-l-full transition-all flex items-center justify-center"

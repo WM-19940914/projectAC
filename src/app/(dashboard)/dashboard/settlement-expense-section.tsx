@@ -1,12 +1,11 @@
 "use client"
 
-// ----- 섹션1: 업무 노트(좌) + 정산·지출·세금계산서 3탭(우) -----
+// ----- 알림 현황: 3개 카드 (미수금 / 입금예정 / 미처리) -----
+// 한눈에 현황 파악, 클릭 시 Sheet로 상세 확인
 
-import { useState, useEffect, useRef, useCallback } from "react"
-import { useAuth } from "@/providers/auth-provider"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { AlertCircle, CreditCard, Receipt, FileText, ClipboardList, Plus, Trash2, Loader2 } from "lucide-react"
+import { useState } from "react"
+import { AlertCircle, CheckCircle2, X } from "lucide-react"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { formatCurrency } from "@/lib/format"
 import { RequestDetailSheet } from "./request-detail-sheet"
 import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, DashboardRequestInfo } from "./dashboard-types"
@@ -18,484 +17,307 @@ interface Props {
   requestInfoMap: Record<string, DashboardRequestInfo>
 }
 
-// 스크롤 영역 최대 높이 (약 5행)
-const MAX_LIST_HEIGHT = 260
+type CardType = "receivable" | "upcoming" | "action"
 
-// ═══════════════════════════════════════
-// 업무 노트 (체크리스트 미니 앱, Supabase DB 저장)
-// ═══════════════════════════════════════
-interface TodoItem {
-  id: string
-  text: string
-  done: boolean
-  done_at: string | null
-  created_at: string
-}
-
-function WorkNotes() {
-  const { user, loading: authLoading } = useAuth()
-  const [todos, setTodos] = useState<TodoItem[]>([])
-  const [input, setInput] = useState("")
-  const [loading, setLoading] = useState(true)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const userId = user?.id || "default"
-
-  // DB에서 로드 (auth 로딩 완료 후)
-  useEffect(() => {
-    if (authLoading) return
-    setLoading(true)
-    fetch(`/api/work-notes?user_id=${userId}`)
-      .then(r => r.json())
-      .then(res => {
-        if (res.data) {
-          // 미완료 먼저, 완료는 아래로 정렬
-          const sorted = (res.data as TodoItem[]).sort((a, b) => {
-            if (a.done !== b.done) return a.done ? 1 : -1
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          })
-          setTodos(sorted)
-        }
-      })
-      .finally(() => setLoading(false))
-  }, [userId, authLoading])
-
-  // 추가
-  const handleAdd = useCallback(async () => {
-    const trimmed = input.trim()
-    if (!trimmed) return
-    setInput("")
-    inputRef.current?.focus()
-    // 낙관적 UI: 임시 항목 추가
-    const tempId = `temp-${Date.now()}`
-    const tempItem: TodoItem = { id: tempId, text: trimmed, done: false, done_at: null, created_at: new Date().toISOString() }
-    setTodos(prev => [tempItem, ...prev])
-    // DB 저장
-    const res = await fetch("/api/work-notes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId, text: trimmed }),
-    }).then(r => r.json())
-    if (res.data) {
-      // 임시 항목을 실제 데이터로 교체
-      setTodos(prev => prev.map(t => t.id === tempId ? res.data : t))
-    }
-  }, [input, user?.id])
-
-  // 체크 토글
-  const handleToggle = useCallback(async (id: string, currentDone: boolean) => {
-    const newDone = !currentDone
-    // 낙관적 UI
-    setTodos(prev => {
-      const updated = prev.map(t =>
-        t.id === id ? { ...t, done: newDone, done_at: newDone ? new Date().toISOString() : null } : t
-      )
-      return updated.sort((a, b) => {
-        if (a.done !== b.done) return a.done ? 1 : -1
-        return 0
-      })
-    })
-    // DB 업데이트
-    await fetch("/api/work-notes", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, done: newDone }),
-    })
-  }, [])
-
-  // 삭제
-  const handleDelete = useCallback(async (id: string) => {
-    // 낙관적 UI
-    setTodos(prev => prev.filter(t => t.id !== id))
-    // DB 삭제
-    await fetch(`/api/work-notes?id=${id}`, { method: "DELETE" })
-  }, [])
-
-  // Enter 키로 추가
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-      e.preventDefault()
-      handleAdd()
-    }
-  }, [handleAdd])
-
-  const activeCount = todos.filter(t => !t.done).length
-  const doneCount = todos.filter(t => t.done).length
-
-  return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-heading flex items-center gap-2">
-            <ClipboardList className="h-5 w-5 text-vanilla-custard" />
-            업무 노트
-            {activeCount > 0 && (
-              <span className="text-xs font-normal text-gray-400">{activeCount}건</span>
-            )}
-          </CardTitle>
-          {doneCount > 0 && (
-            <span className="text-[10px] text-muted-teal">완료 {doneCount}건 (24h 후 자동삭제)</span>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 pt-0 flex flex-col gap-2">
-        {/* 입력창 */}
-        <div className="flex items-center gap-1.5">
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="할 일을 입력하고 Enter..."
-            className="flex-1 rounded-lg border border-gray-200 bg-gray-50/50 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-vanilla-custard/50 focus:border-vanilla-custard/50 transition-colors"
-          />
-          <button
-            onClick={handleAdd}
-            disabled={!input.trim()}
-            className="shrink-0 p-2 rounded-lg bg-tropical-teal/10 text-tropical-teal hover:bg-tropical-teal/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* 리스트 */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin" style={{ maxHeight: 210 }}>
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-5 w-5 text-gray-300 animate-spin" />
-            </div>
-          )}
-          {!loading && todos.length === 0 && (
-            <p className="text-sm text-gray-300 py-8 text-center">메모가 없습니다</p>
-          )}
-          <div className="space-y-1">
-            {todos.map(t => (
-              <div
-                key={t.id}
-                className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors ${
-                  t.done ? "bg-gray-50/50" : "bg-gray-50 hover:bg-gray-100"
-                }`}
-              >
-                {/* 체크박스 */}
-                <button
-                  onClick={() => handleToggle(t.id, t.done)}
-                  className={`shrink-0 w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-                    t.done
-                      ? "bg-muted-teal border-muted-teal"
-                      : "border-gray-300 hover:border-tropical-teal"
-                  }`}
-                >
-                  {t.done && (
-                    <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </button>
-                {/* 텍스트 */}
-                <span className={`flex-1 text-xs leading-snug ${
-                  t.done ? "line-through text-gray-400" : "text-gray-700"
-                }`}>
-                  {t.text}
-                </span>
-                {/* 삭제 버튼 (호버 시 표시) */}
-                <button
-                  onClick={() => handleDelete(t.id)}
-                  className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-soft-blush transition-all"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
+// 만원 단위 축약
+function fmtCompact(n: number): string {
+  if (n === 0) return "₩0"
+  if (n >= 100000000) return `₩${(n / 100000000).toFixed(1)}억`
+  if (n >= 10000) return `₩${Math.round(n / 10000).toLocaleString()}만`
+  return `₩${Math.round(n).toLocaleString()}`
 }
 
 // ═══════════════════════════════════════
-// 정산·지출·세금계산서 3탭 (컴팩트)
+// 메인 알림 현황 섹션
 // ═══════════════════════════════════════
-type TabType = "정산" | "지출" | "계산서"
-
-function AlertsPanel({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, requestInfoMap }: Props) {
-  const [tab, setTab] = useState<TabType>("정산")
-  // 우측 Sheet 패널용: 선택된 의뢰 정보
+export function SettlementExpenseSection({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, requestInfoMap }: Props) {
+  const [selectedCard, setSelectedCard] = useState<CardType | null>(null)
   const [selectedRequestInfo, setSelectedRequestInfo] = useState<DashboardRequestInfo | null>(null)
 
-  // 정산
+  // ── 분류 ──
   const overdueAlerts = settlementAlerts.filter(a => a.type === "overdue")
   const partialAlerts = settlementAlerts.filter(a => a.type === "partial")
   const upcomingAlerts = settlementAlerts.filter(a => a.type === "upcoming")
-
-  // 지출
   const unpaidExpenses = expenseAlerts.filter(a => a.type === "unpaid")
-  const taxDueExpenses = expenseAlerts.filter(a => a.type === "tax_invoice_due")
 
-  const settlementCount = settlementAlerts.length
-  const expenseCount = expenseAlerts.length
-  const taxInvoiceCount = taxInvoiceAlerts.length
+  // ── 카드별 집계 ──
+  // 미수금 = 지연 + 부분입금 (못 받은 돈)
+  const receivableCount = overdueAlerts.length + partialAlerts.length
+  const receivableAmount = overdueAlerts.reduce((s, a) => s + (a.plannedAmount - a.paidAmount), 0)
+    + partialAlerts.reduce((s, a) => s + (a.plannedAmount - a.paidAmount), 0)
+
+  // 입금 예정 (7일 이내)
+  const upcomingCount = upcomingAlerts.length
+  const upcomingAmount = upcomingAlerts.reduce((s, a) => s + a.plannedAmount, 0)
+
+  // 미처리 = 미지급 지출 + 계산서 미발행 (우리가 처리할 것)
+  const actionCount = unpaidExpenses.length + taxInvoiceAlerts.length
+  const actionAmount = unpaidExpenses.reduce((s, a) => s + a.amount, 0)
+    + taxInvoiceAlerts.reduce((s, a) => s + a.amount, 0)
+
+  const totalAlerts = receivableCount + upcomingCount + actionCount
 
   function handleClick(requestId: string) {
     if (!requestId) return
     const info = requestInfoMap[requestId]
-    if (info) {
-      setSelectedRequestInfo(info)
-    }
+    if (info) setSelectedRequestInfo(info)
   }
 
-  const tabs: { key: TabType; label: string; count: number }[] = [
-    { key: "정산", label: "정산", count: settlementCount },
-    { key: "지출", label: "지출", count: expenseCount },
-    { key: "계산서", label: "계산서", count: taxInvoiceCount },
-  ]
-
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-heading flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-tropical-teal" />
-            알림
-          </CardTitle>
-          {/* 3탭 토글 */}
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
-            {tabs.map(t => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                  tab === t.key
-                    ? "bg-white shadow-sm font-semibold text-gray-900"
-                    : "text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                {t.label}
-                {t.count > 0 && <span className="text-soft-blush ml-0.5">{t.count}</span>}
-              </button>
-            ))}
-          </div>
+    <div className="rounded-xl border border-gray-200 bg-white p-5">
+      {/* 헤더 */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 text-gray-400" />
+          <span className="text-sm font-semibold text-gray-700">알림 현황</span>
         </div>
-      </CardHeader>
-      <CardContent className="flex-1 pt-0">
-        {/* 스크롤 리스트 */}
-        <div
-          className="space-y-2 overflow-y-auto scrollbar-thin"
-          style={{ maxHeight: MAX_LIST_HEIGHT }}
+        {totalAlerts > 0 ? (
+          <span className="text-[11px] text-gray-400">{totalAlerts}건</span>
+        ) : (
+          <span className="text-[11px] text-muted-teal flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" /> 전체 정상
+          </span>
+        )}
+      </div>
+
+      {/* 3카드 */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* 미수금 (지연 + 부분입금) */}
+        <button
+          onClick={() => receivableCount > 0 && setSelectedCard("receivable")}
+          disabled={receivableCount === 0}
+          className={`text-left rounded-xl p-4 transition-all border ${
+            receivableCount > 0
+              ? "border-gray-200 hover:shadow-sm hover:border-gray-300 cursor-pointer bg-white"
+              : "border-gray-100 bg-gray-50/50 cursor-default"
+          }`}
         >
-          {/* ===== 정산 탭 ===== */}
-          {tab === "정산" && (
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className={`h-2 w-2 rounded-full ${receivableCount > 0 ? "bg-soft-blush" : "bg-gray-200"}`} />
+            <span className={`text-[11px] font-medium ${receivableCount > 0 ? "text-gray-600" : "text-gray-400"}`}>미수금</span>
+          </div>
+          <p className={`text-2xl font-bold tabular-nums ${receivableCount > 0 ? "text-soft-blush" : "text-gray-200"}`}>
+            {receivableCount}<span className="text-sm font-normal text-gray-400 ml-0.5">건</span>
+          </p>
+          {receivableCount > 0 ? (
             <>
-              <p className="text-[10px] text-gray-400 mb-2 leading-relaxed">
-                입금예정일 초과 시 <span className="text-rose-400 font-medium">지연</span>, 일부만 입금 시 <span className="text-yellow-600 font-medium">부분입금</span>, 7일 이내 예정 시 <span className="text-sky-aqua font-medium">예정</span> 표시
-              </p>
-              {settlementCount === 0 && (
-                <p className="text-sm text-gray-400 py-6 text-center">알림 없음</p>
-              )}
+              <p className="text-xs text-gray-500 tabular-nums mt-1">{fmtCompact(receivableAmount)}</p>
+              <div className="flex items-center gap-2 mt-2 text-[10px] text-gray-400">
+                <span>지연 {overdueAlerts.length}</span>
+                <span>·</span>
+                <span>부분 {partialAlerts.length}</span>
+              </div>
+            </>
+          ) : (
+            <p className="text-[11px] text-gray-300 mt-1">미수금 없음</p>
+          )}
+        </button>
 
-              {overdueAlerts.length > 0 && (
-                <div className="space-y-1">
-                  <Badge variant="outline" className="bg-soft-blush/20 text-soft-blush border-soft-blush/30 text-[10px]">
-                    지연 {overdueAlerts.length}건
-                  </Badge>
-                  {overdueAlerts.map((a, i) => (
-                    <SettlementRow key={`o-${i}`} alert={a} onClick={() => handleClick(a.requestId)}
-                      badgeClass="bg-soft-blush/10 text-soft-blush" badgeLabel={`D+${a.overdueDays}`} />
-                  ))}
-                </div>
-              )}
+        {/* 입금 예정 (7일 이내) */}
+        <button
+          onClick={() => upcomingCount > 0 && setSelectedCard("upcoming")}
+          disabled={upcomingCount === 0}
+          className={`text-left rounded-xl p-4 transition-all border ${
+            upcomingCount > 0
+              ? "border-gray-200 hover:shadow-sm hover:border-gray-300 cursor-pointer bg-white"
+              : "border-gray-100 bg-gray-50/50 cursor-default"
+          }`}
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className={`h-2 w-2 rounded-full ${upcomingCount > 0 ? "bg-sky-aqua" : "bg-gray-200"}`} />
+            <span className={`text-[11px] font-medium ${upcomingCount > 0 ? "text-gray-600" : "text-gray-400"}`}>입금 예정</span>
+          </div>
+          <p className={`text-2xl font-bold tabular-nums ${upcomingCount > 0 ? "text-sky-aqua" : "text-gray-200"}`}>
+            {upcomingCount}<span className="text-sm font-normal text-gray-400 ml-0.5">건</span>
+          </p>
+          {upcomingCount > 0 ? (
+            <>
+              <p className="text-xs text-gray-500 tabular-nums mt-1">{fmtCompact(upcomingAmount)}</p>
+              <p className="text-[10px] text-gray-400 mt-2">7일 이내</p>
+            </>
+          ) : (
+            <p className="text-[11px] text-gray-300 mt-1">예정 건 없음</p>
+          )}
+        </button>
 
-              {partialAlerts.length > 0 && (
-                <div className="space-y-1">
-                  <Badge variant="outline" className="bg-vanilla-custard/20 text-yellow-700 border-vanilla-custard/30 text-[10px]">
-                    부분입금 {partialAlerts.length}건
-                  </Badge>
-                  {partialAlerts.map((a, i) => (
-                    <SettlementRow key={`p-${i}`} alert={a} onClick={() => handleClick(a.requestId)}
-                      badgeClass="bg-vanilla-custard/10 text-yellow-700" badgeLabel="부분" />
-                  ))}
-                </div>
-              )}
+        {/* 미처리 (미지급 + 계산서 미발행) */}
+        <button
+          onClick={() => actionCount > 0 && setSelectedCard("action")}
+          disabled={actionCount === 0}
+          className={`text-left rounded-xl p-4 transition-all border ${
+            actionCount > 0
+              ? "border-gray-200 hover:shadow-sm hover:border-gray-300 cursor-pointer bg-white"
+              : "border-gray-100 bg-gray-50/50 cursor-default"
+          }`}
+        >
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className={`h-2 w-2 rounded-full ${actionCount > 0 ? "bg-vanilla-custard" : "bg-gray-200"}`} />
+            <span className={`text-[11px] font-medium ${actionCount > 0 ? "text-gray-600" : "text-gray-400"}`}>미처리</span>
+          </div>
+          <p className={`text-2xl font-bold tabular-nums ${actionCount > 0 ? "text-vanilla-custard" : "text-gray-200"}`}>
+            {actionCount}<span className="text-sm font-normal text-gray-400 ml-0.5">건</span>
+          </p>
+          {actionCount > 0 ? (
+            <>
+              <p className="text-xs text-gray-500 tabular-nums mt-1">{fmtCompact(actionAmount)}</p>
+              <div className="flex items-center gap-2 mt-2 text-[10px] text-gray-400">
+                <span>미지급 {unpaidExpenses.length}</span>
+                <span>·</span>
+                <span>미발행 {taxInvoiceAlerts.length}</span>
+              </div>
+            </>
+          ) : (
+            <p className="text-[11px] text-gray-300 mt-1">처리할 건 없음</p>
+          )}
+        </button>
+      </div>
 
-              {upcomingAlerts.length > 0 && (
-                <div className="space-y-1">
-                  <Badge variant="outline" className="bg-sky-aqua/10 text-sky-aqua border-sky-aqua/20 text-[10px]">
-                    7일 이내 {upcomingAlerts.length}건
-                  </Badge>
-                  {upcomingAlerts.map((a, i) => (
-                    <SettlementRow key={`u-${i}`} alert={a} onClick={() => handleClick(a.requestId)}
-                      badgeClass="bg-sky-aqua/10 text-sky-aqua" badgeLabel="예정" />
-                  ))}
+      {/* ── 상세 Sheet ── */}
+      <Sheet open={!!selectedCard} onOpenChange={open => !open && setSelectedCard(null)}>
+        <SheetContent side="right" className="w-[400px] sm:w-[440px] p-0 border-l border-gray-100">
+          {selectedCard && (
+            <>
+              {/* 헤더 */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2.5 w-2.5 rounded-full ${
+                    selectedCard === "receivable" ? "bg-soft-blush"
+                    : selectedCard === "upcoming" ? "bg-sky-aqua"
+                    : "bg-vanilla-custard"
+                  }`} />
+                  <p className="text-sm font-semibold text-gray-800">
+                    {selectedCard === "receivable" ? "미수금" : selectedCard === "upcoming" ? "입금 예정" : "미처리"}
+                  </p>
                 </div>
-              )}
+                <button onClick={() => setSelectedCard(null)} className="p-1 rounded-md hover:bg-gray-100 transition-colors">
+                  <X className="h-4 w-4 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="px-4 py-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 80px)" }}>
+
+                {/* ===== 미수금: 지연 + 부분입금 ===== */}
+                {selectedCard === "receivable" && (
+                  <div className="space-y-1">
+                    {/* 지연 그룹 */}
+                    {overdueAlerts.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-soft-blush" />
+                          <span className="text-[11px] font-semibold text-gray-500">지연 {overdueAlerts.length}건</span>
+                        </div>
+                        {overdueAlerts.map((a, i) => (
+                          <SettlementRow key={`o-${i}`} alert={a} onClick={() => handleClick(a.requestId)}
+                            badge={<span className="text-[10px] bg-soft-blush/10 text-soft-blush rounded-full px-2 py-0.5 font-medium">D+{a.overdueDays}</span>}
+                          />
+                        ))}
+                      </>
+                    )}
+                    {/* 부분입금 그룹 */}
+                    {partialAlerts.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-vanilla-custard" />
+                          <span className="text-[11px] font-semibold text-gray-500">부분입금 {partialAlerts.length}건</span>
+                        </div>
+                        {partialAlerts.map((a, i) => (
+                          <SettlementRow key={`p-${i}`} alert={a} onClick={() => handleClick(a.requestId)}
+                            badge={<span className="text-[10px] bg-vanilla-custard/10 text-yellow-700 rounded-full px-2 py-0.5 font-medium">부분</span>}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* ===== 입금 예정 ===== */}
+                {selectedCard === "upcoming" && (
+                  <div className="space-y-1">
+                    {upcomingAlerts.map((a, i) => (
+                      <SettlementRow key={`u-${i}`} alert={a} onClick={() => handleClick(a.requestId)}
+                        badge={<span className="text-[10px] bg-sky-aqua/10 text-sky-aqua rounded-full px-2 py-0.5 font-medium">예정</span>}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* ===== 미처리: 미지급 + 미발행 ===== */}
+                {selectedCard === "action" && (
+                  <div className="space-y-1">
+                    {/* 미지급 그룹 */}
+                    {unpaidExpenses.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-soft-blush" />
+                          <span className="text-[11px] font-semibold text-gray-500">미지급 {unpaidExpenses.length}건</span>
+                        </div>
+                        {unpaidExpenses.map((a, i) => (
+                          <button key={`up-${i}`} type="button" onClick={() => handleClick(a.requestId)}
+                            className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            <p className="text-xs font-medium text-gray-800 truncate mb-0.5">
+                              {a.vendor || a.description || "거래처 미입력"}
+                            </p>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-gray-400 truncate">{a.requestTitle}</span>
+                              <span className="font-semibold text-soft-blush tabular-nums shrink-0 ml-2">{formatCurrency(a.amount)}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    {/* 미발행 그룹 */}
+                    {taxInvoiceAlerts.length > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-vanilla-custard" />
+                          <span className="text-[11px] font-semibold text-gray-500">계산서 미발행 {taxInvoiceAlerts.length}건</span>
+                        </div>
+                        {taxInvoiceAlerts.map((a, i) => (
+                          <button key={`ti-${i}`} type="button" onClick={() => handleClick(a.requestId)}
+                            className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            <p className="text-xs font-medium text-gray-800 truncate mb-0.5">{a.requestTitle}</p>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-gray-400">{a.stageName} · 입금 {formatCurrency(a.paidAmount)}</span>
+                              <span className="font-semibold text-vanilla-custard tabular-nums shrink-0 ml-2">{formatCurrency(a.amount)}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
+        </SheetContent>
+      </Sheet>
 
-          {/* ===== 지출 탭 ===== */}
-          {tab === "지출" && (
-            <>
-              <p className="text-[10px] text-gray-400 mb-2 leading-relaxed">
-                <span className="text-rose-400 font-medium">미지급</span> 지출 내역과 <span className="text-yellow-600 font-medium">세금계산서</span> 마감 7일 이내 건을 표시합니다
-              </p>
-              {expenseCount === 0 && (
-                <p className="text-sm text-gray-400 py-6 text-center">알림 없음</p>
-              )}
-
-              {unpaidExpenses.length > 0 && (
-                <div className="space-y-1">
-                  <Badge variant="outline" className="bg-soft-blush/20 text-soft-blush border-soft-blush/30 text-[10px]">
-                    <CreditCard className="h-3 w-3 mr-1" />
-                    미지급 {unpaidExpenses.length}건
-                  </Badge>
-                  {unpaidExpenses.map((a, i) => (
-                    <button
-                      key={`up-${i}`}
-                      type="button"
-                      className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-sm text-left"
-                      onClick={() => handleClick(a.requestId)}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 truncate text-xs">
-                          {a.vendor || a.description || "거래처 미입력"}
-                        </p>
-                        <p className="text-[10px] text-gray-500 truncate">{a.requestTitle}</p>
-                      </div>
-                      <span className="text-soft-blush font-medium ml-2 whitespace-nowrap text-xs">
-                        {formatCurrency(a.amount)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {taxDueExpenses.length > 0 && (
-                <div className="space-y-1">
-                  <Badge variant="outline" className="bg-vanilla-custard/20 text-yellow-700 border-vanilla-custard/30 text-[10px]">
-                    <Receipt className="h-3 w-3 mr-1" />
-                    세금계산서 예정 {taxDueExpenses.length}건
-                  </Badge>
-                  {taxDueExpenses.map((a, i) => (
-                    <button
-                      key={`tx-${i}`}
-                      type="button"
-                      className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-sm text-left"
-                      onClick={() => handleClick(a.requestId)}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 truncate text-xs">
-                          {a.vendor || a.description || "거래처 미입력"}
-                        </p>
-                        <p className="text-[10px] text-gray-500 truncate">마감: {a.dueDate}</p>
-                      </div>
-                      <span className="text-yellow-700 font-medium ml-2 whitespace-nowrap text-xs">
-                        {formatCurrency(a.amount)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ===== 세금계산서 탭 (미발행) ===== */}
-          {tab === "계산서" && (
-            <>
-              <p className="text-[10px] text-gray-400 mb-2 leading-relaxed">
-                입금이 확인되었으나 <span className="text-rose-400 font-medium">세금계산서 미발행</span> 상태인 정산 단계를 표시합니다
-              </p>
-              {taxInvoiceCount === 0 && (
-                <p className="text-sm text-gray-400 py-6 text-center">미발행 건 없음</p>
-              )}
-
-              {taxInvoiceCount > 0 && (
-                <div className="space-y-1">
-                  <Badge variant="outline" className="bg-vanilla-custard/20 text-yellow-700 border-vanilla-custard/30 text-[10px]">
-                    <FileText className="h-3 w-3 mr-1" />
-                    미발행 {taxInvoiceCount}건
-                  </Badge>
-                  {taxInvoiceAlerts.map((a, i) => (
-                    <button
-                      key={`ti-${i}`}
-                      type="button"
-                      className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-sm text-left"
-                      onClick={() => handleClick(a.requestId)}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-gray-900 truncate text-xs">
-                          {a.requestTitle}
-                        </p>
-                        <p className="text-[10px] text-gray-500 truncate">
-                          {a.stageName} · 입금 {formatCurrency(a.paidAmount)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 ml-2 shrink-0">
-                        <span className="text-yellow-700 font-medium whitespace-nowrap text-xs">
-                          {formatCurrency(a.amount)}
-                        </span>
-                        <Badge variant="outline" className="bg-vanilla-custard/10 text-yellow-700 text-[10px] whitespace-nowrap px-1.5 py-0">
-                          미발행
-                        </Badge>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </CardContent>
-
-      {/* 우측 Sheet 패널: 의뢰 상세 */}
+      {/* 의뢰 상세 Sheet */}
       <RequestDetailSheet
         requestInfo={selectedRequestInfo}
         onClose={() => setSelectedRequestInfo(null)}
       />
-    </Card>
+    </div>
   )
 }
 
-// ═══════════════════════════════════════
-// 메인 섹션: 알림 패널 (전체 너비)
-// ═══════════════════════════════════════
-export function SettlementExpenseSection({ settlementAlerts, expenseAlerts, taxInvoiceAlerts, requestInfoMap }: Props) {
-  return (
-    <AlertsPanel settlementAlerts={settlementAlerts} expenseAlerts={expenseAlerts} taxInvoiceAlerts={taxInvoiceAlerts} requestInfoMap={requestInfoMap} />
-  )
-}
-
-// ----- 정산 알림 행 (컴팩트: 현장명 + 단계 + 예정일 + 금액 + 뱃지) -----
-function SettlementRow({
-  alert,
-  onClick,
-  badgeClass,
-  badgeLabel,
-}: {
-  alert: SettlementAlert
-  onClick: () => void
-  badgeClass: string
-  badgeLabel: string
+// ── 정산 알림 행 (공통) ──
+function SettlementRow({ alert, onClick, badge }: {
+  alert: SettlementAlert; onClick: () => void; badge: React.ReactNode
 }) {
   return (
-    <button
-      type="button"
-      className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors text-left"
-      onClick={onClick}
+    <button type="button" onClick={onClick}
+      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
     >
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-gray-900 truncate text-xs">{alert.requestTitle}</p>
-        <p className="text-[10px] text-gray-500">{alert.stageName}</p>
+      <div className="flex items-center justify-between mb-0.5">
+        <p className="text-xs font-medium text-gray-800 truncate flex-1 mr-2">{alert.requestTitle}</p>
+        {badge}
       </div>
-      <div className="flex items-center gap-2 ml-2 shrink-0">
-        {alert.scheduledDate && (
-          <span className="text-[10px] text-gray-400 whitespace-nowrap">{alert.scheduledDate}</span>
-        )}
-        <span className="font-medium text-gray-700 whitespace-nowrap text-xs">
-          {formatCurrency(alert.plannedAmount)}
-        </span>
-        <Badge variant="outline" className={`${badgeClass} text-[10px] whitespace-nowrap px-1.5 py-0`}>
-          {badgeLabel}
-        </Badge>
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="text-gray-400 truncate">{alert.customerName} · {alert.stageName} · {alert.scheduledDate || "-"}</span>
+        <span className="font-semibold text-gray-700 tabular-nums shrink-0 ml-2">{formatCurrency(alert.plannedAmount)}</span>
       </div>
     </button>
   )

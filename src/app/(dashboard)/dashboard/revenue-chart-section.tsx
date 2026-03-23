@@ -5,7 +5,6 @@
 // 막대 클릭 → 좌측 슬라이드 패널에 해당 월 현장 상세 표시
 
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { BarChart3, ChevronLeft, ChevronRight, Info, TrendingUp, TrendingDown, Building2, FileText, Receipt } from "lucide-react"
@@ -256,11 +255,11 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
   }, [selectedYear, selectedMonth, revenueDetails])
 
   return (<>
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-2">
+    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="px-6 pt-5 pb-2">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <CardTitle className="text-lg font-heading flex items-center gap-2">
+            <h3 className="text-lg font-heading flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-sky-aqua" />
               월별 매출 집계
               <span className="text-xs font-sans font-normal text-sky-aqua ml-1">세금계산서 발행일 기준</span>
@@ -277,7 +276,7 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-            </CardTitle>
+            </h3>
             <p className="text-xs text-gray-400 mt-0.5">모든 금액은 VAT 포함 금액입니다</p>
           </div>
 
@@ -301,9 +300,9 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
             </button>
           </div>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="pt-0">
+      <div className="px-6 pb-5">
         {/* 요약 카드 */}
         <div className="flex items-center gap-6 mb-4 mt-1">
           <div>
@@ -430,8 +429,8 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
 
     {/* 좌측 Sheet — 막대 클릭 시 해당 월의 현장 상세 */}
     <DetailSheet

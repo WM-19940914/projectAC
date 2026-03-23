@@ -36,8 +36,7 @@ export async function POST(req: NextRequest) {
       $excel.DisplayAlerts = $false
       try {
         $wb = $excel.Workbooks.Open('${xlsxPath.replace(/\//g, "\\\\")}')
-        $ws = $wb.Worksheets.Item(1)
-        $ws.PrintOut([Type]::Missing, [Type]::Missing, 1, $false, 'Microsoft Print to PDF', $true, $false, '${pdfPath.replace(/\//g, "\\\\")}')
+        $wb.PrintOut([Type]::Missing, [Type]::Missing, 1, $false, 'Microsoft Print to PDF', $true, $false, '${pdfPath.replace(/\//g, "\\\\")}')
         $wb.Close($false)
       } finally {
         $excel.Quit()
