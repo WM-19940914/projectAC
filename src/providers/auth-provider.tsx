@@ -55,17 +55,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // supabase 인스턴스를 한 번만 생성 (매 렌더마다 재생성 방지)
   const supabase = useMemo(() => createClient(), [])
 
-  /** 사용자 프로필 조회 */
+  /** 사용자 프로필 조회 (RLS 실패 시 user_metadata 폴백) */
   const fetchProfile = useCallback(
-    async (userId: string) => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single()
+    async (userId: string, fallbackUser?: User | null) => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", userId)
+          .single()
 
-      if (data) {
-        setProfile(data as Profile)
+        if (data && !error) {
+          setProfile(data as Profile)
+          return
+        }
+      } catch { /* 무시 */ }
+
+      // profiles 테이블 조회 실패 시 user_metadata로 폴백
+      if (fallbackUser?.user_metadata) {
+        setProfile({
+          id: userId,
+          full_name: fallbackUser.user_metadata.full_name || fallbackUser.email?.split("@")[0] || "사용자",
+          email: fallbackUser.email || "",
+          role: fallbackUser.user_metadata.role || "sales",
+          phone: null,
+          avatar_url: null,
+          is_active: true,
+          created_at: fallbackUser.created_at || "",
+          updated_at: "",
+        })
       }
     },
     [supabase]
@@ -80,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (currentUser) {
         setUser(currentUser)
-        await fetchProfile(currentUser.id)
+        await fetchProfile(currentUser.id, currentUser)
       }
 
       setLoading(false)
@@ -94,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user)
-        await fetchProfile(session.user.id)
+        await fetchProfile(session.user.id, session.user)
       } else {
         setUser(null)
         setProfile(null)
