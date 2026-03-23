@@ -72,21 +72,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
-    // 현재 세션 확인
-    const getSession = async () => {
+    // 현재 사용자 확인 (getUser는 서버에서 토큰 검증 + 갱신)
+    const initUser = async () => {
       const {
-        data: { session },
-      } = await supabase.auth.getSession()
+        data: { user: currentUser },
+      } = await supabase.auth.getUser()
 
-      if (session?.user) {
-        setUser(session.user)
-        await fetchProfile(session.user.id)
+      if (currentUser) {
+        setUser(currentUser)
+        await fetchProfile(currentUser.id)
       }
 
       setLoading(false)
     }
 
-    getSession()
+    initUser()
 
     // 인증 상태 변화 리스너
     const {
