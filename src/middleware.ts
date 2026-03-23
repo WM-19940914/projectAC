@@ -37,15 +37,15 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // getSession()은 로컬 JWT 검증만 → 네트워크 호출 없어서 빠름
+  // getUser()로 세션 갱신 + 토큰 리프레시 (Vercel 배포 시 필수)
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+  } = await supabase.auth.getUser()
 
   // ── API 라우트: 인증 필수 + UTF-8 헤더 ──
   if (isApiRoute) {
     // 인증되지 않은 요청 차단
-    if (!session) {
+    if (!user) {
       return NextResponse.json(
         { error: "인증이 필요합니다" },
         { status: 401 }
@@ -83,12 +83,12 @@ export async function middleware(request: NextRequest) {
   const isResetPasswordPage = pathname === "/reset-password"
 
   // 비로그인 + 보호된 페이지 → 로그인으로
-  if (!session && !isAuthPage && !isResetPasswordPage) {
+  if (!user && !isAuthPage && !isResetPasswordPage) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
   // 로그인 상태 + 인증 페이지 → 대시보드로 (비밀번호 재설정은 제외)
-  if (session && isAuthPage) {
+  if (user && isAuthPage) {
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 
