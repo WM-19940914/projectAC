@@ -150,13 +150,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  /** 로그아웃 */
+  /** 로그아웃 — 세션 없어도 안전하게 로그인 페이지로 이동 */
   const signOut = async () => {
-    await supabase.auth.signOut()
+    // supabase signOut이 Lock 때문에 멈출 수 있어서 3초 제한
+    try {
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000))
+      ])
+    } catch {
+      // 타임아웃이든 에러든 무시하고 진행
+    }
     setUser(null)
     setProfile(null)
-    router.push("/login")
-    router.refresh()
+    // localStorage에 남은 supabase 토큰 제거
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith("sb-")) localStorage.removeItem(key)
+    })
+    // 쿠키에 남은 supabase 세션도 제거 (미들웨어가 세션 있다고 판단하는 것 방지)
+    document.cookie.split(";").forEach((c) => {
+      const name = c.trim().split("=")[0]
+      if (name.startsWith("sb-")) {
+        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+      }
+    })
+    window.location.href = "/login"
   }
 
   return (

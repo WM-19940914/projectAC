@@ -1224,6 +1224,10 @@ function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExpor
       ws.getCell(`L${r}`).value = { formula: `ROUNDUP(Z${r},-3)` }
     }
     ws.getCell(`O${r}`).value = { formula: `L${r}*K${r}` }
+    // 비고
+    ws.getCell(`Q${r}`).value = item.memo || null
+    ws.getCell(`Q${r}`).font = bodyFont
+    ws.getCell(`Q${r}`).alignment = { horizontal: 'center', vertical: 'middle' }
 
     // 본문 스타일 (테두리는 마지막에 일괄 적용)
     ws.getCell(`A${r}`).font = bodyFont
@@ -1409,7 +1413,7 @@ async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayB
     { item_name: d.coverInstallLabel.name, specification: d.coverInstallLabel.desc, unit: '식', quantity: 1, unit_price: d.installTotal, _isFixed: true },
     ...d.coverItems.filter(hasData).map(ci => ({
       item_name: ci.item_name, specification: ci.specification, unit: ci.unit || '식',
-      quantity: ci.quantity, unit_price: ci.unit_price, _isFixed: false,
+      quantity: ci.quantity, unit_price: ci.unit_price, memo: ci.memo, _isFixed: false,
     })),
   ]
 
@@ -1506,6 +1510,7 @@ async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayB
     ws.getCell(`K${row}`).value = item.quantity || null          // 수량
     ws.getCell(`L${row}`).value = item.unit_price || null        // 단가 (직접 값)
     ws.getCell(`O${row}`).value = { formula: `L${row}*K${row}` } // 공급가
+    ws.getCell(`Q${row}`).value = item.memo || null              // 비고
     // 원가분석 안 넣음 (갑지이므로)
   }
 
@@ -1896,6 +1901,8 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<A
 
     // 공급가 수식 — sharedFormula 깨짐 방지를 위해 명시적으로 설정
     ws.getCell(`O${row}`).value = { formula: `L${row}*K${row}` }
+    // 비고
+    ws.getCell(`Q${row}`).value = item.memo || null
 
     // 원가분석 — 입력값
     ws.getCell(`T${row}`).value = item._section                                              // 구분 (장비/설치비)
@@ -2072,7 +2079,7 @@ export async function exportQuoteExcelAsPdf(data: QuoteExportData): Promise<void
       <td class="r">${item.quantity || ''}</td>
       <td class="r" colspan="3">${item.unit_price ? item.unit_price.toLocaleString() : ''}</td>
       <td class="r" colspan="2">${supply ? supply.toLocaleString() : ''}</td>
-      <td class="l" colspan="2" style="border-right:1px solid #333;"></td>
+      <td class="l" colspan="2" style="border-right:1px solid #333;">${esc(item.memo)}</td>
     </tr>`
   }).join('\n')
 
