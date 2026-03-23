@@ -215,6 +215,41 @@ export async function exportQuotePDF(data: QuoteExportData): Promise<void> {
   doc.save(`견적서_${safeName}.pdf`)
 }
 
+// jsPDF로 PDF Blob 생성 (다운로드 없이 반환, Vercel 호환)
+export async function buildQuotePdfBlob(data: QuoteExportData): Promise<Blob | null> {
+  const { jsPDF } = await import("jspdf")
+  const doc = new jsPDF({ unit: "mm", format: "a4", compress: true })
+  await ensureFonts(doc)
+
+  const [logoData, stampData] = await Promise.all([
+    data.logoUrl ? loadImageDataUrl(data.logoUrl) : Promise.resolve(null),
+    data.stampUrl ? loadImageDataUrl(data.stampUrl) : Promise.resolve(null),
+  ])
+
+  if (data.quoteType === "detailed") {
+    renderCoverPage(doc, data, logoData, stampData)
+    const validEquip = data.equipItems.filter(hasData)
+    if (validEquip.length > 0) { doc.addPage(); renderItemsPage(doc, "장비 내역서", validEquip, data.equipTotal) }
+    const validInstall = data.installItems.filter(hasData)
+    if (validInstall.length > 0) { doc.addPage(); renderItemsPage(doc, "설치비 내역서", validInstall, data.installTotal) }
+  } else {
+    renderSimplePage(doc, data, logoData, stampData)
+  }
+
+  const totalPages = doc.getNumberOfPages()
+  if (totalPages > 1) {
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i)
+      doc.setFontSize(7)
+      doc.setFont("Pretendard", "normal")
+      doc.setTextColor(...GRAY500)
+      doc.text(`${i} / ${totalPages}`, PW / 2, 290, { align: "center" })
+    }
+  }
+
+  return doc.output("blob") as unknown as Blob
+}
+
 // ----- 간이 견적서 렌더링 (에디터 UI 그대로 재현) -----
 function renderSimplePage(doc: jsPDF, data: QuoteExportData, logoData: string | null, stampData: string | null) {
   let y = M

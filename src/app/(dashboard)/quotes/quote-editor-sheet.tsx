@@ -24,7 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter,
 } from "@/components/ui/alert-dialog"
 import { formatCurrency } from "@/lib/format"
-import { exportQuotePDF, exportQuoteExcel, buildQuoteExcelBuffer, type QuoteExportData } from "@/lib/quote-export"
+import { exportQuotePDF, exportQuoteExcel, buildQuoteExcelBuffer, buildQuotePdfBlob, type QuoteExportData } from "@/lib/quote-export"
 
 // 내보내기 내역 타입
 interface ExportRecord {
@@ -1077,17 +1077,12 @@ export default function QuoteEditorSheet({
                     if (!exportData) return
                     setPdfExporting(true)
                     try {
-                      const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
-                      if (!xlsxBuffer) return
-                      const res = await fetch("/api/excel-to-pdf", { method: "POST", body: xlsxBuffer })
-                      if (!res.ok) throw new Error(await res.text())
-                      const pdfBlob = await res.blob()
+                      const pdfBlob = await buildQuotePdfBlob(exportData)
+                      if (!pdfBlob) return
                       const typeTag = exportData.quoteType === "detailed" ? "상세" : "간이"
                       const baseName = `${typeTag}_견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}`
                       const fileName = getNumberedName(baseName, "pdf", exportHistory)
-                      // Storage에 업로드 (내역 관리용)
                       await uploadExport(pdfBlob, "pdf", fileName, "application/pdf")
-                      // 로컬 blob으로 새 탭 열기
                       const localUrl = URL.createObjectURL(pdfBlob)
                       window.open(localUrl, "_blank")
                       toast({ title: "완료", description: "PDF가 새 탭에서 열렸습니다" })
@@ -1117,11 +1112,9 @@ export default function QuoteEditorSheet({
                     if (!exportData) return
                     setPngExporting(true)
                     try {
-                      const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
-                      if (!xlsxBuffer) return
-                      const pdfRes = await fetch("/api/excel-to-pdf", { method: "POST", body: xlsxBuffer })
-                      if (!pdfRes.ok) throw new Error(await pdfRes.text())
-                      const pdfArrayBuf = await pdfRes.arrayBuffer()
+                      const pdfBlob = await buildQuotePdfBlob(exportData)
+                      if (!pdfBlob) return
+                      const pdfArrayBuf = await pdfBlob.arrayBuffer()
                       // pdf.js CDN 로드
                       // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       let pdfjsLib = (window as any)["pdfjs-dist/build/pdf"]
