@@ -107,13 +107,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initUser()
 
     // 인증 상태 변화 리스너
+    // SIGNED_OUT일 때만 프로필 초기화 (INITIAL_SESSION의 null 세션으로 프로필이 지워지는 것 방지)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user)
         await fetchProfile(session.user.id, session.user)
-      } else {
+      } else if (event === "SIGNED_OUT") {
         setUser(null)
         setProfile(null)
       }
