@@ -218,6 +218,8 @@ export default function QuoteEditorSheet({
   const savedIdRef = useRef<string | null>(null)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialLoadRef = useRef(true)
+  // 현재 에디터가 바인딩된 requestId를 저장 (카드 전환 시 잘못된 저장 방지)
+  const boundRequestIdRef = useRef<string | undefined>(undefined)
   // doSave의 최신 참조를 유지 (닫힐 때 stale closure 방지)
   const doSaveRef = useRef<(isAuto?: boolean) => Promise<boolean>>(() => Promise.resolve(false))
   // 공급자 모드: "company" = 우리 회사 기본값, "custom" = 직접 입력
@@ -398,6 +400,13 @@ export default function QuoteEditorSheet({
 
   useEffect(() => {
     if (open) {
+      // 이전 자동저장 타이머 즉시 취소 (카드 전환 시 잘못된 저장 방지)
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current)
+        autoSaveTimerRef.current = null
+      }
+      // 현재 requestId를 바인딩 (이 에디터 세션에서만 유효)
+      boundRequestIdRef.current = requestId
       initialLoadRef.current = true
       // 가격표 데이터 로드 (매칭 비교용)
       loadPriceItems()
@@ -856,8 +865,14 @@ export default function QuoteEditorSheet({
       return
     }
     if (!open) return
+    // requestId가 바뀌었으면 저장하지 않음 (카드 전환 중 잘못된 저장 방지)
+    if (boundRequestIdRef.current !== requestId) return
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
-    autoSaveTimerRef.current = setTimeout(() => { doSaveRef.current(true) }, 2000)
+    autoSaveTimerRef.current = setTimeout(() => {
+      // 저장 직전 한 번 더 확인
+      if (boundRequestIdRef.current !== requestId) return
+      doSaveRef.current(true)
+    }, 2000)
     return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, quotationDate, notes, equipItems, installItems, receiver, supplier, supplierMode, truncationInput, open])
@@ -960,10 +975,11 @@ export default function QuoteEditorSheet({
           clearTimeout(autoSaveTimerRef.current)
           autoSaveTimerRef.current = null
         }
-        // 기존 견적서면 닫기 직전 최종 상태 저장 (단 한 번만)
-        if (savedIdRef.current) {
+        // 기존 견적서면 닫기 직전 최종 상태 저장 (requestId 일치 시에만)
+        if (savedIdRef.current && boundRequestIdRef.current === requestId) {
           doSaveRef.current(true)
         }
+        boundRequestIdRef.current = undefined
         onClose()
       }
     }}>
