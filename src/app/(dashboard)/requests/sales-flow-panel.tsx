@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import type { ContractSummary, QuotationListItem } from "./kanban-types"
 import { ContractFlowTab } from "./contract-flow-tab"
 import ExpenseTab from "./expense-tab"
+import AttachmentPanel from "./attachment-panel"
 
 export function SalesFlowPanel({
   quotationsSlot,
@@ -84,7 +85,8 @@ export function SalesFlowPanel({
             layout="side-by-side"
           />
         </div>
-        {/* 우측 1열: 사용자 구현 예정 */}
+        {/* 우측 1열: 첨부파일 관리 */}
+        <AttachmentPanel requestId={requestId} />
       </div>
     </div>
   )

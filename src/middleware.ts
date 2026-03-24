@@ -56,7 +56,8 @@ export async function middleware(request: NextRequest) {
     if (
       !pathname.startsWith("/api/quote-template") &&
       !pathname.startsWith("/api/excel-to-pdf") &&
-      !pathname.startsWith("/api/excel-to-png")
+      !pathname.startsWith("/api/excel-to-png") &&
+      !pathname.startsWith("/api/attachments")
     ) {
       supabaseResponse.headers.set("Content-Type", "application/json; charset=utf-8")
     }

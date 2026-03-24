@@ -55,9 +55,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // supabase 인스턴스를 한 번만 생성 (매 렌더마다 재생성 방지)
   const supabase = useMemo(() => createClient(), [])
 
-  /** 사용자 프로필 조회 (RLS 실패 시 user_metadata 폴백) */
+  /** 사용자 프로필 조회 — /api/auth/me (admin 클라이언트, RLS 우회) 우선 사용 */
   const fetchProfile = useCallback(
     async (userId: string, fallbackUser?: User | null) => {
+      // 1차: API 라우트로 프로필 조회 (admin 클라이언트 → RLS 우회)
+      try {
+        const res = await fetch("/api/auth/me")
+        if (res.ok) {
+          const json = await res.json()
+          if (json.data?.profile) {
+            setProfile(json.data.profile as Profile)
+            return
+          }
+        }
+      } catch { /* API 실패 시 아래 폴백으로 */ }
+
+      // 2차: 브라우저 클라이언트로 직접 조회 (RLS 적용)
       try {
         const { data, error } = await supabase
           .from("profiles")
@@ -71,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch { /* 무시 */ }
 
-      // profiles 테이블 조회 실패 시 user_metadata로 폴백
+      // 3차: user_metadata 폴백
       if (fallbackUser?.user_metadata) {
         setProfile({
           id: userId,

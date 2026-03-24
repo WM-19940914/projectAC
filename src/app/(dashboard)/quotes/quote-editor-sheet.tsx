@@ -213,8 +213,8 @@ export default function QuoteEditorSheet({
   const [saveError, setSaveError] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
-  const [pdfExporting, setPdfExporting] = useState(false)
-  const [pngExporting, setPngExporting] = useState(false)
+  const [_pdfExporting, _setPdfExporting] = useState(false) // 미사용 (PDF/PNG 내보내기 제거됨)
+  const [_pngExporting, _setPngExporting] = useState(false)
   const savedIdRef = useRef<string | null>(null)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialLoadRef = useRef(true)
@@ -996,63 +996,33 @@ export default function QuoteEditorSheet({
         }}
       >
         {/* 헤더 */}
-        <SheetHeader className={`px-6 pt-6 ${activeTab === "simple" ? "pb-4" : "pb-0"} border-b shrink-0`}>
+        <SheetHeader className={`px-6 pt-6 ${activeTab === "simple" || activeTab === "expense-report" ? "pb-4" : "pb-0"} border-b shrink-0`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <SheetTitle className="sr-only">견적서 편집</SheetTitle>
               <SheetDescription className="sr-only">견적서 편집</SheetDescription>
-              {/* 간이 / 상세 메인 토글 (클릭 = 타입 설정 + 뷰 이동) */}
+              {/* 간이 / 상세 견적서 토글 + 지출결의서 */}
+              {/* 간이/상세 토글 */}
               <div className="flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
-                {/* 간이 견적서 */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setQuoteType("simple")
-                    activeTabRef.current = "simple"
-                    setActiveTab("simple")
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all cursor-pointer select-none ${activeTab === "simple"
-                    ? "bg-white shadow-sm"
-                    : "hover:bg-white/50"
-                    }`}
+                  onClick={() => { setQuoteType("simple"); activeTabRef.current = "simple"; setActiveTab("simple") }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all cursor-pointer select-none ${activeTab === "simple" ? "bg-white shadow-sm" : "hover:bg-white/50"}`}
                 >
-                  <span className={`text-xs font-medium transition-all ${activeTab === "simple" ? "text-slate-700" : "text-gray-400"
-                    }`}>
-                    간이 견적서
-                  </span>
-                  {quoteType === "simple" && (
-                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-700">
-                      <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
-                    </span>
-                  )}
+                  <span className={`text-xs font-medium transition-all ${activeTab === "simple" ? "text-slate-700" : "text-gray-400"}`}>간이 견적서</span>
+                  {quoteType === "simple" && <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-700"><Check className="h-2.5 w-2.5 text-white" strokeWidth={3} /></span>}
                 </button>
-                {/* 상세 견적서 */}
                 <button
                   type="button"
-                  onClick={() => {
-                    setQuoteType("detailed")
-                    activeTabRef.current = "cover"
-                    setActiveTab("cover")
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all cursor-pointer select-none ${activeTab !== "simple"
-                    ? "bg-white shadow-sm"
-                    : "hover:bg-white/50"
-                    }`}
+                  onClick={() => { setQuoteType("detailed"); activeTabRef.current = "cover"; setActiveTab("cover") }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all cursor-pointer select-none ${activeTab !== "simple" && activeTab !== "expense-report" ? "bg-white shadow-sm" : "hover:bg-white/50"}`}
                 >
-                  <span className={`text-xs font-medium transition-all ${activeTab !== "simple" ? "text-slate-700" : "text-gray-400"
-                    }`}>
-                    상세 견적서
-                  </span>
-                  {quoteType === "detailed" && (
-                    <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-700">
-                      <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
-                    </span>
-                  )}
+                  <span className={`text-xs font-medium transition-all ${activeTab !== "simple" && activeTab !== "expense-report" ? "text-slate-700" : "text-gray-400"}`}>상세 견적서</span>
+                  {quoteType === "detailed" && <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-700"><Check className="h-2.5 w-2.5 text-white" strokeWidth={3} /></span>}
                 </button>
               </div>
-              {/* Excel / PDF / 이미지 내보내기 — 아이콘 중심 버튼 */}
-              <div className="flex items-center gap-2 ml-3">
-                {/* Excel 내보내기 */}
+              {/* Excel 내보내기 + 내역 뱃지 (지출결의서 탭에서는 숨김) */}
+              {activeTab !== "expense-report" && <div className="relative flex items-center ml-2">
                 <button
                   onClick={async () => {
                     const exportData = buildExportData()
@@ -1064,9 +1034,7 @@ export default function QuoteEditorSheet({
                       const baseName = `${typeTag}_견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}`
                       const fileName = getNumberedName(baseName, "xlsx", exportHistory)
                       const blob = new Blob([xlsxBuffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
-                      // Storage에 업로드 (내역 관리용)
                       await uploadExport(blob, "excel", fileName, blob.type)
-                      // 로컬 blob으로 다운로드 (브라우저에서 xlsx를 열 수 없으므로)
                       const localUrl = URL.createObjectURL(blob)
                       const a = document.createElement("a"); a.href = localUrl; a.download = fileName
                       document.body.appendChild(a); a.click(); document.body.removeChild(a)
@@ -1083,152 +1051,44 @@ export default function QuoteEditorSheet({
                     <path d="M22 10h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2z" fill="#fff" opacity=".6"/>
                     <path d="M7.5 10l2.7 6-2.7 6h2.4l1.6-3.8L13.1 22h2.4l-2.7-6 2.7-6h-2.4l-1.6 3.8L9.9 10H7.5z" fill="#fff"/>
                   </svg>
-                  <span className="text-[9px] text-gray-400 group-hover:text-gray-600">내보내기</span>
+                  <span className="text-[9px] text-gray-400 group-hover:text-gray-600 leading-tight text-center">견적서<br/>내보내기</span>
                 </button>
-                {/* PDF 내보내기 */}
-                <button
-                  disabled={pdfExporting}
-                  onClick={async () => {
-                    const exportData = buildExportData()
-                    if (!exportData) return
-                    setPdfExporting(true)
-                    try {
-                      const pdfBlob = await buildQuotePdfBlob(exportData)
-                      if (!pdfBlob) return
-                      const typeTag = exportData.quoteType === "detailed" ? "상세" : "간이"
-                      const baseName = `${typeTag}_견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}`
-                      const fileName = getNumberedName(baseName, "pdf", exportHistory)
-                      await uploadExport(pdfBlob, "pdf", fileName, "application/pdf")
-                      const localUrl = URL.createObjectURL(pdfBlob)
-                      window.open(localUrl, "_blank")
-                      toast({ title: "완료", description: "PDF가 새 탭에서 열렸습니다" })
-                    } catch (e) { console.error("PDF 내보내기 오류:", e); toast({ title: "오류", description: "PDF 내보내기에 실패했습니다", variant: "destructive" }) }
-                    finally { setPdfExporting(false) }
-                  }}
-                  className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border transition-colors group ${pdfExporting ? "opacity-50 cursor-wait border-gray-200" : "border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}
-                  title="PDF 내보내기"
-                >
-                  {pdfExporting ? (
-                    <svg className="animate-spin w-6 h-6 text-red-400" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                  ) : (
-                    <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none">
-                      <path d="M26 2H10a2 2 0 00-2 2v4H6a2 2 0 00-2 2v12a2 2 0 002 2h2v4a2 2 0 002 2h16a2 2 0 002-2V4a2 2 0 00-2-2z" fill="#E5E7EB"/>
-                      <path d="M6 10h18v12H6z" fill="#EF4444"/>
-                      <text x="15" y="20" textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="Arial">PDF</text>
-                      <path d="M22 2l6 6h-4a2 2 0 01-2-2V2z" fill="#D1D5DB"/>
-                    </svg>
-                  )}
-                  <span className="text-[9px] text-gray-400 group-hover:text-gray-600">{pdfExporting ? "변환중" : "내보내기"}</span>
-                </button>
-                {/* 이미지(PNG) 내보내기 */}
-                <button
-                  disabled={pngExporting}
-                  onClick={async () => {
-                    const exportData = buildExportData()
-                    if (!exportData) return
-                    setPngExporting(true)
-                    try {
-                      const pdfBlob = await buildQuotePdfBlob(exportData)
-                      if (!pdfBlob) return
-                      const pdfArrayBuf = await pdfBlob.arrayBuffer()
-                      // pdf.js CDN 로드
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      let pdfjsLib = (window as any)["pdfjs-dist/build/pdf"]
-                      if (!pdfjsLib) {
-                        await new Promise<void>((resolve, reject) => {
-                          const s = document.createElement("script")
-                          s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
-                          s.onload = () => resolve()
-                          s.onerror = () => reject(new Error("pdf.js 로드 실패"))
-                          document.head.appendChild(s)
-                        })
-                        pdfjsLib = (window as any)["pdfjs-dist/build/pdf"]
-                      }
-                      pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"
-                      const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(pdfArrayBuf) }).promise
-                      const scale = 3
-                      const numPages = pdf.numPages
-                      const typeTag = exportData.quoteType === "detailed" ? "상세" : "간이"
-                      const baseTitle = `${typeTag}_견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}`
-                      if (numPages === 1) {
-                        // 1장: 단일 PNG
-                        const page = await pdf.getPage(1)
-                        const viewport = page.getViewport({ scale })
-                        const canvas = document.createElement("canvas")
-                        canvas.width = viewport.width; canvas.height = viewport.height
-                        const ctx = canvas.getContext("2d")!
-                        ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, canvas.width, canvas.height)
-                        await page.render({ canvasContext: ctx, viewport }).promise
-                        const pngBlob = await new Promise<Blob>((resolve, reject) => {
-                          canvas.toBlob(b => b ? resolve(b) : reject(new Error("PNG 변환 실패")), "image/png")
-                        })
-                        const fileName = getNumberedName(baseTitle, "png", exportHistory)
-                        await uploadExport(pngBlob, "png", fileName, "image/png")
-                        const localUrl = URL.createObjectURL(pngBlob)
-                        window.open(localUrl, "_blank")
-                        toast({ title: "완료", description: "PNG가 새 탭에서 열렸습니다" })
-                      } else {
-                        // 여러 장: 페이지별 PNG → ZIP 묶기
-                        const { default: JSZip } = await import("jszip")
-                        const zip = new JSZip()
-                        const pageLabels = ["갑지", "장비내역서", "설치비내역서"]
-                        for (let p = 1; p <= numPages; p++) {
-                          const page = await pdf.getPage(p)
-                          const viewport = page.getViewport({ scale })
-                          const canvas = document.createElement("canvas")
-                          canvas.width = viewport.width; canvas.height = viewport.height
-                          const ctx = canvas.getContext("2d")!
-                          ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, canvas.width, canvas.height)
-                          await page.render({ canvasContext: ctx, viewport }).promise
-                          const pngBlob = await new Promise<Blob>((resolve, reject) => {
-                            canvas.toBlob(b => b ? resolve(b) : reject(new Error("PNG 변환 실패")), "image/png")
-                          })
-                          const label = pageLabels[p - 1] || `p${p}`
-                          zip.file(`${baseTitle}_${label}.png`, pngBlob)
-                        }
-                        const zipBlob = await zip.generateAsync({ type: "blob" })
-                        const fileName = getNumberedName(baseTitle, "zip", exportHistory)
-                        await uploadExport(zipBlob, "png", fileName, "application/zip")
-                        // ZIP은 다운로드
-                        const localUrl = URL.createObjectURL(zipBlob)
-                        const a = document.createElement("a"); a.href = localUrl; a.download = fileName
-                        document.body.appendChild(a); a.click(); document.body.removeChild(a)
-                        URL.revokeObjectURL(localUrl)
-                        toast({ title: "완료", description: `PNG ${numPages}장이 ZIP으로 다운로드되었습니다` })
-                      }
-                    } catch (e) { console.error("PNG 내보내기 오류:", e); toast({ title: "오류", description: "PNG 내보내기에 실패했습니다", variant: "destructive" }) }
-                    finally { setPngExporting(false) }
-                  }}
-                  className={`flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border transition-colors group ${pngExporting ? "opacity-50 cursor-wait border-gray-200" : "border-gray-200 hover:bg-gray-50 hover:border-gray-300"}`}
-                  title="이미지(PNG) 내보내기"
-                >
-                  {pngExporting ? (
-                    <svg className="animate-spin w-6 h-6 text-blue-400" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                  ) : (
-                    <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none">
-                      <path d="M26 2H10a2 2 0 00-2 2v4H6a2 2 0 00-2 2v12a2 2 0 002 2h2v4a2 2 0 002 2h16a2 2 0 002-2V4a2 2 0 00-2-2z" fill="#E5E7EB"/>
-                      <path d="M6 10h18v12H6z" fill="#3B82F6"/>
-                      <text x="15" y="20" textAnchor="middle" fill="#fff" fontSize="7" fontWeight="bold" fontFamily="Arial">PNG</text>
-                      <path d="M22 2l6 6h-4a2 2 0 01-2-2V2z" fill="#D1D5DB"/>
-                    </svg>
-                  )}
-                  <span className="text-[9px] text-gray-400 group-hover:text-gray-600">{pngExporting ? "변환중" : "내보내기"}</span>
-                </button>
-              </div>
-              {/* 내보내기 내역 토글 */}
-              {exportHistory.length > 0 && (
-                <button
-                  onClick={() => setShowExportHistory(!showExportHistory)}
-                  className={`flex items-center gap-1 px-2 py-1.5 rounded-lg border text-[11px] transition-colors ml-1 ${
-                    showExportHistory ? "bg-gray-100 border-gray-300 text-gray-700" : "border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300"
-                  }`}
-                >
-                  <List className="h-3.5 w-3.5" />
-                  <span>{exportHistory.length}</span>
-                </button>
-              )}
+                {exportHistory.length > 0 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowExportHistory(!showExportHistory) }}
+                    className={`absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[9px] font-bold transition-all ${showExportHistory ? "bg-slate-700 text-white ring-2 ring-slate-300" : "bg-gray-200 text-gray-500 hover:bg-gray-300"}`}
+                    title="내보내기 내역"
+                  >{exportHistory.length}</button>
+                )}
+              </div>}
+              {/* 구분선 + 지출결의서 */}
+              <div className="w-px h-6 bg-gray-200 ml-2" />
+              <button
+                type="button"
+                onClick={() => { activeTabRef.current = "expense-report"; setActiveTab("expense-report") }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all cursor-pointer select-none ml-2 ${activeTab === "expense-report" ? "bg-amber-50 border-amber-300 shadow-sm" : "border-gray-200 hover:border-amber-300 hover:bg-amber-50/50"}`}
+              >
+                <svg className={`h-3.5 w-3.5 transition-colors ${activeTab === "expense-report" ? "text-amber-600" : "text-gray-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
+                <span className={`text-xs font-medium transition-all ${activeTab === "expense-report" ? "text-amber-700" : "text-gray-400"}`}>지출결의서</span>
+              </button>
             </div>
-            <div className="flex items-center gap-2 mr-6">
+            {activeTab !== "expense-report" && <div className="flex items-center gap-2 mr-6">
+              {/* 외부 연동 버튼 (추후 구현) */}
+              <button
+                onClick={() => toast({ title: "준비 중", description: "삼성 재고조회 기능은 추후 제공됩니다" })}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                삼성 재고조회
+              </button>
+              <button
+                onClick={() => toast({ title: "준비 중", description: "DPS 요청하기 기능은 추후 제공됩니다" })}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                DPS 요청하기
+              </button>
+              <div className="w-px h-5 bg-gray-200 mx-0.5" />
               {(quotation || savedIdRef.current) && (
                 <button
                   onClick={() => setDeleteDialogOpen(true)}
@@ -1251,10 +1111,10 @@ export default function QuoteEditorSheet({
                   : <><PanelRightOpen className="h-3.5 w-3.5" /> 원가 분석</>
                 }
               </button>
-            </div>
+            </div>}
           </div>
           {/* 상세 견적서 서브 탭 (갑지 · 장비 내역서 · 설치비 내역서) */}
-          {activeTab !== "simple" && (
+          {activeTab !== "simple" && activeTab !== "expense-report" && (
             <div className="flex items-center mt-3 -mx-6 px-6">
               <button type="button"
                 onClick={() => { activeTabRef.current = "cover"; setActiveTab("cover") }}
@@ -1783,21 +1643,7 @@ export default function QuoteEditorSheet({
                     </div>
                   </div>
 
-                  {pricingOpen && (
-                    <div className="flex-1 min-w-0 border border-gray-200 rounded-lg p-3 self-start bg-gray-50">
-                      <p className="font-sans font-semibold text-xs text-gray-500 mb-2">매입/이윤 요약</p>
-                      <div className="space-y-1.5">
-                        <MiniRow label="총 매입" value={totalPurchase} />
-                        <MiniRow label="총 제안" value={totalAmount} />
-                        <div className="border-t border-gray-100 pt-1.5">
-                          <MiniRow label="총 이윤" value={totalProfit} highlight />
-                        </div>
-                        {totalAmount > 0 && (
-                          <MiniRow label="이윤율" value={0} percent={((totalProfit / totalAmount) * 100).toFixed(1)} />
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  {/* 매입/이윤 요약 제거됨 */}
                 </div>
 
                 {/* ※ 특이사항 */}
@@ -2311,6 +2157,19 @@ export default function QuoteEditorSheet({
                 )}
               </div>
             ))}
+
+            {/* ===== 지출결의서 (추후 구현) ===== */}
+            {activeTab === "expense-report" && (
+              <div className="flex items-center justify-center min-h-[400px]">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center">
+                    <svg className="h-6 w-6 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-600">지출결의서</p>
+                  <p className="text-xs text-gray-400">추후 구현 예정입니다</p>
+                </div>
+              </div>
+            )}
 
           </div>
         </div>
