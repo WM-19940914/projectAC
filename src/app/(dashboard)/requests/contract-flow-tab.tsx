@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -50,7 +50,7 @@ import {
   getStageAmounts,
 } from "./settlement-utils"
 
-export function ContractFlowTab({
+export const ContractFlowTab = memo(function ContractFlowTab({
   requestId,
   requestTitle,
   requestCustomer,
@@ -2379,4 +2379,4 @@ export function ContractFlowTab({
       </Dialog>
     </div>
   )
-}
+})

@@ -2,6 +2,7 @@
 
 // ----- 견적서 목록 (통합 리스트) -----
 
+import { memo, useMemo } from "react"
 import { cn } from "@/lib/utils"
 import { formatShortDate, formatCurrency } from "@/lib/format"
 import { CheckCircle2, Circle, ClipboardList, FileText, Plus } from "lucide-react"
@@ -15,17 +16,17 @@ interface QuotationsTabProps {
   onToggleConfirm: (quote: QuotationListItem) => void
 }
 
-export function QuotationsTab({
+export const QuotationsTab = memo(function QuotationsTab({
   quotations,
   onAddQuote,
   onEditQuote,
   confirmedQuoteId,
   onToggleConfirm,
 }: QuotationsTabProps) {
-  // 오래된순 정렬 (확정 여부 관계없이 위치 유지)
-  const sorted = [...quotations].sort((a, b) => {
+  // 오래된순 정렬 (확정 여부 관계없이 위치 유지) — useMemo로 캐싱
+  const sorted = useMemo(() => [...quotations].sort((a, b) => {
     return a.quotation_date.localeCompare(b.quotation_date)
-  })
+  }), [quotations])
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white shadow-sm min-h-0 flex flex-col overflow-hidden">
@@ -165,4 +166,4 @@ export function QuotationsTab({
       </div>
     </section>
   )
-}
+})

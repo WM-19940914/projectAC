@@ -1,12 +1,12 @@
 "use client"
 
-import type { ReactNode } from "react"
+import { memo, useMemo, type ReactNode } from "react"
 import type { ContractSummary, QuotationListItem } from "./kanban-types"
 import { ContractFlowTab } from "./contract-flow-tab"
 import ExpenseTab from "./expense-tab"
 import AttachmentPanel from "./attachment-panel"
 
-export function SalesFlowPanel({
+export const SalesFlowPanel = memo(function SalesFlowPanel({
   quotationsSlot,
   quotations,
   confirmedQuoteId,
@@ -35,15 +35,18 @@ export function SalesFlowPanel({
   manualIncentive?: number            // 수기 입력 장려금 (VAT별도)
   onManualIncentiveChange?: (v: number) => Promise<void>  // 수기 장려금 저장 콜백
 }) {
-  const confirmedQuote = confirmedQuoteId ? quotations.find((q) => q.id === confirmedQuoteId) ?? null : null
+  const confirmedQuote = useMemo(
+    () => confirmedQuoteId ? quotations.find((q) => q.id === confirmedQuoteId) ?? null : null,
+    [confirmedQuoteId, quotations]
+  )
   // 장려금 (VAT포함): 견적서의 매입단가 × 장려율 → VAT 10% 가산
-  const confirmedIncentiveExclTax = confirmedQuote?.items
+  const confirmedIncentiveExclTax = useMemo(() => confirmedQuote?.items
     ? confirmedQuote.items.reduce((sum, item) => {
       const purchaseAmount = Number(item.purchase_amount ?? 0)
       const incentiveRate = Number(item.incentive_rate ?? 0)
       return sum + Math.round(purchaseAmount * incentiveRate / 100)
     }, 0)
-    : 0
+    : 0, [confirmedQuote])
   const confirmedIncentiveTotal = Math.floor(confirmedIncentiveExclTax * 1.1)
 
   // 수기 장려금 (VAT 포함으로 변환)
@@ -90,4 +93,4 @@ export function SalesFlowPanel({
       </div>
     </div>
   )
-}
+})

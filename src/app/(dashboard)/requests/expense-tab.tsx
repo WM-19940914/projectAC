@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { memo, useEffect, useRef, useState } from "react"
 import { toast } from "@/hooks/use-toast"
 import {
   Dialog,
@@ -670,7 +670,7 @@ function InlineIncentiveInput({ value, onConfirm }: { value: number; onConfirm: 
 // ─────────────────────────────────────────
 // 메인: ExpenseTab
 // ─────────────────────────────────────────
-export default function ExpenseTab({
+function ExpenseTab({
   requestId,
   totalSettlement = 0,
   totalContractAmount = 0,
@@ -1090,3 +1090,5 @@ export default function ExpenseTab({
     </div>
   )
 }
+
+export default memo(ExpenseTab)

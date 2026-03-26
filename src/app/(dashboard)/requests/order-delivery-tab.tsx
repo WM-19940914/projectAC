@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "@/hooks/use-toast"
 import {
   Dialog,
@@ -419,7 +419,7 @@ interface OrderDeliveryTabProps {
   onEditQuote?: (id: string) => void
 }
 
-export default function OrderDeliveryTab({ requestId, defaultSiteName = "", confirmedQuoteId = null, onEditQuote }: OrderDeliveryTabProps) {
+function OrderDeliveryTab({ requestId, defaultSiteName = "", confirmedQuoteId = null, onEditQuote }: OrderDeliveryTabProps) {
   const [items, setItems] = useState<OrderDeliveryItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -1376,3 +1376,5 @@ export default function OrderDeliveryTab({ requestId, defaultSiteName = "", conf
     </div>
   )
 }
+
+export default memo(OrderDeliveryTab)
