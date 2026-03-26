@@ -282,7 +282,7 @@ export default async function RequestsPage() {
       .from("requests")
       .select(`
         id, title, inquiry_date, contract_id, confirmed_quote_id,
-        status, memo, created_at,
+        status, memo, manual_incentive, created_at,
         customer:customers(id, company_name, deleted_at)
       `)
       .neq("status", "숨김")
@@ -293,7 +293,7 @@ export default async function RequestsPage() {
       .from("requests")
       .select(`
         id, title, inquiry_date, contract_id, confirmed_quote_id,
-        status, memo, created_at,
+        status, memo, manual_incentive, created_at,
         customer:customers(id, company_name, deleted_at)
       `)
       .neq("status", "숨김")

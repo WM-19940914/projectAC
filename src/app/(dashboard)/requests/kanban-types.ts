@@ -65,6 +65,7 @@ export interface Props {
 }
 
 export interface ContractSummary {
+  supplyAmount: number   // 공급가액 (VAT별도)
   totalWithVat: number
   paidAmount: number
   unpaidAmount: number

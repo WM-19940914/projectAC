@@ -39,7 +39,7 @@ export const SalesFlowPanel = memo(function SalesFlowPanel({
     () => confirmedQuoteId ? quotations.find((q) => q.id === confirmedQuoteId) ?? null : null,
     [confirmedQuoteId, quotations]
   )
-  // 장려금 (VAT포함): 견적서의 매입단가 × 장려율 → VAT 10% 가산
+  // 장려금 (VAT별도): 견적서의 매입단가 × 장려율
   const confirmedIncentiveExclTax = useMemo(() => confirmedQuote?.items
     ? confirmedQuote.items.reduce((sum, item) => {
       const purchaseAmount = Number(item.purchase_amount ?? 0)
@@ -47,10 +47,6 @@ export const SalesFlowPanel = memo(function SalesFlowPanel({
       return sum + Math.round(purchaseAmount * incentiveRate / 100)
     }, 0)
     : 0, [confirmedQuote])
-  const confirmedIncentiveTotal = Math.floor(confirmedIncentiveExclTax * 1.1)
-
-  // 수기 장려금 (VAT 포함으로 변환)
-  const manualIncentiveWithVat = manualIncentive + Math.floor(manualIncentive * 0.1)
 
   return (
     <div className="space-y-4">
@@ -78,10 +74,10 @@ export const SalesFlowPanel = memo(function SalesFlowPanel({
         <div className="xl:col-span-2">
           <ExpenseTab
             requestId={requestId}
-            totalSettlement={contractSummary ? contractSummary.paidAmount : 0}
-            totalContractAmount={contractSummary ? contractSummary.totalWithVat : 0}
-            quoteIncentiveTotal={confirmedIncentiveTotal}
-            manualIncentiveTotal={manualIncentiveWithVat}
+            totalSettlement={contractSummary ? contractSummary.supplyAmount : 0}
+            totalContractAmount={contractSummary ? contractSummary.supplyAmount : 0}
+            quoteIncentiveTotal={confirmedIncentiveExclTax}
+            manualIncentiveTotal={manualIncentive}
             manualIncentiveExclTax={manualIncentive}
             hasConfirmedQuote={!!confirmedQuote}
             onManualIncentiveChange={onManualIncentiveChange}

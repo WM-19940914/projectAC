@@ -199,6 +199,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     setContractSummary((prev) => {
       if (
         prev &&
+        prev.supplyAmount === summary.supplyAmount &&
         prev.totalWithVat === summary.totalWithVat &&
         prev.paidAmount === summary.paidAmount &&
         prev.unpaidAmount === summary.unpaidAmount &&
@@ -369,6 +370,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
       if (fetchSeq !== contractSummaryFetchSeqRef.current) return
       setContractSummary({
+        supplyAmount: effectiveSupplyAmount,
         totalWithVat,
         paidAmount: clampedPaid,
         unpaidAmount,
@@ -1728,12 +1730,18 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                       onManualIncentiveChange={async (v: number) => {
                         // 숫자 필드이므로 updateRequestField(string) 대신 직접 API 호출
                         setSelectedItem((prev) => prev ? { ...prev, manual_incentive: v } : null)
+                        // 칸반 카드 데이터(columns/failedItems/hiddenItems)에도 동기화 — 패널 닫았다 열어도 값 유지
+                        const itemId = selectedItem.id
+                        const syncItem = (item: RequestItem) => item.id === itemId ? { ...item, manual_incentive: v } : item
+                        setColumns((prev) => prev.map((col) => ({ ...col, items: col.items.map(syncItem) })))
+                        setFailedItems((prev) => prev.map(syncItem))
+                        setHiddenItems((prev) => prev.map(syncItem))
                         setSaveMessage("저장 중...")
                         try {
                           const res = await fetch("/api/requests", {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ id: selectedItem.id, manual_incentive: v }),
+                            body: JSON.stringify({ id: itemId, manual_incentive: v }),
                           })
                           setSaveMessage(res.ok ? "자동 저장됨" : "저장 실패")
                         } catch { setSaveMessage("저장 실패") }

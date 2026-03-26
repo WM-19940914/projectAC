@@ -620,6 +620,7 @@ export const ContractFlowTab = memo(function ContractFlowTab({
     lastSummarySignatureRef.current = signature
 
     onSummaryChange({
+      supplyAmount,
       totalWithVat,
       paidAmount: clampedPaid,
       unpaidAmount,
