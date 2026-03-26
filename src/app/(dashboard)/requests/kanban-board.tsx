@@ -188,10 +188,13 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const contractSummaryFetchSeqRef = useRef(0)
   // 카드 클릭만으로는 칸반 카드 상태를 건드리지 않음 — 실제 저장/변경 시에만 동기화
   const shouldSyncToColumnsRef = useRef(false)
+  // selectedItem을 ref로 유지 — handleSummaryChange에서 참조 (dependency 없이)
+  const selectedItemRef = useRef(selectedItem)
+  selectedItemRef.current = selectedItem
 
   // onSummaryChange 안정화 — inline 함수로 전달하면 매 렌더링마다 새 참조가 생겨 자식 useEffect 무한 루프 발생
   const handleSummaryChange = useCallback((summary: ContractSummary) => {
-    // 실시간 변경 → 칸반 카드에도 반영 허용
+    // 실시간 변경 → 칸반 카드에도 즉시 반영
     shouldSyncToColumnsRef.current = true
     setContractSummary((prev) => {
       if (
@@ -210,6 +213,33 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       contractSummaryFetchSeqRef.current += 1
       return summary
     })
+    // 칸반 카드에 즉시 반영 (useEffect 타이밍 이슈 방지)
+    // — setContractSummary가 prev와 동일 참조를 반환하면 useEffect가 안 돌 수 있으므로 직접 동기화
+    const current = selectedItemRef.current
+    if (current?.contract) {
+      const contractId = current.contract.id
+      setColumns((prev) =>
+        prev.map((col) => ({
+          ...col,
+          items: col.items.map((item) =>
+            item.contract?.id === contractId
+              ? {
+                ...item,
+                contract: {
+                  ...item.contract!,
+                  total_paid: summary.paidAmount,
+                  has_upcoming: summary.unpaidAmount > 0 && !summary.allConfirmed,
+                  all_confirmed: summary.allConfirmed,
+                  tax_invoice_all_issued: summary.taxInvoiceAllIssued,
+                  tax_invoice_some_issued: summary.taxInvoiceSomeIssued,
+                  stage_summaries: summary.stageSummaries,
+                },
+              }
+              : item
+          ),
+        }))
+      )
+    }
   }, [])
 
   // 의뢰 선택 시 견적서 목록 로드
@@ -369,9 +399,6 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   }, [selectedContractId, selectedItemId, loadContractSummaryById])
 
   // contractSummary 변경 시 칸반 카드의 item.contract도 실시간 동기화
-  // selectedItem을 ref로 참조 — dependency에 넣으면 setColumns → 리렌더 → selectedItem 새 참조 → 무한 루프
-  const selectedItemRef = useRef(selectedItem)
-  selectedItemRef.current = selectedItem
   // contractSummary → 칸반 카드 동기화
   // shouldSyncToColumnsRef가 true일 때만 실행 (저장/변경 시에만, 카드 클릭 시에는 스킵)
   useEffect(() => {
