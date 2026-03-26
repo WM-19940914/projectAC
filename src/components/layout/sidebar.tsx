@@ -21,7 +21,6 @@ import {
 import { Separator } from "@/components/ui/separator"
 import {
   Briefcase,
-  Calculator,
   Camera,
   ClipboardList,
   FileText,
@@ -46,7 +45,6 @@ const menuItems: MenuItem[] = [
   { label: "고객", href: "/clients", icon: Users },
   { label: "견적서", href: "/quotes", icon: FileText },
   { label: "가격표", href: "/price-list", icon: ClipboardList },
-  { label: "조합비 계산", href: "/combination-calc", icon: Calculator },
 ]
 
 interface SidebarProps {

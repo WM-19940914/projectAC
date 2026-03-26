@@ -1073,22 +1073,6 @@ export default function QuoteEditorSheet({
               </button>
             </div>
             {activeTab !== "expense-report" && <div className="flex items-center gap-2 mr-6">
-              {/* 외부 연동 버튼 (추후 구현) */}
-              <button
-                onClick={() => toast({ title: "준비 중", description: "삼성 재고조회 기능은 추후 제공됩니다" })}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors"
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                삼성 재고조회
-              </button>
-              <button
-                onClick={() => toast({ title: "준비 중", description: "DPS 요청하기 기능은 추후 제공됩니다" })}
-                className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors"
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-                DPS 요청하기
-              </button>
-              <div className="w-px h-5 bg-gray-200 mx-0.5" />
               {(quotation || savedIdRef.current) && (
                 <button
                   onClick={() => setDeleteDialogOpen(true)}
@@ -2807,8 +2791,10 @@ function ItemsTable({ items, updateItem, addRow, removeRow, blankIdx, onToggleBl
   // 엑셀 붙여넣기 핸들러: 포커스된 셀 위치 기준으로 데이터 채움
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const text = e.clipboardData.getData("text/plain")
-    // 탭이 있으면 엑셀에서 복사한 데이터로 판단 (일반 텍스트 붙여넣기는 그대로 통과)
-    if (!text || !text.includes("\t") || !onPasteCells) return
+    // 탭 또는 여러 줄이 있으면 엑셀에서 복사한 데이터로 판단
+    // (한 열만 복사하면 탭 없이 줄바꿈만 오므로, 2줄 이상이면 엑셀 데이터로 인식)
+    const hasMultipleLines = !!text && text.split(/\r?\n/).filter(l => l.trim()).length > 1
+    if (!text || (!text.includes("\t") && !hasMultipleLines) || !onPasteCells) return
 
     e.preventDefault()
     e.stopPropagation()
