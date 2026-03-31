@@ -207,8 +207,8 @@ function calcSettlementAlerts(
       return
     }
 
-    // 7일 이내 입금예정: 예정일이 7일 이내 AND 미입금
-    if (schedMs && schedMs >= todayMs && schedMs <= todayMs + sevenDaysMs && paid === 0) {
+    // 입금예정: 예정일이 미래이고 미입금인 모든 건 (제한 없음)
+    if (schedMs && schedMs >= todayMs && paid === 0) {
       alerts.push({
         type: "upcoming",
         requestId, requestTitle, customerName, contractId,

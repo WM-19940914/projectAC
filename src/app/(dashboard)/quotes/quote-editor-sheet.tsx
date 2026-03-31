@@ -987,12 +987,8 @@ export default function QuoteEditorSheet({
         side="left"
         className={`${sheetW} p-0 flex flex-col transition-all duration-300`}
         onInteractOutside={(e) => {
-          // Dialog가 열려있으면 Sheet 닫기 방지 (Dialog는 Portal로 Sheet 밖에 렌더링됨)
-          if (supplierDialogOpen || receiverDialogOpen || managerDialogOpen || deleteDialogOpen || pricePickerOpen) {
-            e.preventDefault()
-            return
-          }
-          onClose()
+          // 빈 화면(바깥) 클릭으로 닫히지 않게 — X 버튼으로만 닫기
+          e.preventDefault()
         }}
       >
         {/* 헤더 */}

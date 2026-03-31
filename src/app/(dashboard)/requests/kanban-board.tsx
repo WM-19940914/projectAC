@@ -24,7 +24,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet"
-import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CalendarRange, CheckCircle2, EyeOff, Hash, Plus, Receipt, Search, Send, SmilePlus, Trash2, Truck, X, XCircle } from "lucide-react"
+import { AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Banknote, Box, Briefcase, Building2, Calendar, CalendarRange, CheckCircle2, EyeOff, FileCheck, Hash, Plus, Receipt, Search, Send, SmilePlus, Trash2, Truck, X, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/providers/auth-provider"
 import { Input } from "@/components/ui/input"
@@ -67,6 +67,7 @@ import { InlineTitle, InlineSelect } from "./inline-editors"
 import { CustomerDetailSheet } from "./customer-detail-sheet"
 import { SalesFlowPanel } from "./sales-flow-panel"
 import OrderDeliveryTab from "./order-delivery-tab"
+import ExpenseReportTab from "./expense-report-tab"
 import { SideOverviewPanel } from "./side-overview-panel"
 import { QuotationsTab } from "./quotations-tab"
 import { ContractFlowTab } from "./contract-flow-tab"
@@ -143,7 +144,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
   const [isDeleting, setIsDeleting] = useState(false)
   // 상세 패널용 state
   const [selectedItem, setSelectedItem] = useState<RequestItem | null>(null)
-  const [sheetView, setSheetView] = useState<"영업" | "주문배송">("영업")
+  const [sheetView, setSheetView] = useState<"영업" | "주문배송" | "지출결의서">("영업")
   // 자동저장 상태 메시지
   const [saveMessage, setSaveMessage] = useState("")
   // 문의일시 인라인 편집 모드
@@ -1051,7 +1052,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
-                                onClick={() => { setSelectedItem(item); setEditingInquiryDate(false) }}
+                                onClick={() => { setSelectedItem(item); setSheetView("영업"); setEditingInquiryDate(false) }}
                                 className={cn(
                                   "group relative bg-white rounded-md border border-slate-200 p-3 shadow-none hover:shadow-md hover:-translate-y-0.5 transition-all cursor-grab",
                                   snapshot.isDragging && "shadow-md ring-1 ring-slate-200 scale-[1.01]"
@@ -1278,7 +1279,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                     {failedItems.map((item) => (
                       <button
                         key={item.id}
-                        onClick={() => { setSelectedItem(item); setEditingInquiryDate(false) }}
+                        onClick={() => { setSelectedItem(item); setSheetView("영업"); setEditingInquiryDate(false) }}
                         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover:bg-gray-100 transition-colors text-left"
                       >
                         <span className="text-xs text-gray-700 truncate" title={item.title}>
@@ -1607,9 +1608,10 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
                 {/* 뷰 전환 탭 — 아이콘 + 언더라인 인디케이터 */}
                 <div className="flex items-center gap-1 px-5 border-b border-gray-200">
-                  {(["영업", "주문배송"] as const).map((view) => {
+                  {(["영업", "주문배송", "지출결의서"] as const).map((view) => {
                     const isActive = sheetView === view
-                    const Icon = view === "영업" ? Briefcase : Truck
+                    const Icon = view === "영업" ? Briefcase : view === "주문배송" ? Truck : FileCheck
+                    const label = view === "영업" ? "영업 관리" : view === "주문배송" ? "주문·배송" : "지출결의서"
                     return (
                       <button
                         key={view}
@@ -1622,7 +1624,7 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                         )}
                       >
                         <Icon className="h-3.5 w-3.5" />
-                        {view === "영업" ? "영업 관리" : "주문·배송"}
+                        {label}
                         {/* 활성 탭: 진한 언더라인 / 비활성 탭: 투명 언더라인 (어포던스) */}
                         <span className={cn(
                           "absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-colors",
@@ -1760,6 +1762,24 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
                     defaultSiteName={selectedItem.title}
                     confirmedQuoteId={confirmedQuoteId}
                     onEditQuote={handleEditQuote}
+                  />
+                </div>
+                )}
+
+                {/* 지출결의서 뷰 */}
+                {sheetView === "지출결의서" && (
+                <div className="flex-1 overflow-y-auto bg-slate-50 px-5 pb-8 pt-4 scrollbar-hidden">
+                  <ExpenseReportTab
+                    requestId={selectedItem.id}
+                    requestTitle={selectedItem.title}
+                    customerName={selectedItem.customer?.company_name || ""}
+                    customerContact={
+                      selectedItem.customer?.id
+                        ? (localCustomers.find((c) => c.id === selectedItem.customer?.id)?.contact_name ?? "")
+                        : ""
+                    }
+                    userName={profile ? `${profile.full_name}` : ""}
+                    userTeam="MA영업팀"
                   />
                 </div>
                 )}
