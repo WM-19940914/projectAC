@@ -99,6 +99,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // 정적 파일, _next 내부 리소스 제외
-    "/((?!_next|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|mp4|webm|mp3|woff|woff2|ttf|ico)$).*)",
   ],
 }

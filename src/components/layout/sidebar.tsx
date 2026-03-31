@@ -68,18 +68,18 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           collapsed ? "w-[56px]" : "w-[224px]"
         )}
       >
-        {/* 로고 영역 */}
+        {/* 로고 영역 — Mooov (서비스 브랜드) */}
         <div className="flex h-12 items-center justify-between px-3">
           {!collapsed ? (
             <Link href="/dashboard" className="flex items-center">
-              <img src="/logo-melea-full.png" alt="MELEA" className="h-7" />
+              <span className="text-[28px] text-[#2563EB]" style={{ fontFamily: "'Pacifico', cursive" }}>Mooov</span>
             </Link>
           ) : (
             <Link
               href="/dashboard"
               className="mx-auto flex items-center justify-center"
             >
-              <img src="/logo-melea.png" alt="M" className="h-7 w-7 object-contain" />
+              <span className="text-[16px] text-[#2563EB]" style={{ fontFamily: "'Pacifico', cursive" }}>M</span>
             </Link>
           )}
 
@@ -152,7 +152,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </nav>
         </ScrollArea>
 
-        {/* 하단 유저 프로필 */}
+        {/* 하단: 유저 프로필 (회사정보 포함) */}
         <SidebarUserProfile collapsed={collapsed} />
       </aside>
     </TooltipProvider>
@@ -328,6 +328,13 @@ function SidebarUserProfile({ collapsed }: { collapsed: boolean }) {
 
   return (
     <div className="border-t border-slate-100 px-2 py-3">
+      {/* 회사 정보 — 프로필 바로 위 */}
+      {!collapsed && (
+        <div className="flex items-center justify-between px-3 mb-2">
+          <img src="/logo-melea-full.png" alt="MELEA" className="h-6 object-contain" />
+          <span className="text-[11px] text-gray-500 font-semibold">주식회사 멜레아</span>
+        </div>
+      )}
       <Popover>
         <PopoverTrigger asChild>
           <button className="flex w-full items-center gap-3 rounded-md px-2 py-2.5 hover:bg-gray-50 transition-colors text-left">

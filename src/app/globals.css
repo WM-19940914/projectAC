@@ -8,6 +8,122 @@
   .text-balance {
     text-wrap: balance;
   }
+  /* 블롭 애니메이션 딜레이 */
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+
+  /* ── 로그인 배경 애니메이션 ── */
+
+  /* 흐르는 그라데이션 (공기 순환 느낌) */
+  .animate-flow {
+    animation: flow 12s ease-in-out infinite alternate;
+  }
+  .animate-flow-reverse {
+    animation: flow-reverse 15s ease-in-out infinite alternate;
+  }
+
+  /* 물결 웨이브 (시원한 바람) */
+  .animate-wave {
+    animation: wave 6s ease-in-out infinite alternate;
+  }
+  .animate-wave-slow {
+    animation: wave-slow 8s ease-in-out infinite alternate;
+  }
+  .animate-wave-slower {
+    animation: wave-slower 10s ease-in-out infinite alternate;
+  }
+
+  /* 에어 파티클 (차가운 공기 입자가 위로) */
+  .animate-float-up {
+    animation: float-up linear infinite;
+  }
+
+  /* 빛 펄스 */
+  .animate-pulse-slow {
+    animation: pulse-glow 8s ease-in-out infinite;
+  }
+  .animate-pulse-slower {
+    animation: pulse-glow 12s ease-in-out infinite;
+    animation-delay: 3s;
+  }
+
+  /* 페이드인 */
+  .animate-fade-in {
+    animation: fade-in 0.6s ease-out;
+  }
+
+  /* 아래에서 위로 슬라이드 + 페이드인 (stagger용) */
+  .animate-slide-up {
+    animation: slide-up 0.7s ease-out both;
+  }
+  .animation-delay-200 { animation-delay: 0.2s; }
+  .animation-delay-400 { animation-delay: 0.4s; }
+  .animation-delay-600 { animation-delay: 0.6s; }
+  .animation-delay-800 { animation-delay: 0.8s; }
+
+  /* 화살표 좌우 바운스 */
+  .animate-bounce-gentle {
+    animation: bounce-right 1.5s ease-in-out infinite;
+    animation-delay: 1.2s;
+  }
+
+  /* 화살표 우측으로 흐르는 애니메이션 */
+  .animate-flow-arrow {
+    animation: flow-arrow 2.5s ease-in-out infinite;
+  }
+}
+
+/* ── 키프레임 (로그인 배경용) ── */
+@keyframes flow {
+  0% { transform: translateX(-5%) translateY(-3%) rotate(0deg); }
+  100% { transform: translateX(5%) translateY(3%) rotate(2deg); }
+}
+@keyframes flow-reverse {
+  0% { transform: translateX(3%) translateY(5%) rotate(0deg); }
+  100% { transform: translateX(-5%) translateY(-3%) rotate(-2deg); }
+}
+@keyframes wave {
+  0% { d: path("M0,160 C320,220,420,120,720,160 C1020,200,1120,100,1440,160 L1440,280 L0,280 Z"); }
+  100% { d: path("M0,180 C280,130,520,230,720,170 C920,110,1180,210,1440,150 L1440,280 L0,280 Z"); }
+}
+@keyframes wave-slow {
+  0% { d: path("M0,200 C360,140,480,240,720,180 C960,120,1080,220,1440,180 L1440,280 L0,280 Z"); }
+  100% { d: path("M0,190 C300,240,540,150,720,200 C900,250,1140,160,1440,210 L1440,280 L0,280 Z"); }
+}
+@keyframes wave-slower {
+  0% { d: path("M0,220 C240,260,480,180,720,220 C960,260,1200,190,1440,230 L1440,280 L0,280 Z"); }
+  100% { d: path("M0,230 C300,190,540,260,720,210 C960,170,1200,250,1440,220 L1440,280 L0,280 Z"); }
+}
+@keyframes float-up {
+  0% { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.5; }
+  100% { transform: translateY(-100vh) translateX(30px) scale(0.5); opacity: 0; }
+}
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.05); }
+}
+@keyframes fade-in {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes slide-up {
+  0% { opacity: 0; transform: translateY(30px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes bounce-right {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(8px); }
+}
+@keyframes flow-arrow {
+  0% { opacity: 0; transform: translateX(-10px); }
+  50% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(20px); }
   /* 스크롤 가능하지만 스크롤바 숨김 (엑셀 열 숨기기처럼 하나의 페이지 느낌) */
   .scrollbar-hidden {
     -ms-overflow-style: none;

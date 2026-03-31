@@ -7,36 +7,15 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useAuth } from "@/providers/auth-provider"
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 
-/** 내부적으로 아이디를 이메일 형태로 변환 (Supabase Auth 호환) */
 const toEmail = (username: string) => `${username.toLowerCase().trim()}@m.local`
 
-/** 회원가입 폼 검증 스키마 */
 const signupSchema = z
   .object({
-    name: z
-      .string()
-      .min(1, "이름을 입력해주세요.")
-      .min(2, "이름은 2자 이상이어야 합니다."),
-    username: z
-      .string()
-      .min(1, "아이디를 입력해주세요.")
-      .min(3, "아이디는 3자 이상이어야 합니다.")
+    name: z.string().min(1, "이름을 입력해주세요.").min(2, "이름은 2자 이상이어야 합니다."),
+    username: z.string().min(1, "아이디를 입력해주세요.").min(3, "아이디는 3자 이상이어야 합니다.")
       .regex(/^[a-zA-Z0-9_]+$/, "영문, 숫자, 밑줄(_)만 사용 가능합니다."),
-    password: z
-      .string()
-      .min(1, "비밀번호를 입력해주세요.")
-      .min(6, "비밀번호는 6자 이상이어야 합니다."),
+    password: z.string().min(1, "비밀번호를 입력해주세요.").min(6, "비밀번호는 6자 이상이어야 합니다."),
     confirmPassword: z.string().min(1, "비밀번호 확인을 입력해주세요."),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -46,11 +25,8 @@ const signupSchema = z
 
 type SignupForm = z.infer<typeof signupSchema>
 
-/**
- * 회원가입 페이지
- * 아이디/비밀번호 + 이름으로 가입
- * 기본 역할: sales
- */
+const inputClass = "w-full h-[52px] px-4 bg-[#F0F0F5] border border-[#E8E8EE] rounded-xl text-[16px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-[#2563EB]/40 focus:bg-white focus:shadow-[0_0_0_3px_rgba(37,99,235,0.1)] transition-all"
+
 export default function SignupPage() {
   const { signUp } = useAuth()
   const router = useRouter()
@@ -65,121 +41,61 @@ export default function SignupPage() {
     defaultValues: { name: "", username: "", password: "", confirmPassword: "" },
   })
 
-  /** 회원가입 처리 */
   const onSubmit = async (data: SignupForm) => {
     setServerError(null)
-    // 아이디를 이메일 형태로 변환하여 Supabase에 전달
     const { error } = await signUp(toEmail(data.username), data.password, data.name)
-
     if (error) {
-      if (error.includes("already registered")) {
-        setServerError("이미 사용 중인 아이디입니다.")
-      } else {
-        setServerError(error)
-      }
+      setServerError(error.includes("already registered") ? "이미 사용 중인 아이디입니다." : error)
       return
     }
-
-    // 가입 성공 → 로그인 페이지로 이동
     router.push("/login")
   }
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader className="space-y-1 pb-4">
-        <CardTitle className="text-2xl font-bold text-center">
-          회원가입
-        </CardTitle>
-        <p className="text-sm text-center text-muted-foreground">
-          새 계정을 만들어 시작하세요
+    <div>
+      {/* 로고 */}
+      <div className="flex justify-center mb-4">
+        <span className="text-[48px] text-[#2563EB]" style={{ fontFamily: "'Pacifico', cursive" }}>
+          Mooov
+        </span>
+      </div>
+
+      {/* 타이틀 */}
+      <div className="text-center mb-10">
+        <p className="text-[24px] text-gray-900 leading-snug font-extrabold tracking-tight">
+          새 계정 만들기
         </p>
-      </CardHeader>
+      </div>
 
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <CardContent className="space-y-4">
-          {serverError && (
-            <div className="p-3 text-sm text-soft-blush bg-red-50 rounded-md">
-              {serverError}
-            </div>
-          )}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+        {serverError && (
+          <div className="text-[13px] text-red-500 bg-red-50 rounded-lg px-4 py-3">{serverError}</div>
+        )}
 
-          {/* 이름 */}
-          <div className="space-y-2">
-            <Label htmlFor="name">이름</Label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="홍길동"
-              autoComplete="name"
-              {...register("name")}
-            />
-            {errors.name && (
-              <p className="text-xs text-soft-blush">{errors.name.message}</p>
-            )}
-          </div>
+        <input id="name" type="text" placeholder="이름" autoComplete="name" className={inputClass} {...register("name")} />
+        {errors.name && <p className="text-[11px] text-red-500 pl-1">{errors.name.message}</p>}
 
-          {/* 아이디 */}
-          <div className="space-y-2">
-            <Label htmlFor="username">아이디</Label>
-            <Input
-              id="username"
-              type="text"
-              placeholder="영문, 숫자, 밑줄 조합"
-              autoComplete="username"
-              {...register("username")}
-            />
-            {errors.username && (
-              <p className="text-xs text-soft-blush">{errors.username.message}</p>
-            )}
-          </div>
+        <input id="username" type="text" placeholder="아이디 (영문, 숫자, 밑줄)" autoComplete="username" className={inputClass} {...register("username")} />
+        {errors.username && <p className="text-[11px] text-red-500 pl-1">{errors.username.message}</p>}
 
-          {/* 비밀번호 */}
-          <div className="space-y-2">
-            <Label htmlFor="password">비밀번호</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="6자 이상 입력하세요"
-              autoComplete="new-password"
-              {...register("password")}
-            />
-            {errors.password && (
-              <p className="text-xs text-soft-blush">{errors.password.message}</p>
-            )}
-          </div>
+        <input id="password" type="password" placeholder="비밀번호 (6자 이상)" autoComplete="new-password" className={inputClass} {...register("password")} />
+        {errors.password && <p className="text-[11px] text-red-500 pl-1">{errors.password.message}</p>}
 
-          {/* 비밀번호 확인 */}
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">비밀번호 확인</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="비밀번호를 다시 입력하세요"
-              autoComplete="new-password"
-              {...register("confirmPassword")}
-            />
-            {errors.confirmPassword && (
-              <p className="text-xs text-soft-blush">{errors.confirmPassword.message}</p>
-            )}
-          </div>
-        </CardContent>
+        <input id="confirmPassword" type="password" placeholder="비밀번호 확인" autoComplete="new-password" className={inputClass} {...register("confirmPassword")} />
+        {errors.confirmPassword && <p className="text-[11px] text-red-500 pl-1">{errors.confirmPassword.message}</p>}
 
-        <CardFooter className="flex flex-col space-y-3">
-          <Button
-            type="submit"
-            className="w-full bg-sky-aqua hover:bg-tropical-teal"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? "가입 처리 중..." : "회원가입"}
-          </Button>
-          <p className="text-xs text-center text-muted-foreground">
-            이미 계정이 있으신가요?{" "}
-            <Link href="/login" className="text-sky-aqua hover:underline">
-              로그인
-            </Link>
-          </p>
-        </CardFooter>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full h-[52px] rounded-xl bg-[#1a1a1a] text-white text-[15px] font-bold hover:bg-[#333] active:scale-[0.99] transition-all disabled:opacity-50 mt-6"
+        >
+          {isSubmitting ? "가입 처리 중..." : "회원가입"}
+        </button>
+
+        <div className="flex items-center justify-center gap-5 pt-4 text-[13px] text-gray-400">
+          <Link href="/login" className="hover:text-gray-600 transition-colors">로그인으로 돌아가기</Link>
+        </div>
       </form>
-    </Card>
+    </div>
   )
 }
