@@ -5,8 +5,8 @@ import { QueryProvider } from "@/providers/query-provider"
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: "M",
-  description: "M - 건설/공사 영업·계약·정산 관리 시스템",
+  title: "Mooov",
+  description: "Mooov - B2B 영업·계약·정산 관리 플랫폼",
 }
 
 export default function RootLayout({
