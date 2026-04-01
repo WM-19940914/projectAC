@@ -131,10 +131,14 @@ export default function LoginPage() {
         </button>
 
         {/* 하단 링크 */}
-        <div className="flex items-center justify-center gap-5 pt-4 text-[13px] text-gray-400">
+        <div className="flex items-center justify-center gap-4 pt-4 text-[13px] text-gray-400">
           <Link href="/signup" className="hover:text-gray-600 transition-colors">회원가입</Link>
           <span className="text-gray-200">·</span>
+          <Link href="/find-id" className="hover:text-gray-600 transition-colors">아이디 찾기</Link>
+          <span className="text-gray-200">·</span>
           <Link href="/forgot-password" className="hover:text-gray-600 transition-colors">비밀번호 찾기</Link>
+          <span className="text-gray-200">·</span>
+          <Link href="/change-account" className="hover:text-gray-600 transition-colors">계정변경</Link>
         </div>
       </form>
     </div>

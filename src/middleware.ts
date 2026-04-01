@@ -44,8 +44,12 @@ export async function middleware(request: NextRequest) {
 
   // ── API 라우트: 인증 필수 + UTF-8 헤더 ──
   if (isApiRoute) {
-    // 인증되지 않은 요청 차단
-    if (!user) {
+    // 인증 없이 접근 가능한 API (아이디 찾기, 본인 확인, 계정변경)
+    const publicApiPaths = ["/api/auth/find-id", "/api/auth/verify-account", "/api/auth/change-account"]
+    const isPublicApi = publicApiPaths.some(p => pathname.startsWith(p))
+
+    // 인증되지 않은 요청 차단 (공개 API 제외)
+    if (!user && !isPublicApi) {
       return NextResponse.json(
         { error: "인증이 필요합니다" },
         { status: 401 }
@@ -73,11 +77,13 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // 로그인 불필요 페이지 (로그인, 회원가입, 비밀번호 찾기)
+  // 로그인 불필요 페이지 (로그인, 회원가입, 비밀번호 찾기, 아이디 찾기, 계정변경)
   const isAuthPage =
     pathname === "/login" ||
     pathname === "/signup" ||
-    pathname === "/forgot-password"
+    pathname === "/forgot-password" ||
+    pathname === "/find-id" ||
+    pathname === "/change-account"
 
   // 비밀번호 재설정 페이지 — 이메일 링크를 통해 세션이 생성된 후 접근하므로
   // 로그인 상태여도 대시보드로 리다이렉트하지 않음
