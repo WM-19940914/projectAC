@@ -230,7 +230,7 @@ export default async function DashboardPage() {
     // 1. 의뢰 + 고객 조인
     supabase
       .from("requests")
-      .select("id, title, status, hidden, customer_id, contract_id, confirmed_quote_id, inquiry_date, memo, created_at, customer:customers(id, company_name, deleted_at)")
+      .select("id, title, status, hidden, customer_id, contract_id, confirmed_quote_id, inquiry_date, memo, manual_incentive, created_at, customer:customers(id, company_name, deleted_at)")
       .neq("status", "숨김")
       .order("created_at", { ascending: false }),
     // 2. 계약
@@ -262,7 +262,7 @@ export default async function DashboardPage() {
   const metaMap = new Map(metas.map(m => [m.contract_id, m]))
   const contractMap = new Map(contracts.map(c => [c.id, c]))
 
-  // 견적서별 장려금 합계 (VAT포함): quotation_id → incentive amount
+  // 견적서별 장려금 합계 (VAT별도): quotation_id → incentive amount
   const quoteIncentiveMap = new Map<string, number>()
   for (const item of quoteItems) {
     const purchaseAmount = Number(item.purchase_amount) || 0
@@ -273,10 +273,6 @@ export default async function DashboardPage() {
       quoteIncentiveMap.set(qid, (quoteIncentiveMap.get(qid) || 0) + incentiveExclTax)
     }
   }
-  // VAT 포함으로 변환
-  Array.from(quoteIncentiveMap.entries()).forEach(([qid, total]) => {
-    quoteIncentiveMap.set(qid, Math.floor(total * 1.1))
-  })
 
   // request_id → contract 매핑
   const requestContractMap = new Map<string, typeof contracts[0]>()
@@ -617,13 +613,14 @@ export default async function DashboardPage() {
       confirmed_quote_id: (r as Record<string, unknown>).confirmed_quote_id as string | null,
       inquiry_date: (r as Record<string, unknown>).inquiry_date as string | null,
       memo: (r as Record<string, unknown>).memo as string | null,
+      manual_incentive: Number((r as Record<string, unknown>).manual_incentive) || 0,
       created_at: r.created_at,
       customer: cust,
     }
   }
 
   // ----- 6. 공헌이익: 계약별 기여 데이터 -----
-  // 계약별 지출 합산 — VAT포함 (amount_excl_tax × 1.1)
+  // 계약별 지출 합산 — VAT별도 (공급가액 그대로)
   const contractExpenseMap = new Map<string, number>()
   for (const e of expenses) {
     let cid = e.contract_id
@@ -632,8 +629,8 @@ export default async function DashboardPage() {
       if (c) cid = c.id
     }
     if (cid) {
-      const vatIncluded = Math.floor((Number(e.amount_excl_tax) || 0) * 1.1)
-      contractExpenseMap.set(cid, (contractExpenseMap.get(cid) || 0) + vatIncluded)
+      const amountExcl = Math.round(Number(e.amount_excl_tax) || 0)
+      contractExpenseMap.set(cid, (contractExpenseMap.get(cid) || 0) + amountExcl)
     }
   }
 
@@ -701,24 +698,28 @@ export default async function DashboardPage() {
   const progressAvailableYears = progressYearsArr.sort()
 
   // 계약별 공헌이익 항목 생성 (end_date 기준 월 필터링)
-  // totalPaid = confirmed payment_entries 합계 (VAT포함)
+  // 모든 금액 VAT별도 (공급가액 기준) — 칸반보드 수익성 요약과 동일
   const contractContributions: ContractContribution[] = contracts
     .filter(c => (Number(c.contract_amount) || 0) > 0)
     .map(c => {
-      const contractAmount = Number(c.contract_amount) || 0
-      const contractAmountVat = Math.floor(contractAmount * 1.1)
-      // 입금 합계: settlement_status_map의 confirmed payment_entries 합산 (VAT포함)
+      const contractAmount = Math.round(Number(c.contract_amount) || 0) // 공급가액 (VAT별도)
+      // 입금 합계: payment_entries 합산 후 VAT 역산 (입금은 VAT포함이므로 /1.1)
       const meta = metaMap.get(c.id)
-      const totalPaid = getContractTotalPaid(
+      const totalPaidVatIncl = getContractTotalPaid(
         (meta?.settlement_status_map as Record<string, unknown>) || null
       )
-      // 지출 합계 (VAT포함)
+      const totalPaid = Math.round(totalPaidVatIncl / 1.1) // VAT별도로 변환
+      // 지출 합계 (VAT별도)
       const expense = contractExpenseMap.get(c.id) || 0
       const profit = totalPaid - expense
-      // 장려금: 연결된 의뢰의 확정 견적서에서 계산 (VAT포함)
+      // 장려금: 확정 견적서 있으면 견적서 장려금, 없으면 수동 장려금 (VAT별도)
       const req = contractRequestMap.get(c.id)
       const confirmedQuoteId = (req as Record<string, unknown> | undefined)?.confirmed_quote_id as string | null
-      const incentiveTotal = confirmedQuoteId ? (quoteIncentiveMap.get(confirmedQuoteId) || 0) : 0
+      const manualIncentiveRaw = Number((req as Record<string, unknown> | undefined)?.manual_incentive) || 0
+      // 수동 장려금은 이미 VAT별도 값 → 그대로 사용
+      const incentiveTotal = confirmedQuoteId
+        ? (quoteIncentiveMap.get(confirmedQuoteId) || 0)
+        : manualIncentiveRaw
       // end_date(계약 종료일) 기준, 없으면 created_at 폴백
       const dateStr = (c as Record<string, unknown>).end_date as string || c.created_at
       const d = dateStr ? new Date(dateStr) : new Date(c.created_at!)
@@ -738,12 +739,12 @@ export default async function DashboardPage() {
         requestId,
         title,
         customerName,
-        contractAmountVat,
+        contractAmount,
         totalPaid,
         totalExpense: expense,
         incentiveTotal,
         netProfit: profit,
-        profitRate: contractAmountVat > 0 ? (profit / contractAmountVat) * 100 : 0,
+        profitRate: contractAmount > 0 ? (profit / contractAmount) * 100 : 0,
         yearMonth: ym,
       }
     })
@@ -845,12 +846,12 @@ export default async function DashboardPage() {
 
   const kpiCollectionRate = kpiTotalExpected > 0 ? (kpiTotalCollected / kpiTotalExpected) * 100 : 0
 
-  // 2. 고객별 누적 거래액
+  // 2. 고객별 누적 거래액 (VAT별도)
   const customerVolumeMap = new Map<string, CustomerVolume>()
   for (const c of contracts) {
     const contractAmount = Number(c.contract_amount) || 0
     if (contractAmount <= 0) continue
-    const vatAmount = contractAmount + Math.floor(contractAmount * 0.1)
+    const supplyAmount = Math.round(contractAmount) // VAT별도 공급가액
     // 연결된 의뢰에서 고객 정보 찾기
     const req = contractRequestMap.get(c.id)
     if (!req?.customer_id) continue
@@ -863,13 +864,13 @@ export default async function DashboardPage() {
 
     const existing = customerVolumeMap.get(customerId)
     if (existing) {
-      existing.totalContractAmount += vatAmount
+      existing.totalContractAmount += supplyAmount
       existing.contractCount += 1
     } else {
       customerVolumeMap.set(customerId, {
         customerId,
         customerName,
-        totalContractAmount: vatAmount,
+        totalContractAmount: supplyAmount,
         contractCount: 1,
       })
     }

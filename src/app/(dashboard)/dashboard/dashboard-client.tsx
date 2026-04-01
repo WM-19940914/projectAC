@@ -201,7 +201,7 @@ function TopCustomersCard({ kpi, contractContributions }: { kpi: DashboardKPI; c
           </div>
           <div>
             <p className="text-sm font-medium text-gray-700">고객별 거래액</p>
-            <p className="text-[11px] text-gray-400">계약 공급가액 + VAT 포함 · 클릭하여 상세 보기</p>
+            <p className="text-[11px] text-gray-400">계약 공급가액 (VAT별도) · 클릭하여 상세 보기</p>
           </div>
         </div>
         <span className="text-xs text-gray-400">TOP 10</span>
@@ -216,7 +216,7 @@ function TopCustomersCard({ kpi, contractContributions }: { kpi: DashboardKPI; c
             <span className="w-8 text-center">#</span>
             <span className="flex-1">고객명</span>
             <span className="w-16 text-center">계약 수</span>
-            <span className="w-32 text-right">거래액 (VAT포함)</span>
+            <span className="w-32 text-right">거래액 (VAT별도)</span>
           </div>
           {/* 데이터 행 (클릭 가능) */}
           {displayCustomers.map((c, idx) => (
@@ -285,7 +285,7 @@ function TopCustomersCard({ kpi, contractContributions }: { kpi: DashboardKPI; c
                         <p className="text-xs font-medium text-gray-800 mb-2 truncate">{c.title}</p>
                         <div className="grid grid-cols-2 gap-y-1.5 text-[11px]">
                           <span className="text-gray-400">계약금</span>
-                          <span className="text-right tabular-nums text-gray-600">{formatCurrency(c.contractAmountVat)}</span>
+                          <span className="text-right tabular-nums text-gray-600">{formatCurrency(c.contractAmount)}</span>
                           <span className="text-gray-400">입금</span>
                           <span className="text-right tabular-nums text-gray-600">{formatCurrency(c.totalPaid)}</span>
                           <span className="text-gray-400">지출</span>

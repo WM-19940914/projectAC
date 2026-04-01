@@ -22,7 +22,7 @@ function fmtAmount(n: number): string {
 }
 
 export function ContributionSection({ items, requestInfoMap, initialYear, initialMonth }: Props) {
-  const [viewMode, setViewMode] = useState<"monthly" | "yearly">("monthly")
+  const [viewMode, setViewMode] = useState<"monthly" | "yearly">("yearly")
   const [year, setYear] = useState(initialYear)
   const [month, setMonth] = useState(initialMonth)
   // Sheet 패널용: 선택된 의뢰 정보
@@ -55,17 +55,17 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
     return items.filter(i => i.yearMonth === ym)
   }, [items, viewMode, year, month])
 
-  // 순이익 내림차순 정렬
+  // 총이익(순이익+장려금) 내림차순 정렬
   const sorted = useMemo(() =>
-    [...filtered].sort((a, b) => b.netProfit - a.netProfit)
+    [...filtered].sort((a, b) => (b.netProfit + b.incentiveTotal) - (a.netProfit + a.incentiveTotal))
   , [filtered])
 
-  // 집계 — 이익률 분모는 계약금액(VAT포함) 합계
-  const totalContractAmountVat = sorted.reduce((s, i) => s + i.contractAmountVat, 0)
+  // 집계 — 이익률 분모는 계약금액(VAT별도) 합계
+  const totalContractAmount = sorted.reduce((s, i) => s + i.contractAmount, 0)
   const totalProfit = sorted.reduce((s, i) => s + i.netProfit, 0)
   const totalIncentive = sorted.reduce((s, i) => s + i.incentiveTotal, 0)
   const totalGrossProfit = totalProfit + totalIncentive
-  const totalRate = totalContractAmountVat > 0 ? (totalProfit / totalContractAmountVat) * 100 : 0
+  const totalRate = totalContractAmount > 0 ? (totalProfit / totalContractAmount) * 100 : 0
   const lossCount = sorted.filter(i => i.netProfit < 0).length
 
   // 기간 라벨
@@ -115,19 +115,9 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
               )}
             </h2>
 
-            {/* 월간/연간 토글 + 날짜 선택 */}
+            {/* 연간/월간 토글 + 날짜 선택 */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <div className="flex bg-gray-100 rounded-lg p-0.5">
-                <button
-                  onClick={() => setViewMode("monthly")}
-                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                    viewMode === "monthly"
-                      ? "bg-white shadow-sm font-medium text-gray-900"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  월간
-                </button>
                 <button
                   onClick={() => setViewMode("yearly")}
                   className={`px-3 py-1 text-sm rounded-md transition-colors ${
@@ -137,6 +127,16 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
                   }`}
                 >
                   연간
+                </button>
+                <button
+                  onClick={() => setViewMode("monthly")}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    viewMode === "monthly"
+                      ? "bg-white shadow-sm font-medium text-gray-900"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  월간
                 </button>
               </div>
 
@@ -178,7 +178,7 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
                 {periodLabel} 포함 계약 공헌 이익
               </p>
               <p className="text-xs text-gray-400">
-                모든 금액은 VAT 포함 금액입니다
+                모든 금액은 VAT 별도 금액입니다
               </p>
             </div>
             <div className="flex items-center gap-6 flex-wrap">
@@ -202,7 +202,7 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
               {/* 장려금 총합계 */}
               <div>
                 <p className="text-xs text-gray-400 mb-0.5">장려금</p>
-                <span className="text-lg font-heading font-bold text-gray-700">
+                <span className="text-base font-semibold text-[#3B6FD4]">
                   {totalIncentive > 0 ? fmtAmount(totalIncentive) : "-"}
                 </span>
               </div>
@@ -274,7 +274,7 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
                               {item.profitRate.toFixed(2)}%
                             </span>
                           </td>
-                          <td className="py-3 pr-4 text-right text-gray-700 whitespace-nowrap">
+                          <td className="py-3 pr-4 text-right text-[#3B6FD4] text-xs whitespace-nowrap">
                             {item.incentiveTotal > 0 ? fmtAmount(item.incentiveTotal) : "-"}
                           </td>
                           <td className={`py-3 text-right font-medium whitespace-nowrap ${

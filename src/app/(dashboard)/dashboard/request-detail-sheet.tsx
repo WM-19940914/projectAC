@@ -10,10 +10,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { SalesFlowPanel } from "../requests/sales-flow-panel"
 import { QuotationsTab } from "../requests/quotations-tab"
 import OrderDeliveryTab from "../requests/order-delivery-tab"
+import ExpenseReportTab from "../requests/expense-report-tab"
 import type { QuotationListItem, ContractSummary } from "../requests/kanban-types"
 import type { DashboardRequestInfo } from "./dashboard-types"
 import { formatDate, formatDateTime } from "@/lib/format"
-import { Send, Calendar, Building2, Briefcase, Truck, X } from "lucide-react"
+import { Send, Calendar, Building2, Briefcase, Truck, FileCheck, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -26,8 +27,8 @@ export function RequestDetailSheet({ requestInfo, onClose }: Props) {
   // 데이터 변경 여부 추적 — 패널 닫을 때 변경이 있었으면 서버 컴포넌트 갱신
   const dirtyRef = useRef(false)
 
-  // ----- 뷰 전환 (영업 / 주문배송) -----
-  const [sheetView, setSheetView] = useState<"영업" | "주문배송">("영업")
+  // ----- 뷰 전환 (영업 / 주문배송 / 지출결의서) — 칸반보드와 동일 -----
+  const [sheetView, setSheetView] = useState<"영업" | "주문배송" | "지출결의서">("영업")
 
   // ----- 견적서 state -----
   const [quotations, setQuotations] = useState<QuotationListItem[]>([])
@@ -38,6 +39,9 @@ export function RequestDetailSheet({ requestInfo, onClose }: Props) {
   // ----- 의뢰 필드 로컬 state (contract_id, confirmed_quote_id 등 변경 반영) -----
   const [localContractId, setLocalContractId] = useState<string | null>(null)
   const [localConfirmedQuoteId, setLocalConfirmedQuoteId] = useState<string | null>(null)
+
+  // ----- 수동 장려금 state -----
+  const [manualIncentive, setManualIncentive] = useState<number>(0)
 
   // 패널 닫기 + 변경 사항 있으면 대시보드 새로고침
   const handleClose = useCallback(() => {
@@ -53,6 +57,7 @@ export function RequestDetailSheet({ requestInfo, onClose }: Props) {
     if (requestInfo) {
       setLocalContractId(requestInfo.contract_id)
       setLocalConfirmedQuoteId(requestInfo.confirmed_quote_id)
+      setManualIncentive(requestInfo.manual_incentive || 0)
       setSheetView("영업")
       dirtyRef.current = false
     } else {
@@ -146,6 +151,20 @@ export function RequestDetailSheet({ requestInfo, onClose }: Props) {
     } catch { /* 실패 시 무시 */ }
   }, [requestInfo, loadQuotations])
 
+  // ----- 수동 장려금 변경 핸들러 -----
+  const handleManualIncentiveChange = useCallback(async (v: number) => {
+    if (!requestInfo) return
+    setManualIncentive(v)
+    dirtyRef.current = true
+    try {
+      await fetch("/api/requests", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: requestInfo.id, manual_incentive: v }),
+      })
+    } catch { /* 실패 시 무시 */ }
+  }, [requestInfo])
+
   // ----- 견적서 편집 (현재는 칸반 이동 안내 — 에디터가 칸반에 강하게 결합됨) -----
   const handleEditQuote = useCallback((_quoteId: string) => {
     // 견적서 에디터는 칸반보드에서만 열 수 있음
@@ -219,11 +238,12 @@ export function RequestDetailSheet({ requestInfo, onClose }: Props) {
           </div>
         </div>
 
-        {/* ----- 뷰 전환 탭 ----- */}
+        {/* ----- 뷰 전환 탭 — 칸반보드와 동일 (영업/주문배송/지출결의서) ----- */}
         <div className="flex items-center gap-1 px-5 border-b border-gray-200">
-          {(["영업", "주문배송"] as const).map((view) => {
+          {(["영업", "주문배송", "지출결의서"] as const).map((view) => {
             const isActive = sheetView === view
-            const Icon = view === "영업" ? Briefcase : Truck
+            const Icon = view === "영업" ? Briefcase : view === "주문배송" ? Truck : FileCheck
+            const label = view === "영업" ? "영업 관리" : view === "주문배송" ? "주문·배송" : "지출결의서"
             return (
               <button
                 key={view}
@@ -234,7 +254,7 @@ export function RequestDetailSheet({ requestInfo, onClose }: Props) {
                 )}
               >
                 <Icon className="h-3.5 w-3.5" />
-                {view === "영업" ? "영업 관리" : "주문·배송"}
+                {label}
                 <span className={cn(
                   "absolute bottom-0 left-2 right-2 h-0.5 rounded-full transition-colors",
                   isActive ? "bg-slate-900" : "bg-transparent"
@@ -268,6 +288,8 @@ export function RequestDetailSheet({ requestInfo, onClose }: Props) {
                 onSavedContract={handleSavedContract}
                 onSummaryChange={handleSummaryChange}
                 contractSummary={contractSummary}
+                manualIncentive={manualIncentive}
+                onManualIncentiveChange={handleManualIncentiveChange}
               />
             </div>
           </div>
@@ -281,6 +303,20 @@ export function RequestDetailSheet({ requestInfo, onClose }: Props) {
               defaultSiteName={requestInfo.title}
               confirmedQuoteId={confirmedQuoteId}
               onEditQuote={handleEditQuote}
+            />
+          </div>
+        )}
+
+        {/* ----- 지출결의서 뷰 — 칸반보드와 동일 ----- */}
+        {sheetView === "지출결의서" && (
+          <div className="flex-1 overflow-y-auto bg-slate-50 px-5 pb-8 pt-4 scrollbar-hidden">
+            <ExpenseReportTab
+              requestId={requestInfo.id}
+              requestTitle={requestInfo.title}
+              customerName={requestInfo.customer?.company_name || ""}
+              customerContact=""
+              userName=""
+              userTeam="MA영업팀"
             />
           </div>
         )}

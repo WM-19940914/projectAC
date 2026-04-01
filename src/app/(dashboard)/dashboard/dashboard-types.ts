@@ -66,6 +66,7 @@ export interface DashboardRequestInfo {
   confirmed_quote_id: string | null
   inquiry_date: string | null
   memo: string | null
+  manual_incentive: number   // 수동 장려금 (VAT별도)
   created_at: string
   customer: { id: string; company_name: string; deleted_at: string | null } | null
 }
@@ -90,7 +91,7 @@ export interface ContributionData {
 export interface CustomerVolume {
   customerId: string
   customerName: string
-  totalContractAmount: number  // 계약금액 합계 (VAT포함)
+  totalContractAmount: number  // 계약금액 합계 (VAT별도, 공급가액)
   contractCount: number        // 계약 건수
 }
 
@@ -103,17 +104,17 @@ export interface DashboardKPI {
   topCustomers: CustomerVolume[] // 고객별 누적 거래액 (상위)
 }
 
-// 계약별 공헌이익 항목
+// 계약별 공헌이익 항목 (모든 금액 VAT별도 = 공급가액 기준)
 export interface ContractContribution {
   contractId: string
   requestId: string | null // 연결된 의뢰 ID (딥링크용)
   title: string
   customerName: string     // 고객(업체)명
-  contractAmountVat: number // 계약금액 (VAT포함) — 이익률 분모
-  totalPaid: number        // 총 입금 금액 (confirmed payment_entries 합계, VAT포함)
-  totalExpense: number     // 총 지출 금액 (VAT포함)
-  incentiveTotal: number   // 장려금 (VAT포함)
-  netProfit: number        // 순이익 = 입금 - 지출
-  profitRate: number       // 이익률 % = 순이익 / 계약금액(VAT포함)
+  contractAmount: number   // 계약금액 (VAT별도, 공급가액) — 이익률 분모
+  totalPaid: number        // 총 입금 금액 (VAT별도 환산)
+  totalExpense: number     // 총 지출 금액 (VAT별도)
+  incentiveTotal: number   // 장려금 (VAT별도)
+  netProfit: number        // 순이익 = 입금 - 지출 (VAT별도)
+  profitRate: number       // 이익률 % = 순이익 / 계약금액(VAT별도)
   yearMonth: string        // "2026-01" 형태 — 계약 종료일(end_date) 기준
 }
