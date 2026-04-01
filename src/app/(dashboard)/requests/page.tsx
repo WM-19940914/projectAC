@@ -275,8 +275,8 @@ function toRequestItem(
 export default async function RequestsPage() {
   const supabase = createAdminClient()
 
-  // 1단계: 의뢰 + 고객 목록을 병렬 조회
-  const [requestsResult, hiddenResult, customersResult] = await Promise.all([
+  // 모든 데이터를 한 번에 병렬 조회 (기존 2단계 → 1단계로 통합)
+  const [requestsResult, hiddenResult, customersResult, contractsResult, metasResult] = await Promise.all([
     // 보이는 의뢰 (hidden = false)
     supabase
       .from("requests")
@@ -305,6 +305,15 @@ export default async function RequestsPage() {
       .select("id, company_name, contact_name, phone, email, address, representative, business_number, memo")
       .is("deleted_at", null)
       .order("company_name"),
+    // 계약 전체 (삭제 안 된 것만)
+    supabase
+      .from("contracts")
+      .select("*")
+      .is("deleted_at", null),
+    // 정산 메타 전체
+    supabase
+      .from("contract_settlement_meta")
+      .select("contract_id, settlement_status_map, stage_ratios, middle_installments"),
   ])
 
   const requests = requestsResult.data
@@ -313,22 +322,18 @@ export default async function RequestsPage() {
 
   // 모든 의뢰에서 contract_id 수집
   const allRequests = [...(requests || []), ...(hiddenRequests || [])]
-  const contractIds = allRequests
-    .map((r) => r.contract_id)
-    .filter((id): id is string => id != null)
+  const contractIds = new Set(
+    allRequests.map((r) => r.contract_id).filter((id): id is string => id != null)
+  )
 
-  // 계약 금액 + 정산 메타 데이터를 한 번에 조회
+  // 의뢰에 연결된 계약만 필터링
+  const contracts = (contractsResult.data || []).filter(c => contractIds.has(c.id))
+  const metas = (metasResult.data || []).filter(m => contractIds.has(m.contract_id))
+
+  // 계약 금액 + 정산 메타 데이터를 맵으로 구성
   const settlementMap = new Map<string, SettlementInfo>()
 
-  if (contractIds.length > 0) {
-    // 2단계: 계약 + 정산 메타를 병렬 조회
-    const [contractsResult, metasResult] = await Promise.all([
-      supabase.from("contracts").select("*").in("id", contractIds),
-      supabase.from("contract_settlement_meta").select("contract_id, settlement_status_map, stage_ratios, middle_installments").in("contract_id", contractIds),
-    ])
-
-    const contracts = contractsResult.data
-    const metas = metasResult.data
+  if (contractIds.size > 0) {
 
     // contract_id별 메타 맵
     const metaMap = new Map<string, { settlement_status_map: unknown; stage_ratios: unknown; middle_installments: number }>()

@@ -18,7 +18,8 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts"
-import type { MonthlyRevenue, RevenueDetail } from "./dashboard-types"
+import { RequestDetailSheet } from "./request-detail-sheet"
+import type { MonthlyRevenue, RevenueDetail, DashboardRequestInfo } from "./dashboard-types"
 
 interface Props {
   allRevenueData: Record<number, MonthlyRevenue[]>
@@ -26,6 +27,7 @@ interface Props {
   availableYears: number[]
   currentYear: number
   currentMonth: number // 1~12
+  requestInfoMap: Record<string, DashboardRequestInfo>
 }
 
 // ----- 금액 포맷 유틸 -----
@@ -87,13 +89,24 @@ function DetailSheet({
   month,
   details,
   onClose,
+  requestInfoMap,
 }: {
   open: boolean
   year: number
   month: number
   details: RevenueDetail[]
   onClose: () => void
+  requestInfoMap: Record<string, DashboardRequestInfo>
 }) {
+  // 현장 클릭 → 의뢰 상세 Sheet 열기
+  const [selectedRequestInfo, setSelectedRequestInfo] = useState<DashboardRequestInfo | null>(null)
+
+  const handleSiteClick = useCallback((requestId: string | null) => {
+    if (!requestId) return
+    const info = requestInfoMap[requestId]
+    if (info) setSelectedRequestInfo(info)
+  }, [requestInfoMap])
+
   // 현장(계약)별 그룹핑 — 같은 계약의 여러 단계를 묶어서 표시
   const grouped = useMemo(() => {
     const map = new Map<string, { title: string; customerName: string; requestId: string | null; stages: { stageName: string; amount: number; invoiceDate: string }[] }>()
@@ -121,7 +134,7 @@ function DetailSheet({
 
   const totalAmount = details.reduce((s, d) => s + d.amount, 0)
 
-  return (
+  return (<>
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="left" className="w-[380px] sm:w-[420px] p-0 flex flex-col [&>button:first-child]:hidden">
         {/* 헤더 */}
@@ -145,9 +158,15 @@ function DetailSheet({
             </div>
           ) : (
             grouped.map((item) => (
-              <div
+              <button
+                type="button"
                 key={item.contractId}
-                className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100/80 transition-colors"
+                onClick={() => handleSiteClick(item.requestId)}
+                className={`w-full text-left bg-gray-50 rounded-xl p-4 transition-colors group ${
+                  item.requestId && requestInfoMap[item.requestId]
+                    ? "hover:bg-tropical-teal/5 hover:ring-1 hover:ring-tropical-teal/20 cursor-pointer"
+                    : "hover:bg-gray-100/80"
+                }`}
               >
                 {/* 현장명 + 고객 + 금액 */}
                 <div className="flex items-start gap-2.5 mb-2.5">
@@ -155,7 +174,7 @@ function DetailSheet({
                     <Building2 className="h-3.5 w-3.5 text-tropical-teal" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{item.title}</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate group-hover:text-tropical-teal transition-colors">{item.title}</p>
                     {item.customerName && (
                       <p className="text-xs text-gray-500 truncate mt-0.5">{item.customerName}</p>
                     )}
@@ -177,17 +196,24 @@ function DetailSheet({
                     </div>
                   ))}
                 </div>
-              </div>
+              </button>
             ))
           )}
         </div>
       </SheetContent>
     </Sheet>
+
+    {/* 의뢰 상세 Sheet — 현장 클릭 시 칸반보드와 동일한 패널 */}
+    <RequestDetailSheet
+      requestInfo={selectedRequestInfo}
+      onClose={() => setSelectedRequestInfo(null)}
+    />
+  </>
   )
 }
 
 // ----- 메인 차트 섹션 -----
-export function RevenueChartSection({ allRevenueData, revenueDetails, availableYears, currentYear, currentMonth }: Props) {
+export function RevenueChartSection({ allRevenueData, revenueDetails, availableYears, currentYear, currentMonth, requestInfoMap }: Props) {
   const [selectedYear, setSelectedYear] = useState(currentYear)
   const [mounted, setMounted] = useState(false)
   // 클릭된 월 (좌측 패널 표시용)
@@ -442,6 +468,7 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
       month={selectedMonth ?? 1}
       details={selectedDetails}
       onClose={() => setSelectedMonth(null)}
+      requestInfoMap={requestInfoMap}
     />
   </>
   )

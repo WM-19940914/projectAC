@@ -148,6 +148,7 @@ export function DashboardClient({
           availableYears={availableYears}
           currentYear={currentYear}
           currentMonth={currentMonth}
+          requestInfoMap={requestInfoMap}
         />
         <ProgressRevenueSection
           allProgressData={allProgressData}
