@@ -228,12 +228,15 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
     return max
   }, [allRevenueData])
 
-  // 전년 대비 — 전년 데이터가 6개월 미만이면 비교 무의미하므로 표시 안 함
+  // 전년 대비 — 같은 기간끼리 비교 (올해 1~4월 vs 작년 1~4월)
   const prevYearData = allRevenueData[selectedYear - 1]
-  const prevYearMonthsWithData = prevYearData ? prevYearData.filter(d => d.amount > 0).length : 0
-  const prevYearTotal = prevYearData ? prevYearData.reduce((s, d) => s + d.amount, 0) : 0
-  const yoyChange = prevYearTotal > 0 && prevYearMonthsWithData >= 6
-    ? ((yearTotal - prevYearTotal) / prevYearTotal) * 100
+  // 올해 데이터가 있는 마지막 월까지만 비교 (미래 월 제외)
+  const compareUpToMonth = selectedYear === currentYear ? currentMonth : 12
+  const prevYearSamePeriod = prevYearData
+    ? prevYearData.filter(d => d.month <= compareUpToMonth).reduce((s, d) => s + d.amount, 0)
+    : 0
+  const yoyChange = prevYearSamePeriod > 0
+    ? ((yearTotal - prevYearSamePeriod) / prevYearSamePeriod) * 100
     : null
 
   const canNext = selectedYear < currentYear
@@ -318,7 +321,7 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
             <>
               <div className="h-8 w-px bg-gray-200" />
               <div>
-                <p className="text-xs text-gray-400 mb-0.5">전년 대비</p>
+                <p className="text-xs text-gray-400 mb-0.5">전년 대비 <span className="text-gray-300">(1~{compareUpToMonth}월)</span></p>
                 <div className="flex items-center gap-1">
                   {yoyChange >= 0 ? (
                     <TrendingUp className="h-4 w-4 text-muted-teal" />
