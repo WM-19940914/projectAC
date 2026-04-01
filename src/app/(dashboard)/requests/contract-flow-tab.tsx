@@ -615,7 +615,7 @@ export const ContractFlowTab = memo(function ContractFlowTab({
     })
     const stagesKey = stageSummariesForCard.map((s) => `${s.name}:${s.status}`).join(",")
 
-    const signature = `${totalWithVat}|${clampedPaid}|${unpaidAmount}|${progressPercent}|${allConfirmed}|${taxInvoiceAllIssued}|${taxInvoiceSomeIssued}|${stagesKey}`
+    const signature = `${totalWithVat}|${clampedPaid}|${unpaidAmount}|${progressPercent}|${allConfirmed}|${taxInvoiceAllIssued}|${taxInvoiceSomeIssued}|${stagesKey}|${supplyAmount}|${draft.start_date}|${draft.end_date}`
     if (lastSummarySignatureRef.current === signature) return
     lastSummarySignatureRef.current = signature
 
@@ -629,15 +629,22 @@ export const ContractFlowTab = memo(function ContractFlowTab({
       taxInvoiceAllIssued,
       taxInvoiceSomeIssued,
       stageSummaries: stageSummariesForCard,
+      // 카드 실시간 동기화용
+      contractAmount: supplyAmount,
+      startDate: draft.start_date || null,
+      endDate: draft.end_date || null,
     })
   }, [
     allConfirmed,
     clampedPaid,
     draft.id,
+    draft.start_date,
+    draft.end_date,
     isLoading,
     onSummaryChange,
     requestContractId,
     settlementStatusRows,
+    supplyAmount,
     taxInvoiceAllIssued,
     taxInvoiceSomeIssued,
     totalWithVat,

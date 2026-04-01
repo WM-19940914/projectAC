@@ -74,6 +74,10 @@ export interface ContractSummary {
   taxInvoiceAllIssued: boolean  // 모든 단계 계산서 발행
   taxInvoiceSomeIssued: boolean  // 일부 단계만 계산서 발행
   stageSummaries: { name: string; status: "paid" | "partial" | "unpaid" }[]  // 단계별 입금완료 요약
+  // 카드 실시간 동기화용 필드
+  contractAmount?: number         // 계약금액 (공급가액)
+  startDate?: string | null       // 계약 착수일
+  endDate?: string | null         // 계약 종료일
 }
 
 // ----- 견적서 목록 항목 타입 -----

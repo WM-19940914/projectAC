@@ -208,6 +208,9 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
         prev.allConfirmed === summary.allConfirmed &&
         prev.taxInvoiceAllIssued === summary.taxInvoiceAllIssued &&
         prev.taxInvoiceSomeIssued === summary.taxInvoiceSomeIssued &&
+        prev.contractAmount === summary.contractAmount &&
+        prev.startDate === summary.startDate &&
+        prev.endDate === summary.endDate &&
         JSON.stringify(prev.stageSummaries) === JSON.stringify(summary.stageSummaries)
       ) {
         return prev
@@ -220,27 +223,29 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     const current = selectedItemRef.current
     if (current?.contract) {
       const contractId = current.contract.id
+      const syncContract = (item: RequestItem) =>
+        item.contract?.id === contractId
+          ? {
+            ...item,
+            contract: {
+              ...item.contract!,
+              ...(summary.contractAmount != null ? { contract_amount: summary.contractAmount } : {}),
+              total_paid: summary.paidAmount,
+              has_upcoming: summary.unpaidAmount > 0 && !summary.allConfirmed,
+              all_confirmed: summary.allConfirmed,
+              tax_invoice_all_issued: summary.taxInvoiceAllIssued,
+              tax_invoice_some_issued: summary.taxInvoiceSomeIssued,
+              stage_summaries: summary.stageSummaries,
+              ...(summary.startDate !== undefined ? { start_date: summary.startDate } : {}),
+              ...(summary.endDate !== undefined ? { end_date: summary.endDate } : {}),
+            },
+          }
+          : item
       setColumns((prev) =>
-        prev.map((col) => ({
-          ...col,
-          items: col.items.map((item) =>
-            item.contract?.id === contractId
-              ? {
-                ...item,
-                contract: {
-                  ...item.contract!,
-                  total_paid: summary.paidAmount,
-                  has_upcoming: summary.unpaidAmount > 0 && !summary.allConfirmed,
-                  all_confirmed: summary.allConfirmed,
-                  tax_invoice_all_issued: summary.taxInvoiceAllIssued,
-                  tax_invoice_some_issued: summary.taxInvoiceSomeIssued,
-                  stage_summaries: summary.stageSummaries,
-                },
-              }
-              : item
-          ),
-        }))
+        prev.map((col) => ({ ...col, items: col.items.map(syncContract) }))
       )
+      setFailedItems((prev) => prev.map(syncContract))
+      setHiddenItems((prev) => prev.map(syncContract))
     }
   }, [])
 
@@ -411,27 +416,29 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
     if (!shouldSyncToColumnsRef.current) return
 
     const contractId = current.contract.id
+    const syncContract = (item: RequestItem) =>
+      item.contract?.id === contractId
+        ? {
+          ...item,
+          contract: {
+            ...item.contract!,
+            ...(contractSummary.contractAmount != null ? { contract_amount: contractSummary.contractAmount } : {}),
+            total_paid: contractSummary.paidAmount,
+            has_upcoming: contractSummary.unpaidAmount > 0 && !contractSummary.allConfirmed,
+            all_confirmed: contractSummary.allConfirmed,
+            tax_invoice_all_issued: contractSummary.taxInvoiceAllIssued,
+            tax_invoice_some_issued: contractSummary.taxInvoiceSomeIssued,
+            stage_summaries: contractSummary.stageSummaries,
+            ...(contractSummary.startDate !== undefined ? { start_date: contractSummary.startDate } : {}),
+            ...(contractSummary.endDate !== undefined ? { end_date: contractSummary.endDate } : {}),
+          },
+        }
+        : item
     setColumns((prev) =>
-      prev.map((col) => ({
-        ...col,
-        items: col.items.map((item) =>
-          item.contract?.id === contractId
-            ? {
-              ...item,
-              contract: {
-                ...item.contract!,
-                total_paid: contractSummary.paidAmount,
-                has_upcoming: contractSummary.unpaidAmount > 0 && !contractSummary.allConfirmed,
-                all_confirmed: contractSummary.allConfirmed,
-                tax_invoice_all_issued: contractSummary.taxInvoiceAllIssued,
-                tax_invoice_some_issued: contractSummary.taxInvoiceSomeIssued,
-                stage_summaries: contractSummary.stageSummaries,
-              },
-            }
-            : item
-        ),
-      }))
+      prev.map((col) => ({ ...col, items: col.items.map(syncContract) }))
     )
+    setFailedItems((prev) => prev.map(syncContract))
+    setHiddenItems((prev) => prev.map(syncContract))
   }, [contractSummary])
 
   // 견적서 편집 열기 (상세 데이터 fetch)
