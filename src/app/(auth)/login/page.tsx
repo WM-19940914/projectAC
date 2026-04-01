@@ -58,8 +58,8 @@ export default function LoginPage() {
       setServerError(error.includes("Invalid login credentials") ? "아이디 또는 비밀번호가 올바르지 않습니다." : error)
       return
     }
-    // 세션 쿠키 반영 대기 후 이동
-    setTimeout(() => { window.location.href = "/dashboard" }, 300)
+    // signIn 내부에서 router.refresh() 호출 → 쿠키 반영 완료 후 이동
+    router.push("/dashboard")
   }
 
   return (
