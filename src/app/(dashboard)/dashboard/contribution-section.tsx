@@ -96,8 +96,8 @@ export function ContributionSection({ items, requestInfoMap, initialYear, initia
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-[280px] text-xs leading-relaxed">
-                  <p>계약 종료일 기준으로 월을 구분합니다.</p>
-                  <p className="mt-1 text-gray-400">종료일이 없는 계약은 생성일 기준</p>
+                  <p>입금 완료 + 지출 전액 지급된 계약만 표시됩니다.</p>
+                  <p className="mt-1 text-gray-400">계약 종료일 기준 · 종료일 없으면 생성일 기준</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

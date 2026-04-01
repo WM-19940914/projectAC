@@ -320,18 +320,24 @@ export default async function DashboardPage() {
   const todayMs = today.getTime()
   const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
 
+  // request_id → request 직접 매핑 (지출에 contract_id 없고 request_id만 있는 경우용)
+  const requestByIdMap = new Map(requests.map(r => [r.id, r]))
+
   const expenseAlerts: ExpenseAlert[] = []
   for (const exp of expenses) {
-    // request 찾기 (contract_id → request 매핑)
-    const req = exp.contract_id ? contractRequestMap.get(exp.contract_id) : null
+    // request 찾기: contract_id → 역매핑 우선, 없으면 request_id 직접 조회
+    const req = exp.contract_id
+      ? contractRequestMap.get(exp.contract_id)
+      : (exp.request_id ? requestByIdMap.get(exp.request_id) : null)
     const customerName = req
       ? (Array.isArray(req.customer)
           ? (req.customer[0] as { company_name: string } | undefined)?.company_name || ""
           : (req.customer as { company_name: string } | null)?.company_name || "")
       : ""
 
-    // 미지급 지출
+    // 미지급 지출 — VAT포함 금액으로 통일
     if (exp.is_paid === false) {
+      const amountExcl = Number(exp.amount_excl_tax) || 0
       expenseAlerts.push({
         type: "unpaid",
         requestId: req?.id || "",
@@ -340,16 +346,17 @@ export default async function DashboardPage() {
         expenseId: exp.id,
         vendor: exp.vendor || "",
         description: exp.description || "",
-        amount: Number(exp.amount_excl_tax) || 0,
+        amount: amountExcl + Math.floor(amountExcl * 0.1),
       })
     }
 
-    // 세금계산서 예정 (7일 이내)
+    // 세금계산서 예정 (7일 이내) — VAT포함 금액으로 통일
     if (exp.tax_invoice_due_date) {
       const dueDate = new Date(`${exp.tax_invoice_due_date}T00:00:00`)
       if (!isNaN(dueDate.getTime())) {
         const dueMs = dueDate.getTime()
         if (dueMs >= todayMs && dueMs <= todayMs + sevenDaysMs) {
+          const amountExcl = Number(exp.amount_excl_tax) || 0
           expenseAlerts.push({
             type: "tax_invoice_due",
             requestId: req?.id || "",
@@ -358,7 +365,7 @@ export default async function DashboardPage() {
             expenseId: exp.id,
             vendor: exp.vendor || "",
             description: exp.description || "",
-            amount: Number(exp.amount_excl_tax) || 0,
+            amount: amountExcl + Math.floor(amountExcl * 0.1),
             dueDate: exp.tax_invoice_due_date,
           })
         }
@@ -697,8 +704,21 @@ export default async function DashboardPage() {
   }
   const progressAvailableYears = progressYearsArr.sort()
 
+  // 계약별 미지급 지출 존재 여부 맵 (is_paid === false인 건이 1개라도 있으면 true)
+  const contractHasUnpaidExpense = new Set<string>()
+  for (const e of expenses) {
+    if (e.is_paid !== false) continue
+    let cid = e.contract_id
+    if (!cid && e.request_id) {
+      const c = requestContractMap.get(e.request_id)
+      if (c) cid = c.id
+    }
+    if (cid) contractHasUnpaidExpense.add(cid)
+  }
+
   // 계약별 공헌이익 항목 생성 (end_date 기준 월 필터링)
   // 모든 금액 VAT별도 (공급가액 기준) — 칸반보드 수익성 요약과 동일
+  // 조건: 입금 100% 완료 + 미지급 지출 0건인 계약만 표시
   const contractContributions: ContractContribution[] = contracts
     .filter(c => (Number(c.contract_amount) || 0) > 0)
     .map(c => {
@@ -746,8 +766,22 @@ export default async function DashboardPage() {
         netProfit: profit,
         profitRate: contractAmount > 0 ? (profit / contractAmount) * 100 : 0,
         yearMonth: ym,
+        // 완료 판정용 (필터링에 사용)
+        _totalPaidVatIncl: totalPaidVatIncl,
+        _contractAmountVatIncl: contractAmount + Math.floor(contractAmount * 0.1),
+        _hasUnpaidExpense: contractHasUnpaidExpense.has(c.id),
       }
     })
+    // 완료된 계약만 표시: 입금 100% + 미지급 지출 0건
+    .filter(c => {
+      // 입금이 예정 총액 이상인지 (VAT포함 기준으로 비교)
+      const fullyPaid = c._totalPaidVatIncl >= c._contractAmountVatIncl
+      // 미지급 지출이 없는지
+      const noUnpaid = !c._hasUnpaidExpense
+      return fullyPaid && noUnpaid
+    })
+    // 내부 필터용 필드 제거
+    .map(({ _totalPaidVatIncl, _contractAmountVatIncl, _hasUnpaidExpense, ...rest }) => rest)
 
   // ----- KPI 계산 -----
 

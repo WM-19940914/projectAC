@@ -4,19 +4,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Mooov 커스텀 커서 (로열 블루 #3B6FD4) ── */
-* { cursor: url('/cursor-default.svg') 4 1, default; }
-a, button, [role="button"], label, select, summary,
-input[type="submit"], input[type="button"], input[type="reset"],
-input[type="checkbox"], input[type="radio"],
-.cursor-pointer, [data-state] {
-  cursor: url('/cursor-pointer.svg') 9 1, pointer !important;
-}
-input[type="text"], input[type="email"], input[type="password"],
-input[type="number"], input[type="search"], input[type="tel"],
-input[type="url"], textarea, [contenteditable="true"] {
-  cursor: url('/cursor-text.svg') 6 10, text !important;
-}
 
 @layer utilities {
   .text-balance {
