@@ -65,7 +65,9 @@ export default function PriceList({ items }: PriceListProps) {
       } else {
         toast({ title: "오류", description: "수정 실패", variant: "destructive" })
       }
-    } catch { }
+    } catch {
+      toast({ title: "오류", description: "수정 중 문제가 발생했습니다", variant: "destructive" })
+    }
   }
 
   // 삭제 핸들러
@@ -83,7 +85,9 @@ export default function PriceList({ items }: PriceListProps) {
       } else {
         toast({ title: "오류", description: "삭제 실패", variant: "destructive" })
       }
-    } catch { }
+    } catch {
+      toast({ title: "오류", description: "삭제 중 문제가 발생했습니다", variant: "destructive" })
+    }
   }
 
   // 추가 핸들러
@@ -102,7 +106,9 @@ export default function PriceList({ items }: PriceListProps) {
       } else {
         toast({ title: "오류", description: "추가 실패", variant: "destructive" })
       }
-    } catch { }
+    } catch {
+      toast({ title: "오류", description: "추가 중 문제가 발생했습니다", variant: "destructive" })
+    }
   }
 
   const subCategories = useMemo(() => {

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { jsonWithUTF8 } from "@/lib/utf8-response"
 import { getApiUserId } from "@/lib/api-auth"
+import { revalidatePath } from "next/cache"
 
 // GET /api/work-notes — 인증된 사용자의 업무 노트 조회 (본인 노트만)
 export async function GET(req: NextRequest) {
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
     return jsonWithUTF8({ error: error.message }, { status: 500 })
   }
 
+  revalidatePath("/dashboard")
   return jsonWithUTF8({ data })
 }
 
@@ -92,6 +94,7 @@ export async function PATCH(req: NextRequest) {
     return jsonWithUTF8({ error: error.message }, { status: 500 })
   }
 
+  revalidatePath("/dashboard")
   return jsonWithUTF8({ data })
 }
 
@@ -118,5 +121,6 @@ export async function DELETE(req: NextRequest) {
     return jsonWithUTF8({ error: error.message }, { status: 500 })
   }
 
+  revalidatePath("/dashboard")
   return jsonWithUTF8({ success: true })
 }

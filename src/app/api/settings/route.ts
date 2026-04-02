@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { requireAdmin } from "@/lib/api-auth"
 import { logError } from "@/lib/logger"
 import { NextRequest, NextResponse } from "next/server"
+import { revalidatePath } from "next/cache"
 
 // 우리 회사 기본 정보 조회
 export async function GET() {
@@ -76,6 +77,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    revalidatePath("/settings")
     return NextResponse.json({ success: true })
   } catch (e: unknown) {
     logError("[/api/settings]", e)

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { logError } from "@/lib/logger"
+import { revalidatePath } from "next/cache"
 
 const BUCKET = "quote-exports"
 
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
 
     if (error) throw error
 
+    revalidatePath("/quotes")
     return NextResponse.json({ data })
   } catch (e) {
     logError("quote-exports POST", e)
@@ -112,6 +114,8 @@ export async function PATCH(req: NextRequest) {
       .eq("id", id)
 
     if (error) throw error
+
+    revalidatePath("/quotes")
     return NextResponse.json({ success: true })
   } catch (e) {
     logError("quote-exports PATCH", e)
@@ -147,6 +151,8 @@ export async function DELETE(req: NextRequest) {
       .eq("id", id)
 
     if (error) throw error
+
+    revalidatePath("/quotes")
     return NextResponse.json({ success: true })
   } catch (e) {
     logError("quote-exports DELETE", e)

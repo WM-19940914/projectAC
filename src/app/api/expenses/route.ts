@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
         category,
         expense_date,
         amount_excl_tax: amount,
-        // VAT 포함 금액도 함께 저장
-        amount_incl_tax: Math.floor(amount * 1.1),
+        // VAT 계산: 세액을 먼저 구한 뒤 합산 (반올림 오차 방지)
         tax_amount: Math.floor(amount * 0.1),
+        amount_incl_tax: amount + Math.floor(amount * 0.1),
         vendor: vendor || null,
         payment_method: payment_method || null,
         description: description || null,
@@ -92,8 +92,9 @@ export async function PATCH(req: NextRequest) {
         category,
         expense_date,
         amount_excl_tax: amount,
-        amount_incl_tax: Math.floor(amount * 1.1),
+        // VAT 계산: 세액을 먼저 구한 뒤 합산 (반올림 오차 방지)
         tax_amount: Math.floor(amount * 0.1),
+        amount_incl_tax: amount + Math.floor(amount * 0.1),
         vendor: vendor || null,
         payment_method: payment_method || null,
         description: description || null,

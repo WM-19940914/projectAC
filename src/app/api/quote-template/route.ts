@@ -3,6 +3,7 @@ import { readFile } from "fs/promises"
 import path from "path"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { logError } from "@/lib/logger"
+import { revalidatePath } from "next/cache"
 
 // 로컬 기본 템플릿 (최초 업로드 전 폴백용)
 const LOCAL_FALLBACK = path.join(process.cwd(), "public", "templates", "quote-template.xlsx")
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "업로드 실패: " + uploadError.message }, { status: 500 })
     }
 
+    revalidatePath("/quotes")
     return NextResponse.json({ success: true, message: "템플릿이 업데이트되었습니다" })
   } catch (e) {
     logError("템플릿 업로드 오류:", e)
