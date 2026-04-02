@@ -231,14 +231,9 @@ export default function QuoteEditorSheet({
     companyName: "", bizNumber: "", ceoName: "",
     email: "", address: "", manager: "", managerPhone: "", managerEmail: "",
   })
-  // 회사 로고
+  // 회사 로고/도장 (엑셀 템플릿에서 자동 추출)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
-  const [logoUploading, setLogoUploading] = useState(false)
-  const logoInputRef = useRef<HTMLInputElement>(null)
-  // 회사 도장
   const [stampUrl, setStampUrl] = useState<string | null>(null)
-  const [stampUploading, setStampUploading] = useState(false)
-  const stampInputRef = useRef<HTMLInputElement>(null)
   const [businessSettingsLoaded, setBusinessSettingsLoaded] = useState(false)
   // "다음에도 사용하기" 체크박스 (dialog 열릴 때마다 기본 체크)
   const [supplierSaveAsDefault, setSupplierSaveAsDefault] = useState(true)
@@ -374,10 +369,23 @@ export default function QuoteEditorSheet({
         }
         setBusinessSettings(settings)
         setBusinessSettingsLoaded(true)
-        // 회사 로고 URL 로드
-        if (data.logo_url) setLogoUrl(data.logo_url)
-        // 도장 URL 로드
-        if (data.stamp_url) setStampUrl(data.stamp_url)
+        // 회사 로고/도장 URL 로드 (기존에 ?t= 붙어있으면 제거)
+        const cleanLogo = data.logo_url ? data.logo_url.split("?")[0] : null
+        const cleanStamp = data.stamp_url ? data.stamp_url.split("?")[0] : null
+        if (cleanLogo) setLogoUrl(cleanLogo)
+        if (cleanStamp) setStampUrl(cleanStamp)
+
+        // 로고/도장이 없으면 엑셀 템플릿에서 자동 추출 시도
+        if (!cleanLogo || !cleanStamp) {
+          try {
+            const extRes = await fetch("/api/settings/extract-template-images", { method: "POST" })
+            if (extRes.ok) {
+              const extData = await extRes.json()
+              if (!cleanLogo && extData.logo_url) setLogoUrl(extData.logo_url)
+              if (!cleanStamp && extData.stamp_url) setStampUrl(extData.stamp_url)
+            }
+          } catch { /* 템플릿 추출 실패 — 무시 */ }
+        }
         return settings
       }
     } catch { /* 무시 */ }
@@ -877,73 +885,6 @@ export default function QuoteEditorSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, quotationDate, notes, equipItems, installItems, receiver, supplier, supplierMode, truncationInput, open])
 
-  // 회사 로고 업로드
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setLogoUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-      const res = await fetch("/api/settings/logo", { method: "POST", body: formData })
-      const result = await res.json()
-      if (res.ok && result.logo_url) {
-        setLogoUrl(result.logo_url)
-      } else {
-        console.error("로고 업로드 실패:", result.error)
-      }
-    } catch (err) {
-      console.error("로고 업로드 오류:", err)
-    } finally {
-      setLogoUploading(false)
-      // input 초기화 (같은 파일 재업로드 가능하도록)
-      if (logoInputRef.current) logoInputRef.current.value = ""
-    }
-  }
-
-  // 회사 로고 삭제
-  const handleLogoDelete = async () => {
-    try {
-      await fetch("/api/settings/logo", { method: "DELETE" })
-      setLogoUrl(null)
-    } catch (err) {
-      console.error("로고 삭제 오류:", err)
-    }
-  }
-
-  // 회사 도장 업로드
-  const handleStampUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setStampUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append("file", file)
-      const res = await fetch("/api/settings/stamp", { method: "POST", body: formData })
-      const result = await res.json()
-      if (res.ok && result.stamp_url) {
-        setStampUrl(result.stamp_url)
-      } else {
-        console.error("도장 업로드 실패:", result.error)
-      }
-    } catch (err) {
-      console.error("도장 업로드 오류:", err)
-    } finally {
-      setStampUploading(false)
-      if (stampInputRef.current) stampInputRef.current.value = ""
-    }
-  }
-
-  // 회사 도장 삭제
-  const handleStampDelete = async () => {
-    try {
-      await fetch("/api/settings/stamp", { method: "DELETE" })
-      setStampUrl(null)
-    } catch (err) {
-      console.error("도장 삭제 오류:", err)
-    }
-  }
-
   const handleDelete = async () => {
     const id = quotation?.id || savedIdRef.current
     if (!id) return
@@ -1360,43 +1301,17 @@ export default function QuoteEditorSheet({
                       <div className="w-[45%]" />
                       {/* 우측: 로고 + 회사명 (엑셀 J~Q열 영역) */}
                       <div className="flex-1 flex items-center gap-2">
-                        <div className="shrink-0">
-                          {logoUrl ? (
-                            <div className="group relative">
-                              <img src={logoUrl} alt="로고" className="h-9 max-w-[120px] object-contain" />
-                              <div className="absolute inset-0 bg-black/40 rounded opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                                <button onClick={() => logoInputRef.current?.click()} className="px-1 py-0.5 bg-white rounded text-[8px]">변경</button>
-                                <button onClick={handleLogoDelete} className="px-1 py-0.5 bg-white rounded text-[8px] text-red-500">삭제</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button onClick={() => logoInputRef.current?.click()}
-                              className="h-9 px-3 border border-dashed border-gray-300 rounded text-[10px] text-gray-400 hover:border-gray-500 hover:text-gray-600 transition-colors">
-                              {logoUploading ? "업로드..." : "로고"}
-                            </button>
-                          )}
-                        </div>
+                        {logoUrl && (
+                          <img src={logoUrl} alt="로고" className="h-9 max-w-[120px] object-contain shrink-0" />
+                        )}
                         <span className="text-base font-bold text-gray-900">{supplier.companyName || "회사명"}</span>
                       </div>
                       {/* 도장 (엑셀 R열 = 우측 끝, 성명·(인) 위에 겹침) */}
-                      <div className="absolute right-6 top-1/2 -translate-y-1/2">
-                        {stampUrl ? (
-                          <div className="group relative">
-                            <img src={stampUrl} alt="도장" className="h-14 w-14 object-contain opacity-80" />
-                            <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-0.5">
-                              <button onClick={() => stampInputRef.current?.click()} className="px-1 py-0.5 bg-white rounded text-[7px]">변경</button>
-                              <button onClick={handleStampDelete} className="px-1 py-0.5 bg-white rounded text-[7px] text-red-500">삭제</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button onClick={() => stampInputRef.current?.click()}
-                            className="h-14 w-14 border border-dashed border-gray-300 rounded-full text-[9px] text-gray-400 hover:border-gray-500 hover:text-gray-600 transition-colors flex items-center justify-center">
-                            {stampUploading ? "..." : "도장"}
-                          </button>
-                        )}
-                      </div>
-                      <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                      <input ref={stampInputRef} type="file" accept="image/png,image/webp,image/gif" className="hidden" onChange={handleStampUpload} />
+                      {stampUrl && (
+                        <div className="absolute right-6 top-1/2 -translate-y-1/2">
+                          <img src={stampUrl} alt="도장" className="h-14 w-14 object-contain opacity-80" />
+                        </div>
+                      )}
                     </div>
 
                     {/* Row 6: 수신처 귀하 + 수신자 편집 */}
@@ -1659,42 +1574,16 @@ export default function QuoteEditorSheet({
                   <div className="relative flex items-center py-3 px-6">
                     <div className="w-[45%]" />
                     <div className="flex-1 flex items-center gap-2">
-                      <div className="shrink-0">
-                        {logoUrl ? (
-                          <div className="group relative">
-                            <img src={logoUrl} alt="로고" className="h-9 max-w-[120px] object-contain" />
-                            <div className="absolute inset-0 bg-black/40 rounded opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
-                              <button onClick={() => logoInputRef.current?.click()} className="px-1 py-0.5 bg-white rounded text-[8px]">변경</button>
-                              <button onClick={handleLogoDelete} className="px-1 py-0.5 bg-white rounded text-[8px] text-red-500">삭제</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button onClick={() => logoInputRef.current?.click()}
-                            className="h-9 px-3 border border-dashed border-gray-300 rounded text-[10px] text-gray-400 hover:border-gray-500 hover:text-gray-600 transition-colors">
-                            {logoUploading ? "업로드..." : "로고"}
-                          </button>
-                        )}
-                      </div>
+                      {logoUrl && (
+                        <img src={logoUrl} alt="로고" className="h-9 max-w-[120px] object-contain shrink-0" />
+                      )}
                       <span className="text-base font-bold text-gray-900">{supplier.companyName || "회사명"}</span>
                     </div>
-                    <div className="absolute right-6 top-1/2 -translate-y-1/2">
-                      {stampUrl ? (
-                        <div className="group relative">
-                          <img src={stampUrl} alt="도장" className="h-14 w-14 object-contain opacity-80" />
-                          <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-0.5">
-                            <button onClick={() => stampInputRef.current?.click()} className="px-1 py-0.5 bg-white rounded text-[7px]">변경</button>
-                            <button onClick={handleStampDelete} className="px-1 py-0.5 bg-white rounded text-[7px] text-red-500">삭제</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button onClick={() => stampInputRef.current?.click()}
-                          className="h-14 w-14 border border-dashed border-gray-300 rounded-full text-[9px] text-gray-400 hover:border-gray-500 hover:text-gray-600 transition-colors flex items-center justify-center">
-                          {stampUploading ? "..." : "도장"}
-                        </button>
-                      )}
-                    </div>
-                    <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                    <input ref={stampInputRef} type="file" accept="image/png,image/webp,image/gif" className="hidden" onChange={handleStampUpload} />
+                    {stampUrl && (
+                      <div className="absolute right-6 top-1/2 -translate-y-1/2">
+                        <img src={stampUrl} alt="도장" className="h-14 w-14 object-contain opacity-80" />
+                      </div>
+                    )}
                   </div>
 
                   {/* 수신처 귀하 */}

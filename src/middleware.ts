@@ -56,12 +56,14 @@ export async function middleware(request: NextRequest) {
       )
     }
 
-    // UTF-8 헤더 설정 (바이너리 응답 엔드포인트는 제외)
+    // UTF-8 헤더 설정 (바이너리/파일업로드 엔드포인트는 제외)
     if (
       !pathname.startsWith("/api/quote-template") &&
       !pathname.startsWith("/api/excel-to-pdf") &&
       !pathname.startsWith("/api/excel-to-png") &&
-      !pathname.startsWith("/api/attachments")
+      !pathname.startsWith("/api/attachments") &&
+      !pathname.startsWith("/api/settings/logo") &&
+      !pathname.startsWith("/api/settings/stamp")
     ) {
       supabaseResponse.headers.set("Content-Type", "application/json; charset=utf-8")
     }

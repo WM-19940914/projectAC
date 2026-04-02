@@ -121,7 +121,9 @@ function ab2b64(buffer: ArrayBuffer): string {
 // 이미지 URL → data URL (base64)
 async function loadImageDataUrl(url: string): Promise<string | null> {
   try {
-    const res = await fetch(url)
+    // DB에 ?t=타임스탬프가 붙어있으면 제거 (Supabase Storage가 쿼리 파라미터 400 반환)
+    const cleanUrl = url.split("?")[0]
+    const res = await fetch(cleanUrl)
     if (!res.ok) return null
     const blob = await res.blob()
     return new Promise((resolve) => {

@@ -69,9 +69,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "업로드 실패: " + uploadError.message }, { status: 500 })
     }
 
-    // 공개 URL 가져오기 (캐시 방지용 타임스탬프 추가)
+    // 공개 URL 가져오기 (DB에는 깨끗한 URL만 저장, 캐시 방지는 클라이언트에서 처리)
     const { data: urlData } = supabase.storage.from("logos").getPublicUrl(fileName)
-    const logoUrl = `${urlData.publicUrl}?t=${Date.now()}`
+    const logoUrl = urlData.publicUrl
 
     // business_settings에 logo_url 저장
     const { data: existing } = await supabase
