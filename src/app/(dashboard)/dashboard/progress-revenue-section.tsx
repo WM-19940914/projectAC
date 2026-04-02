@@ -95,7 +95,7 @@ export function ProgressRevenueSection({ allProgressData, availableYears, curren
                 </Tooltip>
               </TooltipProvider>
             </h3>
-            <p className="text-xs text-gray-400 mt-0.5">계약금액을 한 번에 잡지 않고, 실제 진행된 기간에 맞춰 각 월에 나누어 표시한 매출입니다.</p>
+            <p className="text-xs text-gray-400 mt-0.5">계약금액을 한 번에 잡지 않고, 실제 진행된 기간에 맞춰 각 월에 나누어 표시한 매출입니다. <span className="text-sky-aqua/70">(VAT 포함)</span></p>
           </div>
 
           {/* 연도 선택 */}

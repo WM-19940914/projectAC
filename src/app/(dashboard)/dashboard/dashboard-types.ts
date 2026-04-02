@@ -75,7 +75,7 @@ export interface DashboardRequestInfo {
 export interface MonthlyProgressRevenue {
   month: number       // 1~12
   label: string       // "1월", "2월" 등
-  amount: number      // 안분된 진행매출 합계 (공급가액)
+  amount: number      // 안분된 진행매출 합계 (VAT 포함)
   contractCount: number // 해당 월에 진행 중인 계약 수
 }
 

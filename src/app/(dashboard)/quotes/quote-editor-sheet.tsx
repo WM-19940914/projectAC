@@ -213,8 +213,7 @@ export default function QuoteEditorSheet({
   const [saveError, setSaveError] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
-  const [_pdfExporting, _setPdfExporting] = useState(false) // 미사용 (PDF/PNG 내보내기 제거됨)
-  const [_pngExporting, _setPngExporting] = useState(false)
+  const [excelExporting, setExcelExporting] = useState(false)
   const savedIdRef = useRef<string | null>(null)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialLoadRef = useRef(true)
@@ -964,6 +963,7 @@ export default function QuoteEditorSheet({
                   onClick={async () => {
                     const exportData = buildExportData()
                     if (!exportData) return
+                    setExcelExporting(true)
                     try {
                       const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
                       if (!xlsxBuffer) return
@@ -978,16 +978,22 @@ export default function QuoteEditorSheet({
                       URL.revokeObjectURL(localUrl)
                       toast({ title: "완료", description: "Excel 파일이 다운로드되었습니다" })
                     } catch (e) { console.error("Excel 내보내기 오류:", e); toast({ title: "오류", description: "Excel 내보내기에 실패했습니다", variant: "destructive" }) }
+                    finally { setExcelExporting(false) }
                   }}
-                  className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors group"
+                  disabled={excelExporting}
+                  className="flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-colors group disabled:opacity-50"
                   title="Excel 내보내기"
                 >
-                  <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none">
-                    <path d="M28 4H18v24h10a2 2 0 002-2V6a2 2 0 00-2-2z" fill="#21A366"/>
-                    <path d="M18 4H6a2 2 0 00-2 2v20a2 2 0 002 2h12V4z" fill="#107C41"/>
-                    <path d="M22 10h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2z" fill="#fff" opacity=".6"/>
-                    <path d="M7.5 10l2.7 6-2.7 6h2.4l1.6-3.8L13.1 22h2.4l-2.7-6 2.7-6h-2.4l-1.6 3.8L9.9 10H7.5z" fill="#fff"/>
-                  </svg>
+                  {excelExporting ? (
+                    <Loader2 className="w-6 h-6 animate-spin text-green-600" />
+                  ) : (
+                    <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none">
+                      <path d="M28 4H18v24h10a2 2 0 002-2V6a2 2 0 00-2-2z" fill="#21A366"/>
+                      <path d="M18 4H6a2 2 0 00-2 2v20a2 2 0 002 2h12V4z" fill="#107C41"/>
+                      <path d="M22 10h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2zm0 4h-4v2h4v-2z" fill="#fff" opacity=".6"/>
+                      <path d="M7.5 10l2.7 6-2.7 6h2.4l1.6-3.8L13.1 22h2.4l-2.7-6 2.7-6h-2.4l-1.6 3.8L9.9 10H7.5z" fill="#fff"/>
+                    </svg>
+                  )}
                   <span className="text-[9px] text-gray-400 group-hover:text-gray-600 leading-tight text-center">견적서<br/>내보내기</span>
                 </button>
                 {exportHistory.length > 0 && (
@@ -1131,7 +1137,7 @@ export default function QuoteEditorSheet({
           )}
         </SheetHeader>
 
-        {/* ── 내보내기 내역 패널 (좌측 견적서 영역에만 표시) ── */}
+        {/* ── 내보내기 내역 패널 ── */}
         {showExportHistory && exportHistory.length > 0 && (
           <div className={`px-6 py-3 border-b border-gray-100 bg-gray-50/50 ${pricingOpen ? "w-[842px]" : ""}`}>
             <div className="flex items-center justify-between mb-2">
@@ -1290,34 +1296,30 @@ export default function QuoteEditorSheet({
                         className="w-full text-[10px] text-gray-400 bg-transparent border-0 focus:outline-none px-0 placeholder:text-gray-300" />
                     </div>
 
-                    {/* Row 1-2: 見積書 대제목 + 굵은 밑줄 */}
-                    <div className="text-center pt-3 pb-2 mx-6 border-b-[3px] border-gray-900">
-                      <h1 className="text-[28px] font-bold tracking-[1em] text-gray-900 font-serif">見　積　書</h1>
+                    {/* Row 1-2: 見積書 대제목 + 굵은 밑줄 — 엑셀과 동일하게 크고 굵게 */}
+                    <div className="text-center pt-4 pb-2.5 mx-6 border-b-[4px] border-gray-900">
+                      <h1 className="text-[32px] font-bold tracking-[1.2em] text-gray-900 font-serif">見　積　書</h1>
                     </div>
 
-                    {/* Row 3-5: 로고+회사명(우측) + 도장(우측 끝) — 엑셀과 동일 배치 */}
-                    <div className="relative flex items-center py-3 px-6">
-                      {/* 좌측 여백 (엑셀 A~I열 영역 = 약 45%) */}
-                      <div className="w-[45%]" />
-                      {/* 우측: 로고 + 회사명 (엑셀 J~Q열 영역) */}
-                      <div className="flex-1 flex items-center gap-2">
-                        {logoUrl && (
-                          <img src={logoUrl} alt="로고" className="h-9 max-w-[120px] object-contain shrink-0" />
+                    {/* Row 3-5: 로고+회사명+도장 — 등록번호 컬럼 바로 위에 정렬 */}
+                    <div className="flex pt-3 mb-[-16px] px-6">
+                      <div className="w-[45%] shrink-0" />
+                      <div className="flex items-center gap-3">
+                        {logoUrl ? (
+                          <img src={logoUrl} alt="로고" className="h-10 max-w-[200px] object-contain" />
+                        ) : (
+                          <span className="text-[20px] font-bold text-gray-900 tracking-wide">{supplier.companyName || "회사명"}</span>
                         )}
-                        <span className="text-base font-bold text-gray-900">{supplier.companyName || "회사명"}</span>
+                        {stampUrl && (
+                          <img src={stampUrl} alt="도장" className="h-[48px] w-[48px] object-contain opacity-85" />
+                        )}
                       </div>
-                      {/* 도장 (엑셀 R열 = 우측 끝, 성명·(인) 위에 겹침) */}
-                      {stampUrl && (
-                        <div className="absolute right-6 top-1/2 -translate-y-1/2">
-                          <img src={stampUrl} alt="도장" className="h-14 w-14 object-contain opacity-80" />
-                        </div>
-                      )}
                     </div>
 
                     {/* Row 6: 수신처 귀하 + 수신자 편집 */}
-                    <div className="px-6 pb-1.5 flex items-end gap-1.5">
+                    <div className="px-6 pb-2 flex items-end gap-1.5">
                       <button onClick={() => setReceiverDialogOpen(true)} type="button"
-                        className="text-[13px] font-bold text-gray-900 border-b border-gray-900 pb-0.5 hover:text-gray-600 transition-colors">
+                        className="text-[14px] font-bold text-gray-900 border-b-2 border-gray-900 pb-0.5 hover:text-gray-600 transition-colors">
                         {receiver.companyName || customerName || "(수신처)"}{" "}귀하
                       </button>
                       <button onClick={() => setReceiverDialogOpen(true)} type="button"
@@ -1327,8 +1329,8 @@ export default function QuoteEditorSheet({
                     </div>
 
                     {/* Row 7-11: 엑셀 동일 레이아웃 — 좌측(수신자) / 우측(공급자) */}
-                    <div className="px-6 py-1 text-[11px] text-gray-900 leading-[22px]">
-                      {/* Row 7: 담당자 / 등록번호·성명·(인) + 공급자 편집 */}
+                    <div className="relative px-6 py-1.5 text-[11.5px] text-gray-900 leading-[26px]">
+                      {/* Row 7: 담당자 / 등록번호·성명·(인) + 도장 — 도장이 (인) 위에 겹침 */}
                       <div className="flex">
                         <div className="w-[45%] flex">
                           <span className="text-gray-500 w-[100px] shrink-0 tracking-[0.2em] font-bold">담 당 자 :</span>
@@ -1405,23 +1407,23 @@ export default function QuoteEditorSheet({
                     </div>
 
 
-                    {/* Row 12: "아래와 같이 견적합니다." */}
-                    <div className="px-6 pt-0.5 pb-2">
-                      <span className="text-[11px] text-gray-900 border-b border-gray-400 pb-0.5">아래와 같이 견적합니다.</span>
+                    {/* Row 12: "아래와 같이 견적합니다." — 엑셀과 동일하게 파란색 */}
+                    <div className="px-6 pt-1 pb-2.5">
+                      <span className="text-[11.5px] text-sky-aqua font-medium">아래와 같이 견적합니다.</span>
                     </div>
 
-                    {/* Row 13: 합계금액 바 — 엑셀 동일 레이아웃 */}
-                    <div className="mx-5 mb-3 grid grid-cols-[100px_1fr_auto] border border-gray-400">
-                      <div className="px-2 py-2.5 bg-gray-50 text-center border-r border-gray-400 leading-tight">
-                        <span className="text-xs font-bold text-gray-900">합계금액</span><br />
+                    {/* Row 13: 총계금액 바 — 엑셀 동일 레이아웃 */}
+                    <div className="mx-5 mb-4 grid grid-cols-[110px_1fr_auto] border-2 border-gray-500">
+                      <div className="px-2 py-3 bg-gray-100 text-center border-r-2 border-gray-500 leading-tight">
+                        <span className="text-[13px] font-bold text-gray-900">총계금액</span><br />
                         <span className="text-[9px] text-gray-500">(공급가+부가세)</span>
                       </div>
-                      <div className="px-4 py-2.5 flex items-center justify-end text-sm text-gray-900 font-bold">
+                      <div className="px-4 py-3 flex items-center justify-center text-[13px] text-gray-900 font-bold tracking-wide">
                         {grandTotal > 0 ? `${numberToKorean(grandTotal)} 원整` : "영 원整"}
                       </div>
-                      <div className="px-4 py-2.5 flex items-center gap-1.5 text-sm">
+                      <div className="px-5 py-3 flex items-center gap-1.5 text-[14px]">
                         <span className="text-gray-500">(₩</span>
-                        <span className="font-bold text-gray-900 min-w-[120px] text-right">{grandTotal > 0 ? grandTotal.toLocaleString() : ""}</span>
+                        <span className="font-bold text-gray-900 min-w-[130px] text-right">{grandTotal > 0 ? grandTotal.toLocaleString() : ""}</span>
                         <span className="text-gray-500">)</span>
                       </div>
                     </div>
@@ -1565,31 +1567,30 @@ export default function QuoteEditorSheet({
                       className="w-full text-[10px] text-gray-400 bg-transparent border-0 focus:outline-none px-0 placeholder:text-gray-300" />
                   </div>
 
-                  {/* 見積書 대제목 */}
-                  <div className="text-center pt-3 pb-2 mx-6 border-b-[3px] border-gray-900">
-                    <h1 className="text-[28px] font-bold tracking-[1em] text-gray-900 font-serif">見　積　書</h1>
+                  {/* 見積書 대제목 — 간이 견적서와 동일 */}
+                  <div className="text-center pt-4 pb-2.5 mx-6 border-b-[4px] border-gray-900">
+                    <h1 className="text-[32px] font-bold tracking-[1.2em] text-gray-900 font-serif">見　積　書</h1>
                   </div>
 
-                  {/* 로고+회사명(우측) + 도장 — 간이 견적서와 동일 */}
-                  <div className="relative flex items-center py-3 px-6">
-                    <div className="w-[45%]" />
-                    <div className="flex-1 flex items-center gap-2">
-                      {logoUrl && (
-                        <img src={logoUrl} alt="로고" className="h-9 max-w-[120px] object-contain shrink-0" />
+                  {/* 로고+회사명+도장 — 간이 견적서와 동일 배치 */}
+                  <div className="flex pt-3 mb-[-16px] px-6">
+                    <div className="w-[45%] shrink-0" />
+                    <div className="flex items-center gap-3">
+                      {logoUrl ? (
+                        <img src={logoUrl} alt="로고" className="h-10 max-w-[200px] object-contain" />
+                      ) : (
+                        <span className="text-[20px] font-bold text-gray-900 tracking-wide">{supplier.companyName || "회사명"}</span>
                       )}
-                      <span className="text-base font-bold text-gray-900">{supplier.companyName || "회사명"}</span>
+                      {stampUrl && (
+                        <img src={stampUrl} alt="도장" className="h-[48px] w-[48px] object-contain opacity-85" />
+                      )}
                     </div>
-                    {stampUrl && (
-                      <div className="absolute right-6 top-1/2 -translate-y-1/2">
-                        <img src={stampUrl} alt="도장" className="h-14 w-14 object-contain opacity-80" />
-                      </div>
-                    )}
                   </div>
 
-                  {/* 수신처 귀하 */}
-                  <div className="px-6 pb-1.5 flex items-end gap-1.5">
+                  {/* 수신처 귀하 — 간이 견적서와 동일 */}
+                  <div className="px-6 pb-2 flex items-end gap-1.5">
                     <button onClick={() => setReceiverDialogOpen(true)} type="button"
-                      className="text-[13px] font-bold text-gray-900 border-b border-gray-900 pb-0.5 hover:text-gray-600 transition-colors">
+                      className="text-[14px] font-bold text-gray-900 border-b-2 border-gray-900 pb-0.5 hover:text-gray-600 transition-colors">
                       {receiver.companyName || customerName || "(수신처)"}{" "}귀하
                     </button>
                     <button onClick={() => setReceiverDialogOpen(true)} type="button"
@@ -1599,7 +1600,7 @@ export default function QuoteEditorSheet({
                   </div>
 
                   {/* 정보 영역 — 간이 견적서와 동일 레이아웃 */}
-                  <div className="px-6 py-1 text-[11px] text-gray-900 leading-[22px]">
+                  <div className="px-6 py-1.5 text-[11.5px] text-gray-900 leading-[26px]">
                     <div className="flex">
                       <div className="w-[45%] flex">
                         <span className="text-gray-500 w-[100px] shrink-0 tracking-[0.2em] font-bold">담 당 자 :</span>

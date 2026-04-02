@@ -55,7 +55,7 @@ function CustomChartTooltip({
   selectedYear,
 }: {
   active?: boolean
-  payload?: Array<{ payload: MonthlyRevenue & { isFuture: boolean } }>
+  payload?: Array<{ payload: MonthlyRevenue & { isFuture: boolean; prevAmount: number } }>
   label?: string
   selectedYear: number
 }) {
@@ -74,6 +74,13 @@ function CustomChartTooltip({
           <span className="text-gray-500">발행 건수</span>
           <span className="font-medium text-gray-700">{d.count}건</span>
         </div>
+        {/* 전년도 같은 달 금액 비교 (2024년 이하는 전년 비교 무의미하므로 숨김) */}
+        {selectedYear > 2024 && d.prevAmount > 0 && (
+          <div className="flex justify-between items-center gap-4 border-t border-gray-100 pt-1">
+            <span className="text-gray-400">{selectedYear - 1}년</span>
+            <span className="font-medium text-gray-400">{formatFullAmount(d.prevAmount)}</span>
+          </div>
+        )}
       </div>
       {d.amount > 0 && (
         <p className="text-[10px] text-gray-400 mt-2 border-t border-gray-100 pt-1.5">클릭하여 상세 보기</p>
@@ -221,13 +228,16 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
 
   useEffect(() => { setMounted(true) }, [])
 
-  // 선택된 연도의 차트 데이터
+  // 선택된 연도의 차트 데이터 (전년도 금액도 함께 포함 → 점선 오버레이용)
   const chartData = useMemo(() => {
     const months = allRevenueData[selectedYear] || Array.from({ length: 12 }, (_, i) => ({
       month: i + 1, label: `${i + 1}월`, amount: 0, count: 0,
     }))
+    const prevMonths = allRevenueData[selectedYear - 1]
     return months.map(m => ({
       ...m,
+      // 전년도 같은 월 금액 (점선 오버레이용)
+      prevAmount: prevMonths ? (prevMonths.find(p => p.month === m.month)?.amount ?? 0) : 0,
       isFuture: selectedYear === currentYear && m.month > currentMonth,
       isCurrent: selectedYear === currentYear && m.month === currentMonth,
       isSelected: m.month === selectedMonth,
@@ -261,9 +271,11 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
   const prevYearSamePeriod = prevYearData
     ? prevYearData.filter(d => d.month <= compareUpToMonth).reduce((s, d) => s + d.amount, 0)
     : 0
-  const yoyChange = prevYearSamePeriod > 0
-    ? ((yearTotal - prevYearSamePeriod) / prevYearSamePeriod) * 100
-    : null
+  // 2024년은 첫 본격 운영 연도이므로 전년(2023) 대비 비교가 무의미 → 숨김
+  const yoyChange = selectedYear <= 2024 ? null
+    : prevYearSamePeriod > 0
+      ? ((yearTotal - prevYearSamePeriod) / prevYearSamePeriod) * 100
+      : null
 
   const canNext = selectedYear < currentYear
 
@@ -357,6 +369,10 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
                   <span className={`text-lg font-heading font-bold ${yoyChange >= 0 ? "text-muted-teal" : "text-soft-blush"}`}>
                     {yoyChange >= 0 ? "+" : ""}{yoyChange.toFixed(1)}%
                   </span>
+                  {/* 실제 금액 차이 — 퍼센트만으로는 체감이 안 되므로 금액도 함께 표시 */}
+                  <span className={`text-xs font-medium ml-1 ${yoyChange >= 0 ? "text-muted-teal/70" : "text-soft-blush/70"}`}>
+                    ({yoyChange >= 0 ? "+" : ""}{formatAxisAmount(yearTotal - prevYearSamePeriod)})
+                  </span>
                 </div>
               </div>
             </>
@@ -427,6 +443,19 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
                       strokeWidth={1.5}
                       label={{ value: "평균", position: "insideTopLeft", fontSize: 11, fill: "#9ca3af" }}
                     />
+                    {/* 전년도 연한 면적 오버레이 — 선 없이 배경처럼 깔아서 참조용 */}
+                    {selectedYear > 2024 && prevYearData && (
+                      <Area
+                        type="linear"
+                        dataKey="prevAmount"
+                        stroke="none"
+                        fill="#e2e8f0"
+                        fillOpacity={0.35}
+                        dot={false}
+                        activeDot={false}
+                        animationDuration={600}
+                      />
+                    )}
                     <Area
                       type="linear"
                       dataKey="amount"
@@ -455,6 +484,19 @@ export function RevenueChartSection({ allRevenueData, revenueDetails, availableY
                     />
                   </AreaChart>
                 </ResponsiveContainer>
+            </div>
+          )}
+          {/* 범례 — 전년도 점선이 표시될 때만 노출 */}
+          {selectedYear > 2024 && prevYearData && maxAmount > 0 && (
+            <div className="flex items-center gap-4 mt-2 ml-[70px]">
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-0.5 bg-[#42CAFD] rounded" />
+                <span className="text-[11px] text-gray-500">{selectedYear}년</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-2.5 bg-gray-200/60 rounded-sm" />
+                <span className="text-[11px] text-gray-400">{selectedYear - 1}년</span>
+              </div>
             </div>
           )}
         </div>
