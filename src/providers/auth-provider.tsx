@@ -16,10 +16,11 @@ import type { User } from "@supabase/supabase-js"
 
 // ── 세션 타임아웃 설정 ──
 // 로그인 후 이 시간이 지나면 자동 로그아웃 (밀리초)
-const SESSION_TIMEOUT_MS = 60 * 60 * 1000 // 1시간
+const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000 // 1일 (24시간)
 // 세션 만료 여부를 확인하는 주기 (밀리초)
-const SESSION_CHECK_INTERVAL_MS = 60 * 1000 // 1분마다 체크
-// sessionStorage에 로그인 시각을 저장하는 키 이름
+const SESSION_CHECK_INTERVAL_MS = 5 * 60 * 1000 // 5분마다 체크
+// localStorage에 로그인 시각을 저장하는 키 이름
+// (localStorage는 브라우저를 닫아도 유지됨 → 컴퓨터 껐다 켜도 1일 안이면 로그인 유지)
 const SESSION_LOGIN_TIME_KEY = "m_login_timestamp"
 
 /** 사용자 프로필 타입 */
@@ -122,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* 타임아웃이든 에러든 무시 */ }
     setUser(null)
     setProfile(null)
-    sessionStorage.removeItem(SESSION_LOGIN_TIME_KEY)
+    localStorage.removeItem(SESSION_LOGIN_TIME_KEY)
     // localStorage에 남은 supabase 토큰도 제거
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith("sb-")) localStorage.removeItem(key)
@@ -139,9 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── 세션 타임아웃 체크 (1분마다) ──
   const sessionCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  /** 로그인 시각을 확인해서 1시간이 지났으면 true 반환 */
+  /** 로그인 시각을 확인해서 1일이 지났으면 true 반환 */
   const isSessionExpired = useCallback(() => {
-    const loginTime = sessionStorage.getItem(SESSION_LOGIN_TIME_KEY)
+    const loginTime = localStorage.getItem(SESSION_LOGIN_TIME_KEY)
     if (!loginTime) return true // 로그인 시각이 없으면 만료 취급
     const elapsed = Date.now() - parseInt(loginTime, 10)
     return elapsed >= SESSION_TIMEOUT_MS
@@ -156,8 +157,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (currentUser) {
         // ── 세션 만료 체크 ──
-        // Supabase에 토큰이 남아있어도, sessionStorage의 로그인 시각이
-        // 없거나 1시간이 지났으면 → 자동 로그아웃
+        // Supabase에 토큰이 남아있어도, localStorage의 로그인 시각이
+        // 없거나 1일이 지났으면 → 자동 로그아웃
         if (isSessionExpired()) {
           await forceLogout()
           return
@@ -172,10 +173,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initUser()
 
-    // ── 1분마다 세션 만료 여부 체크하는 타이머 ──
-    // 비유: 놀이공원 팔찌에 유효시간이 적혀있어서, 직원이 1분마다 확인하는 것
+    // ── 5분마다 세션 만료 여부 체크하는 타이머 ──
+    // 비유: 놀이공원 팔찌에 유효시간이 적혀있어서, 직원이 5분마다 확인하는 것
     sessionCheckRef.current = setInterval(() => {
-      const loginTime = sessionStorage.getItem(SESSION_LOGIN_TIME_KEY)
+      const loginTime = localStorage.getItem(SESSION_LOGIN_TIME_KEY)
       if (loginTime && isSessionExpired()) {
         forceLogout()
       }
@@ -216,9 +217,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error.message }
     }
 
-    // 로그인 성공 시 현재 시각을 sessionStorage에 기록
-    // (브라우저를 닫으면 sessionStorage는 자동으로 사라짐 → 다시 로그인 필요)
-    sessionStorage.setItem(SESSION_LOGIN_TIME_KEY, Date.now().toString())
+    // 로그인 성공 시 현재 시각을 localStorage에 기록
+    // (localStorage는 브라우저를 닫아도 유지됨 → 1일 안이면 다시 로그인 불필요)
+    localStorage.setItem(SESSION_LOGIN_TIME_KEY, Date.now().toString())
 
     router.refresh()
     return { error: null }
@@ -270,7 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearInterval(sessionCheckRef.current)
     }
     // 로그인 시각 기록 제거
-    sessionStorage.removeItem(SESSION_LOGIN_TIME_KEY)
+    localStorage.removeItem(SESSION_LOGIN_TIME_KEY)
     // localStorage에 남은 supabase 토큰 제거
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith("sb-")) localStorage.removeItem(key)
