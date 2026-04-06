@@ -677,11 +677,12 @@ export default function QuoteEditorSheet({
         // 각 행의 첫 번째 값만 반출가로 사용
         const val = data[r][0]?.trim() || ""
         row.retrieval_price = Number(val.replace(/[^0-9.-]/g, "")) || 0
-        next[targetRow] = row
+        // 붙여넣기 후에도 매입단가/매입총액/제안가 자동 계산
+        next[targetRow] = recalcPricing(row, roundUp)
       }
       return next
     })
-  }, [])
+  }, [roundUp])
 
   const equipTotal = equipItems.reduce((s, r) => s + r.quantity * r.unit_price, 0)
   const installTotal = installItems.reduce((s, r) => s + r.quantity * r.unit_price, 0)
