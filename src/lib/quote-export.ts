@@ -84,6 +84,7 @@ export interface QuoteExportData {
 interface QuoteExcelBuildOptions {
   hideCostColumnsForPrint?: boolean
   replaceExcelOnlyFormulasForPrint?: boolean
+  normalizeNegativeNumberFormatForPrint?: boolean
 }
 
 // ===== 상수 =====
@@ -2114,6 +2115,18 @@ function hideCostColumnsForPrint(ws: any) {
   }
 }
 
+function normalizeNegativeNumberFormatsForPrint(ws: any) {
+  ws.eachRow({ includeEmpty: false }, (row: any) => {
+    row.eachCell({ includeEmpty: false }, (cell: any) => {
+      if (typeof cell.numFmt !== "string") return
+      if (!cell.numFmt.includes("#,##0")) return
+      if (cell.numFmt === "@") return
+
+      cell.numFmt = '#,##0;[Red]-#,##0;"-";@'
+    })
+  })
+}
+
 /* ═════════════════════════════════════════════════════════
    메인 진입점 — 간이/상세 분기
    ═════════════════════════════════════════════════════════ */
@@ -2150,7 +2163,12 @@ export async function buildQuoteExcelBuffer(data: QuoteExportData, options: Quot
 
   const wb2 = new ExcelJS.Workbook()
   await wb2.xlsx.load(buffer)
-  wb2.worksheets.forEach((ws: any) => hideCostColumnsForPrint(ws))
+  wb2.worksheets.forEach((ws: any) => {
+    hideCostColumnsForPrint(ws)
+    if (options.normalizeNegativeNumberFormatForPrint) {
+      normalizeNegativeNumberFormatsForPrint(ws)
+    }
+  })
   return await wb2.xlsx.writeBuffer() as ArrayBuffer
 }
 

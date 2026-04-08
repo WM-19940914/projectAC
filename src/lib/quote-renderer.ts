@@ -91,6 +91,7 @@ export async function renderQuotePdf(data: QuoteExportData): Promise<Blob> {
   const excelBuffer = await buildQuoteExcelBuffer(data, {
     hideCostColumnsForPrint: true,
     replaceExcelOnlyFormulasForPrint: true,
+    normalizeNegativeNumberFormatForPrint: true,
   })
   if (!excelBuffer) throw new Error("Excel 버퍼 생성 실패")
 
