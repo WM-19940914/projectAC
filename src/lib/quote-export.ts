@@ -146,8 +146,11 @@ function setTotalAmountDisplayCells(
   options: QuoteExcelBuildOptions
 ) {
   if (options.replaceExcelOnlyFormulasForPrint) {
-    ws.getCell("D13").value = `${numberToKorean(d.grandTotal)} 원整`
-    ws.getCell("M13").value = d.grandTotal
+    ws.getCell("D13").value = numberToKorean(d.grandTotal)
+    ws.getCell("L13").value = "(₩"
+    ws.getCell("M13").value = fmt(d.grandTotal)
+    ws.getCell("M13").numFmt = "@"
+    ws.getCell("P13").value = ")"
     return
   }
 
