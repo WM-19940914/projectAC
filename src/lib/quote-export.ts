@@ -31,6 +31,7 @@ export interface QuoteExportData {
   quotationNumber: string
   quotationDate: string
   quoteType: "simple" | "detailed"
+  roundUp: boolean
   notes: string
 
   supplier: {
@@ -1258,7 +1259,9 @@ function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExpor
     if (item.retrieval_price < 0) {
       ws.getCell(`L${r}`).value = item.retrieval_price
     } else {
-      ws.getCell(`L${r}`).value = { formula: `ROUNDUP(Z${r},-3)` }
+      ws.getCell(`L${r}`).value = d.roundUp
+        ? { formula: `ROUNDUP(Z${r},-3)` }
+        : { formula: `Z${r}` }
     }
     ws.getCell(`O${r}`).value = { formula: `L${r}*K${r}` }
     // 비고
@@ -1898,6 +1901,11 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<A
   ws.getCell('D11').value = d.validUntil || '견적 후 7일'
   ws.getCell('M11').value = d.supplier.manager || ''
   ws.getCell('P11').value = d.supplier.managerPhone || ''
+  // Row 14: 견적서명
+  try { ws.unMergeCells('A14:R14') } catch { /* already unmerged */ }
+  ws.mergeCells('A14:R14')
+  ws.getCell('A14').value = `● ${d.title || ''}`
+  xlStyle(ws.getCell('A14'), { sz: 9, align: 'left' })
 
   // 특이사항 (행 삽입 후 밀린 위치에 기록)
   const notesRow = 36 + extraRows
@@ -1934,7 +1942,9 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<A
     ws.getCell(`G${row}`).value = item.specification || null     // 모델/사양 (G:I 머지 영역)
     ws.getCell(`J${row}`).value = item.unit || null              // 단위
     ws.getCell(`K${row}`).value = item.quantity || null          // 수량
-    ws.getCell(`L${row}`).value = { formula: `ROUNDUP(Z${row},-3)` }  // 단가 = 제안가(Z) 1000원 단위 올림
+    ws.getCell(`L${row}`).value = d.roundUp
+      ? { formula: `ROUNDUP(Z${row},-3)` }
+      : { formula: `Z${row}` }  // 단가 = 제안가(Z), ON일 때만 1000원 단위 올림
 
     // 공급가 수식 — sharedFormula 깨짐 방지를 위해 명시적으로 설정
     ws.getCell(`O${row}`).value = { formula: `L${row}*K${row}` }

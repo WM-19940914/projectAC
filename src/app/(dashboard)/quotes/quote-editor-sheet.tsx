@@ -24,7 +24,7 @@ import {
   AlertDialogDescription, AlertDialogFooter,
 } from "@/components/ui/alert-dialog"
 import { formatCurrency } from "@/lib/format"
-import { exportQuotePDF, exportQuoteExcel, buildQuoteExcelBuffer, buildQuotePdfBlob, type QuoteExportData } from "@/lib/quote-export"
+import { buildQuoteExcelBuffer, type QuoteExportData } from "@/lib/quote-export"
 
 // 내보내기 내역 타입
 interface ExportRecord {
@@ -214,6 +214,15 @@ export default function QuoteEditorSheet({
   const [isDeleting, setIsDeleting] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [excelExporting, setExcelExporting] = useState(false)
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false)
+  const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false)
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null)
+  const [pdfPreviewPageUrls, setPdfPreviewPageUrls] = useState<string[]>([])
+  const [pdfPreviewFileName, setPdfPreviewFileName] = useState("견적서.pdf")
+  const [pngPreviewOpen, setPngPreviewOpen] = useState(false)
+  const [pngPreviewLoading, setPngPreviewLoading] = useState(false)
+  const [pngPreviewPageUrls, setPngPreviewPageUrls] = useState<string[]>([])
+  const [pngPreviewBaseName, setPngPreviewBaseName] = useState("견적서")
   const savedIdRef = useRef<string | null>(null)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialLoadRef = useRef(true)
@@ -342,6 +351,14 @@ export default function QuoteEditorSheet({
 
   // 초기 로드
   useEffect(() => { loadExportHistory() }, [loadExportHistory])
+
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl)
+      pdfPreviewPageUrls.forEach((url) => URL.revokeObjectURL(url))
+      pngPreviewPageUrls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [pdfPreviewUrl, pdfPreviewPageUrls, pngPreviewPageUrls])
 
   // 견적서 뷰 탭 (네비게이션 전용, autoSave 트리거 안 함)
   const [activeTab, setActiveTab] = useState<string>("simple")
@@ -491,6 +508,7 @@ export default function QuoteEditorSheet({
           const equip: ItemRow[] = []
           const install: ItemRow[] = []
           const cover: ItemRow[] = []
+          const customSheetMap = new Map<string, ItemRow[]>()
           for (const item of quotation.items || []) {
             const row: ItemRow = {
               item_name: item.item_name, specification: item.specification || "",
@@ -503,6 +521,11 @@ export default function QuoteEditorSheet({
             }
             if (item.category === "설치비") install.push(row)
             else if (item.category === "갑지") cover.push(row)
+            else if (item.category !== "장비") {
+              const existing = customSheetMap.get(item.category) || []
+              existing.push(row)
+              customSheetMap.set(item.category, existing)
+            }
             else equip.push(row)
           }
           // 최소 10행 보장 (데이터가 있으면 그 뒤에 빈 행 채움)
@@ -513,8 +536,15 @@ export default function QuoteEditorSheet({
           setEquipItems(padRows(equip.length > 0 ? equip : []))
           setInstallItems(padRows(install.length > 0 ? install : []))
           setCoverItems(cover)
-          setCustomSheets([])
-          setPricingOpen([...equip, ...install].some((r) => r.retrieval_price > 0))
+          const loadedCustomSheets = Array.from(customSheetMap.entries()).map(([name, items], index) => ({
+            id: `custom-loaded-${index}`,
+            name,
+            items: padRows(items),
+          }))
+          setCustomSheets(
+            loadedCustomSheets
+          )
+          setPricingOpen([...equip, ...install, ...loadedCustomSheets.flatMap((sheet) => sheet.items)].some((r) => r.retrieval_price > 0))
           // 비동기 로드 후 상태 변경이 autoSave 트리거하지 않도록 가드 재설정
           initialLoadRef.current = true
         } else {
@@ -687,7 +717,11 @@ export default function QuoteEditorSheet({
   const equipTotal = equipItems.reduce((s, r) => s + r.quantity * r.unit_price, 0)
   const installTotal = installItems.reduce((s, r) => s + r.quantity * r.unit_price, 0)
   const coverTotal = coverItems.reduce((s, r) => s + r.quantity * r.unit_price, 0)
-  const totalAmount = equipTotal + installTotal + coverTotal
+  const customSheetsTotal = customSheets.reduce(
+    (sum, sheet) => sum + sheet.items.reduce((sheetSum, row) => sheetSum + row.quantity * row.unit_price, 0),
+    0
+  )
+  const totalAmount = equipTotal + installTotal + coverTotal + customSheetsTotal
   // 단위절사: 직접 입력 (음수로 적용)
   const truncation = -(Number(truncationInput.replace(/[^0-9]/g, "")) || 0)
   const supplyAmount = totalAmount + truncation   // 공급가액
@@ -695,8 +729,14 @@ export default function QuoteEditorSheet({
   const grandTotal = supplyAmount + taxAmount      // 최종 견적
   const equipPurchaseTotal = equipItems.reduce((s, r) => s + r.purchase_amount, 0)
   const installPurchaseTotal = installItems.reduce((s, r) => s + r.purchase_amount, 0)
-  const totalPurchase = equipPurchaseTotal + installPurchaseTotal
-  const totalProfit = equipItems.reduce((s, r) => s + r.profit, 0) + installItems.reduce((s, r) => s + r.profit, 0)
+  const customPurchaseTotal = customSheets.reduce(
+    (sum, sheet) => sum + sheet.items.reduce((sheetSum, row) => sheetSum + row.purchase_amount, 0),
+    0
+  )
+  const totalPurchase = equipPurchaseTotal + installPurchaseTotal + customPurchaseTotal
+  const totalProfit = equipItems.reduce((s, r) => s + r.profit, 0)
+    + installItems.reduce((s, r) => s + r.profit, 0)
+    + customSheets.reduce((sum, sheet) => sum + sheet.items.reduce((sheetSum, row) => sheetSum + row.profit, 0), 0)
 
   // 핵심 저장 로직 (자동저장 / 수동저장 공용)
   // 저장 payload 생성 (isUpdate=true면 기존 견적서 → 품목 없어도 헤더만 저장 허용)
@@ -713,9 +753,15 @@ export default function QuoteEditorSheet({
     const validEquip = equipItems.filter(hasData)
     const validInstall = installItems.filter(hasData)
     const validCover = coverItems.filter(hasData)
+    const validCustomSheets = customSheets
+      .map((sheet) => ({
+        name: sheet.name.trim(),
+        items: sheet.items.filter(hasData),
+      }))
+      .filter((sheet) => sheet.name && sheet.items.length > 0)
     if (!title.trim()) return null
     // 신규 생성은 최소 1행 이상 입력 필요
-    if (!isUpdate && validEquip.length === 0 && validInstall.length === 0 && validCover.length === 0) return null
+    if (!isUpdate && validEquip.length === 0 && validInstall.length === 0 && validCover.length === 0 && validCustomSheets.length === 0) return null
     // DB에는 실제 입력된 행만 저장
     const saveEquip = validEquip
     const saveInstall = validInstall
@@ -725,6 +771,9 @@ export default function QuoteEditorSheet({
       ...saveEquip.map((item) => ({ ...item, category: "장비" })),
       ...saveInstall.map((item) => ({ ...item, category: "설치비" })),
       ...saveCover.map((item) => ({ ...item, category: "갑지" })),
+      ...validCustomSheets.flatMap((sheet) =>
+        sheet.items.map((item) => ({ ...item, category: sheet.name }))
+      ),
     ].map((item) => ({
       category: item.category, item_name: item.item_name.trim(),
       specification: item.specification || null, unit: item.unit || null,
@@ -769,7 +818,7 @@ export default function QuoteEditorSheet({
       grand_total: grandTotal,
       tax_amount: taxAmount,
     }
-  }, [title, quotationDate, requestId, customerId, receiver, supplier, supplierMode, notes, equipItems, installItems, coverItems, supplyAmount, grandTotal, taxAmount, quoteType, deliveryDate, deliveryPlace, paymentCondition, validUntil])
+  }, [title, quotationDate, requestId, customerId, receiver, supplier, supplierMode, notes, equipItems, installItems, coverItems, customSheets, supplyAmount, grandTotal, taxAmount, quoteType, deliveryDate, deliveryPlace, paymentCondition, validUntil])
 
   const doSave = useCallback(async (isAuto = false): Promise<boolean> => {
     const isUpdate = !!savedIdRef.current
@@ -843,7 +892,7 @@ export default function QuoteEditorSheet({
   const buildExportData = useCallback((): QuoteExportData | null => {
     if (!title.trim()) return null
     return {
-      title, quotationNumber: quotation?.quotation_number || "", quotationDate, quoteType, notes,
+      title, quotationNumber: quotation?.quotation_number || "", quotationDate, quoteType, roundUp, notes,
       supplier, receiver,
       deliveryDate, deliveryPlace, paymentCondition, validUntil,
       equipItems, installItems, coverItems,
@@ -855,7 +904,7 @@ export default function QuoteEditorSheet({
       logoUrl, stampUrl,
     }
   }, [
-    title, quotation, quotationDate, quoteType, notes, supplier, receiver,
+    title, quotation, quotationDate, quoteType, roundUp, notes, supplier, receiver,
     deliveryDate, deliveryPlace, paymentCondition, validUntil,
     equipItems, installItems, coverItems, coverEquipLabel, coverInstallLabel,
     equipTotal, installTotal, totalAmount, truncationInput,
@@ -883,7 +932,7 @@ export default function QuoteEditorSheet({
     }, 2000)
     return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, quotationDate, notes, equipItems, installItems, receiver, supplier, supplierMode, truncationInput, open])
+  }, [title, quotationDate, notes, equipItems, installItems, coverItems, customSheets, receiver, supplier, supplierMode, truncationInput, open])
 
   const handleDelete = async () => {
     const id = quotation?.id || savedIdRef.current
@@ -901,6 +950,19 @@ export default function QuoteEditorSheet({
       console.error("삭제 오류:", e)
     } finally { setIsDeleting(false) }
   }
+
+  const downloadPngFiles = useCallback((pageUrls: string[], baseName: string) => {
+    pageUrls.forEach((url, index) => {
+      const a = document.createElement("a")
+      a.href = url
+      a.download = pageUrls.length === 1
+        ? `${baseName}.png`
+        : `${baseName}_${String(index + 1).padStart(2, "0")}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    })
+  }, [])
 
   // Sheet 너비: 내부 단가 보이면 우측으로 확장 (엑셀 열 숨기기/보이기)
   // A4 용지 폭 기준: 794px (210mm @ 96DPI) + 패딩 px-6*2(48px) = 842px
@@ -964,6 +1026,96 @@ export default function QuoteEditorSheet({
                   onClick={async () => {
                     const exportData = buildExportData()
                     if (!exportData) return
+                    setPngPreviewLoading(true)
+                    setPngPreviewOpen(true)
+                    try {
+                      const { renderQuotePngAll } = await import("@/lib/quote-renderer")
+                      const pngBlobs = await renderQuotePngAll(exportData)
+                      const previewPageUrls = pngBlobs.map((blob) => URL.createObjectURL(blob))
+                      setPngPreviewPageUrls((prev) => {
+                        prev.forEach((url) => URL.revokeObjectURL(url))
+                        return previewPageUrls
+                      })
+                      const typeTag = exportData.quoteType === "detailed" ? "상세" : "간이"
+                      setPngPreviewBaseName(`${typeTag}_견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}`)
+                    } catch (e) {
+                      console.error("PNG 미리보기 오류:", e)
+                      setPngPreviewOpen(false)
+                      toast({ title: "오류", description: "PNG 미리보기에 실패했습니다", variant: "destructive" })
+                    } finally {
+                      setPngPreviewLoading(false)
+                    }
+                  }}
+                  disabled={pngPreviewLoading}
+                  className="mr-2 flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border border-sky-200 bg-white hover:bg-sky-50/40 hover:border-sky-300 transition-colors group disabled:opacity-50"
+                  title="PNG 미리보기"
+                >
+                  {pngPreviewLoading ? (
+                    <Loader2 className="w-6 h-6 animate-spin text-sky-600" />
+                  ) : (
+                    <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                      <path d="M9 2h11l7 7v19a2 2 0 01-2 2H9a2 2 0 01-2-2V4a2 2 0 012-2z" fill="#fff" />
+                      <path d="M20 2v5a2 2 0 002 2h5" fill="#EFF6FF" />
+                      <path d="M20 2v5a2 2 0 002 2h5" stroke="#BFDBFE" strokeWidth="1.1" strokeLinejoin="round" />
+                      <path d="M9 2h11l7 7v19a2 2 0 01-2 2H9a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="#3B82F6" strokeWidth="1.6" strokeLinejoin="round" />
+                      <rect x="7.25" y="18.25" width="17.5" height="7.25" rx="1.6" fill="#3B82F6" />
+                      <text x="16" y="23.15" textAnchor="middle" fill="#fff" fontSize="5.6" fontWeight="700" fontFamily="Arial, sans-serif" letterSpacing="0.2">PNG</text>
+                    </svg>
+                  )}
+                  <span className="text-[9px] text-sky-500 group-hover:text-sky-700 leading-tight text-center">PNG<br/>미리보기</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    const exportData = buildExportData()
+                    if (!exportData) return
+                    setPdfPreviewLoading(true)
+                    setPdfPreviewOpen(true)
+                    try {
+                      const { renderQuotePdf, renderPdfPagesToPngBlobs } = await import("@/lib/quote-renderer")
+                      const pdfBlob = await renderQuotePdf(exportData)
+                      const localUrl = URL.createObjectURL(pdfBlob)
+                      const previewPngBlobs = await renderPdfPagesToPngBlobs(pdfBlob)
+                      const previewPageUrls = previewPngBlobs.map((blob) => URL.createObjectURL(blob))
+                      setPdfPreviewUrl((prev) => {
+                        if (prev) URL.revokeObjectURL(prev)
+                        return localUrl
+                      })
+                      setPdfPreviewPageUrls((prev) => {
+                        prev.forEach((url) => URL.revokeObjectURL(url))
+                        return previewPageUrls
+                      })
+                      const typeTag = exportData.quoteType === "detailed" ? "상세" : "간이"
+                      setPdfPreviewFileName(`${typeTag}_견적서_${(exportData.title || "무제").replace(/[\\/:*?"<>|]/g, "_")}.pdf`)
+                    } catch (e) {
+                      console.error("PDF 미리보기 오류:", e)
+                      setPdfPreviewOpen(false)
+                      toast({ title: "오류", description: "PDF 미리보기에 실패했습니다", variant: "destructive" })
+                    } finally {
+                      setPdfPreviewLoading(false)
+                    }
+                  }}
+                  disabled={pdfPreviewLoading}
+                  className="mr-2 flex flex-col items-center gap-0.5 px-2.5 py-1.5 rounded-lg border border-red-200 bg-white hover:bg-red-50/40 hover:border-red-300 transition-colors group disabled:opacity-50"
+                  title="PDF 미리보기"
+                >
+                  {pdfPreviewLoading ? (
+                    <Loader2 className="w-6 h-6 animate-spin text-red-600" />
+                  ) : (
+                    <svg className="w-6 h-6" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                      <path d="M9 2h11l7 7v19a2 2 0 01-2 2H9a2 2 0 01-2-2V4a2 2 0 012-2z" fill="#fff" />
+                      <path d="M20 2v5a2 2 0 002 2h5" fill="#F3F4F6" />
+                      <path d="M20 2v5a2 2 0 002 2h5" stroke="#D1D5DB" strokeWidth="1.1" strokeLinejoin="round" />
+                      <path d="M9 2h11l7 7v19a2 2 0 01-2 2H9a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="#D84B4B" strokeWidth="1.6" strokeLinejoin="round" />
+                      <rect x="7.25" y="18.25" width="17.5" height="7.25" rx="1.6" fill="#EF4444" />
+                      <text x="16" y="23.15" textAnchor="middle" fill="#fff" fontSize="5.9" fontWeight="700" fontFamily="Arial, sans-serif" letterSpacing="0.3">PDF</text>
+                    </svg>
+                  )}
+                  <span className="text-[9px] text-red-500 group-hover:text-red-700 leading-tight text-center">PDF<br/>미리보기</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    const exportData = buildExportData()
+                    if (!exportData) return
                     setExcelExporting(true)
                     try {
                       const xlsxBuffer = await buildQuoteExcelBuffer(exportData)
@@ -1005,16 +1157,6 @@ export default function QuoteEditorSheet({
                   >{exportHistory.length}</button>
                 )}
               </div>}
-              {/* 구분선 + 지출결의서 */}
-              <div className="w-px h-6 bg-gray-200 ml-2" />
-              <button
-                type="button"
-                onClick={() => { activeTabRef.current = "expense-report"; setActiveTab("expense-report") }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all cursor-pointer select-none ml-2 ${activeTab === "expense-report" ? "bg-amber-50 border-amber-300 shadow-sm" : "border-gray-200 hover:border-amber-300 hover:bg-amber-50/50"}`}
-              >
-                <svg className={`h-3.5 w-3.5 transition-colors ${activeTab === "expense-report" ? "text-amber-600" : "text-gray-400"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
-                <span className={`text-xs font-medium transition-all ${activeTab === "expense-report" ? "text-amber-700" : "text-gray-400"}`}>지출결의서</span>
-              </button>
             </div>
             {activeTab !== "expense-report" && <div className="flex items-center gap-2 mr-6">
               {(quotation || savedIdRef.current) && (
@@ -1226,6 +1368,147 @@ export default function QuoteEditorSheet({
             </div>
           </div>
         )}
+
+        <Dialog
+          open={pdfPreviewOpen}
+          onOpenChange={(nextOpen) => {
+            setPdfPreviewOpen(nextOpen)
+            if (!nextOpen) {
+              setPdfPreviewUrl((prev) => {
+                if (prev) URL.revokeObjectURL(prev)
+                return null
+              })
+              setPdfPreviewPageUrls((prev) => {
+                prev.forEach((url) => URL.revokeObjectURL(url))
+                return []
+              })
+            }
+          }}
+        >
+          <DialogContent className="max-w-[92vw] w-[1100px] h-[90vh] p-0 overflow-hidden gap-0">
+            <DialogHeader className="px-6 py-4 border-b bg-white">
+              <div className="flex items-center justify-between gap-4 pr-8">
+                <div>
+                  <DialogTitle className="text-base">PDF 미리보기</DialogTitle>
+                  <DialogDescription className="text-xs">
+                    엑셀 인쇄 결과를 그대로 변환한 PDF입니다.
+                  </DialogDescription>
+                </div>
+                {pdfPreviewUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const a = document.createElement("a")
+                      a.href = pdfPreviewUrl
+                      a.download = pdfPreviewFileName
+                      document.body.appendChild(a)
+                      a.click()
+                      document.body.removeChild(a)
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    PDF 저장
+                  </button>
+                )}
+              </div>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto bg-gray-100">
+              {pdfPreviewLoading ? (
+                <div className="flex h-full items-center justify-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  PDF 생성 중...
+                </div>
+              ) : pdfPreviewPageUrls.length > 0 ? (
+                <div className="flex min-h-full flex-col items-center gap-6 px-6 py-8">
+                  {pdfPreviewPageUrls.map((pageUrl, index) => (
+                    <img
+                      key={pageUrl}
+                      src={pageUrl}
+                      alt={`견적서 PDF ${index + 1}페이지`}
+                      className="w-full max-w-[820px] rounded-md bg-white shadow-[0_8px_24px_rgba(15,23,42,0.10)]"
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                  미리볼 PDF가 없습니다.
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={pngPreviewOpen}
+          onOpenChange={(nextOpen) => {
+            setPngPreviewOpen(nextOpen)
+            if (!nextOpen) {
+              setPngPreviewPageUrls((prev) => {
+                prev.forEach((url) => URL.revokeObjectURL(url))
+                return []
+              })
+            }
+          }}
+        >
+          <DialogContent className="max-w-[92vw] w-[1100px] h-[90vh] p-0 overflow-hidden gap-0">
+            <DialogHeader className="px-6 py-4 border-b bg-white">
+              <div className="flex items-center justify-between gap-4 pr-8">
+                <div>
+                  <DialogTitle className="text-base">PNG 미리보기</DialogTitle>
+                  <DialogDescription className="text-xs">
+                    페이지별 PNG 파일로 저장할 수 있습니다.
+                  </DialogDescription>
+                </div>
+                {pngPreviewPageUrls.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => downloadPngFiles(pngPreviewPageUrls, pngPreviewBaseName)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    PNG 저장
+                  </button>
+                )}
+              </div>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto bg-gray-100">
+              {pngPreviewLoading ? (
+                <div className="flex h-full items-center justify-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  PNG 생성 중...
+                </div>
+              ) : pngPreviewPageUrls.length > 0 ? (
+                <div className="flex min-h-full flex-col items-center gap-6 px-6 py-8">
+                  {pngPreviewPageUrls.map((pageUrl, index) => (
+                    <div key={pageUrl} className="w-full max-w-[820px]">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">페이지 {index + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => downloadPngFiles([pageUrl], pngPreviewPageUrls.length === 1 ? pngPreviewBaseName : `${pngPreviewBaseName}_${String(index + 1).padStart(2, "0")}`)}
+                          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          <Download className="h-3 w-3" />
+                          이 페이지만 저장
+                        </button>
+                      </div>
+                      <img
+                        src={pageUrl}
+                        alt={`견적서 PNG ${index + 1}페이지`}
+                        className="w-full rounded-md bg-white shadow-[0_8px_24px_rgba(15,23,42,0.10)]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                  미리볼 PNG가 없습니다.
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* 내보내기 삭제 확인 다이얼로그 */}
         <AlertDialog open={!!exportDeleteTarget} onOpenChange={open => !open && setExportDeleteTarget(null)}>

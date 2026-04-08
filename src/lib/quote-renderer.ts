@@ -65,6 +65,23 @@ async function pdfToCanvases(pdfBlob: Blob, scale = 3): Promise<HTMLCanvasElemen
   return canvases
 }
 
+export async function renderPdfPagesToPngBlobs(pdfBlob: Blob): Promise<Blob[]> {
+  const canvases = await pdfToCanvases(pdfBlob)
+
+  return Promise.all(
+    canvases.map(
+      (canvas) =>
+        new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(
+            (blob) => (blob ? resolve(blob) : reject(new Error("PNG 변환 실패"))),
+            "image/png",
+            1.0
+          )
+        })
+    )
+  )
+}
+
 // ===================================================
 //  공개 API: 견적서 → PDF Blob
 // ===================================================
@@ -83,15 +100,8 @@ export async function renderQuotePdf(data: QuoteExportData): Promise<Blob> {
 // ===================================================
 export async function renderQuotePng(data: QuoteExportData): Promise<Blob> {
   const pdfBlob = await renderQuotePdf(data)
-  const canvases = await pdfToCanvases(pdfBlob)
-
-  return new Promise((resolve, reject) => {
-    canvases[0].toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("PNG 변환 실패"))),
-      "image/png",
-      1.0
-    )
-  })
+  const pngBlobs = await renderPdfPagesToPngBlobs(pdfBlob)
+  return pngBlobs[0]
 }
 
 // ===================================================
@@ -99,18 +109,5 @@ export async function renderQuotePng(data: QuoteExportData): Promise<Blob> {
 // ===================================================
 export async function renderQuotePngAll(data: QuoteExportData): Promise<Blob[]> {
   const pdfBlob = await renderQuotePdf(data)
-  const canvases = await pdfToCanvases(pdfBlob)
-
-  return Promise.all(
-    canvases.map(
-      (canvas) =>
-        new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob(
-            (blob) => (blob ? resolve(blob) : reject(new Error("PNG 변환 실패"))),
-            "image/png",
-            1.0
-          )
-        })
-    )
-  )
+  return renderPdfPagesToPngBlobs(pdfBlob)
 }
