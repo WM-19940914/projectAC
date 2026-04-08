@@ -83,6 +83,7 @@ export interface QuoteExportData {
 
 interface QuoteExcelBuildOptions {
   hideCostColumnsForPrint?: boolean
+  replaceExcelOnlyFormulasForPrint?: boolean
 }
 
 // ===== 상수 =====
@@ -111,6 +112,47 @@ function hasData(r: ItemRow): boolean {
 // 숫자 → 천단위 콤마 문자열
 function fmt(n: number): string {
   return n.toLocaleString("ko-KR")
+}
+
+// Excel 전용 NUMBERSTRING 대신, PDF/PNG 변환용으로 한글 금액 문자열을 직접 쓴다.
+function numberToKorean(n: number): string {
+  if (n === 0) return "영"
+  const digits = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"]
+  const units = ["", "십", "백", "천"]
+  const bigs = ["", "만", "억", "조"]
+  const abs = Math.abs(Math.floor(n))
+  const str = String(abs)
+  const len = str.length
+  let result = ""
+
+  for (let i = 0; i < len; i++) {
+    const d = Number(str[i])
+    const pos = len - 1 - i
+    const unitIdx = pos % 4
+    const bigIdx = Math.floor(pos / 4)
+    if (d > 0) {
+      result += (d === 1 && unitIdx > 0 ? "" : digits[d]) + units[unitIdx]
+    }
+    if (unitIdx === 0 && result.length > 0) result += bigs[bigIdx]
+  }
+
+  return (n < 0 ? "마이너스" : "") + result
+}
+
+function setTotalAmountDisplayCells(
+  ws: any,
+  totalRow: number,
+  d: QuoteExportData,
+  options: QuoteExcelBuildOptions
+) {
+  if (options.replaceExcelOnlyFormulasForPrint) {
+    ws.getCell("D13").value = `${numberToKorean(d.grandTotal)} 원整`
+    ws.getCell("M13").value = d.grandTotal
+    return
+  }
+
+  ws.getCell("D13").value = { formula: `NUMBERSTRING(L${totalRow},1)` }
+  ws.getCell("M13").value = { formula: `L${totalRow}` }
 }
 
 // ArrayBuffer → base64 문자열
@@ -1127,9 +1169,15 @@ function xlRenderSummary(ws: any, d: QuoteExportData, r: number): number {
    내역서: 템플릿 15행 이하 구조 + 원가분석 포함
    ───────────────────────────────────────────────────────── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function xlBuildDetailedAllSheets(wb: any, d: QuoteExportData, validEquip: ItemRow[], validInstall: ItemRow[]): Promise<ArrayBuffer> {
+async function xlBuildDetailedAllSheets(
+  wb: any,
+  d: QuoteExportData,
+  validEquip: ItemRow[],
+  validInstall: ItemRow[],
+  options: QuoteExcelBuildOptions = {}
+): Promise<ArrayBuffer> {
   // 1. 갑지 빌드 (템플릿 기반)
-  const coverBuf = await xlBuildDetailedCover(wb, d)
+  const coverBuf = await xlBuildDetailedCover(wb, d, options)
 
   // 2. 갑지 결과 로드 → 내역서 시트 추가
   const ExcelJS2 = await import('exceljs')
@@ -1417,7 +1465,11 @@ function xlBuildItemSheet(wb: any, name: string, items: ItemRow[], d: QuoteExpor
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayBuffer> {
+async function xlBuildDetailedCover(
+  wb: any,
+  d: QuoteExportData,
+  options: QuoteExcelBuildOptions = {}
+): Promise<ArrayBuffer> {
   // 템플릿 파일 로드 (간이 견적서와 동일한 템플릿 사용)
   let buf: ArrayBuffer
   try {
@@ -1500,9 +1552,8 @@ async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayB
     ws.getCell(`L${sumRow}`).value = { formula: `SUM(O16:P${lastDataRow})` }
     ws.getCell(`L${vatRow}`).value = { formula: `L${sumRow}*0.1` }
     ws.getCell(`L${totalRow}`).value = { formula: `SUM(L${sumRow}:R${vatRow})` }
-    ws.getCell('D13').value = { formula: `NUMBERSTRING(L${totalRow},1)` }
-    ws.getCell('M13').value = { formula: `L${totalRow}` }
-  }
+    setTotalAmountDisplayCells(ws, totalRow, d, options)
+    }
 
   // 헤더 정보 채우기 (간이 견적서와 동일)
   ws.getCell('A6').value = `${d.receiver.companyName || ''} 귀하`
@@ -1517,6 +1568,7 @@ async function xlBuildDetailedCover(wb: any, d: QuoteExportData): Promise<ArrayB
   ws.getCell('D11').value = d.validUntil || '견적 후 7일'
   ws.getCell('M11').value = d.supplier.manager || ''
   ws.getCell('P11').value = d.supplier.managerPhone || ''
+  setTotalAmountDisplayCells(ws, 33 + extraRows, d, options)
 
   // 특이사항
   const notesRow = 36 + extraRows
@@ -1780,7 +1832,11 @@ function xlBuildCoverSheet(wb: any, d: QuoteExportData, logoId: number | null, s
    서식/수식/병합/테두리 100% 보존, 데이터만 기록
    ───────────────────────────────────────────────────────── */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<ArrayBuffer> {
+async function xlBuildSimpleFromTemplate(
+  wb: any,
+  d: QuoteExportData,
+  options: QuoteExcelBuildOptions = {}
+): Promise<ArrayBuffer> {
   // 템플릿 파일 로드 (Supabase Storage → 로컬 폴백)
   let buf: ArrayBuffer
   try {
@@ -1882,8 +1938,7 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<A
     ws.getCell(`L${totalRow}`).value = { formula: `SUM(L${sumRow}:R${vatRow})` }
 
     // R13 합계금액 수식도 총계 행 참조 업데이트
-    ws.getCell('D13').value = { formula: `NUMBERSTRING(L${totalRow},1)` }
-    ws.getCell('M13').value = { formula: `L${totalRow}` }
+    setTotalAmountDisplayCells(ws, totalRow, d, options)
   }
 
   /* ══════ 헤더 정보 채우기 ══════ */
@@ -1905,6 +1960,7 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<A
   ws.getCell('D11').value = d.validUntil || '견적 후 7일'
   ws.getCell('M11').value = d.supplier.manager || ''
   ws.getCell('P11').value = d.supplier.managerPhone || ''
+  setTotalAmountDisplayCells(ws, 33 + extraRows, d, options)
   // Row 14: 견적서명
   try { ws.unMergeCells('A14:R14') } catch { /* already unmerged */ }
   ws.mergeCells('A14:R14')
@@ -2078,9 +2134,9 @@ export async function buildQuoteExcelBuffer(data: QuoteExportData, options: Quot
   let buffer: ArrayBuffer | null
   if (data.quoteType === 'detailed') {
     // 상세 견적서: 갑지 + 장비내역서 + 설치비내역서 (모두 템플릿 기반)
-    buffer = await xlBuildDetailedAllSheets(wb, data, validEquip, validInstall)
+    buffer = await xlBuildDetailedAllSheets(wb, data, validEquip, validInstall, options)
   } else {
-    buffer = await xlBuildSimpleFromTemplate(wb, data)
+    buffer = await xlBuildSimpleFromTemplate(wb, data, options)
   }
 
   if (!buffer) return null
