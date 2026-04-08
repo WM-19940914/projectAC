@@ -81,6 +81,10 @@ export interface QuoteExportData {
   stampUrl: string | null
 }
 
+interface QuoteExcelBuildOptions {
+  hideCostColumnsForPrint?: boolean
+}
+
 // ===== 상수 =====
 const M = 15 // 마진 (mm)
 const PW = 210 // 페이지 폭
@@ -2044,11 +2048,18 @@ async function xlBuildSimpleFromTemplate(wb: any, d: QuoteExportData): Promise<A
   return await outZip.generateAsync({ type: 'arraybuffer' })
 }
 
+function hideCostColumnsForPrint(ws: any) {
+  const hiddenCols = ['S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'AB', 'AC']
+  for (const col of hiddenCols) {
+    ws.getColumn(col).hidden = true
+  }
+}
+
 /* ═════════════════════════════════════════════════════════
    메인 진입점 — 간이/상세 분기
    ═════════════════════════════════════════════════════════ */
 // Excel 버퍼만 생성 (PDF 변환 등에서 재사용)
-export async function buildQuoteExcelBuffer(data: QuoteExportData): Promise<ArrayBuffer | null> {
+export async function buildQuoteExcelBuffer(data: QuoteExportData, options: QuoteExcelBuildOptions = {}): Promise<ArrayBuffer | null> {
   const ExcelJS = await import('exceljs')
   const wb = new ExcelJS.Workbook()
 
@@ -2064,12 +2075,24 @@ export async function buildQuoteExcelBuffer(data: QuoteExportData): Promise<Arra
   const validInstall = data.installItems.filter(hasData)
   if (!validEquip.length && !validInstall.length) return null
 
+  let buffer: ArrayBuffer | null
   if (data.quoteType === 'detailed') {
     // 상세 견적서: 갑지 + 장비내역서 + 설치비내역서 (모두 템플릿 기반)
-    return await xlBuildDetailedAllSheets(wb, data, validEquip, validInstall)
+    buffer = await xlBuildDetailedAllSheets(wb, data, validEquip, validInstall)
   } else {
-    return await xlBuildSimpleFromTemplate(wb, data)
+    buffer = await xlBuildSimpleFromTemplate(wb, data)
   }
+
+  if (!buffer) return null
+
+  if (!options.hideCostColumnsForPrint) {
+    return buffer
+  }
+
+  const wb2 = new ExcelJS.Workbook()
+  await wb2.xlsx.load(buffer)
+  wb2.worksheets.forEach((ws: any) => hideCostColumnsForPrint(ws))
+  return await wb2.xlsx.writeBuffer() as ArrayBuffer
 }
 
 export async function exportQuoteExcel(data: QuoteExportData): Promise<void> {

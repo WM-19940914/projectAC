@@ -88,7 +88,7 @@ export async function renderPdfPagesToPngBlobs(pdfBlob: Blob): Promise<Blob[]> {
 export async function renderQuotePdf(data: QuoteExportData): Promise<Blob> {
   // 1. Excel 버퍼 생성
   const { buildQuoteExcelBuffer } = await import("./quote-export")
-  const excelBuffer = await buildQuoteExcelBuffer(data)
+  const excelBuffer = await buildQuoteExcelBuffer(data, { hideCostColumnsForPrint: true })
   if (!excelBuffer) throw new Error("Excel 버퍼 생성 실패")
 
   // 2. 서버에서 Excel → PDF 변환 (Gotenberg 또는 Windows COM)
