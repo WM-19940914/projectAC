@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireAdminOrSales } from "@/lib/api-auth"
 import { logError } from "@/lib/logger"
+import { cleanupQuoteExports } from "@/lib/quote-export-cleanup"
 import { revalidatePath } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -410,6 +411,11 @@ export async function DELETE(req: NextRequest) {
     }
 
     const supabase = createAdminClient()
+    const exportCleanup = await cleanupQuoteExports(supabase, [id], "[DELETE /api/quotes]")
+    if (!exportCleanup.ok) {
+      return NextResponse.json({ error: exportCleanup.error }, { status: 500 })
+    }
+
     const { error } = await supabase.from("quotations").delete().eq("id", id)
 
     if (error) {

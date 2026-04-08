@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { logError } from "@/lib/logger"
 import { requireAdminOrSales } from "@/lib/api-auth"
+import { cleanupQuoteExports } from "@/lib/quote-export-cleanup"
 import { revalidatePath } from "next/cache"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -108,6 +109,21 @@ export async function DELETE(req: NextRequest) {
     }
 
     const supabase = createAdminClient()
+    const { data: quotations, error: quotationsFetchError } = await supabase
+      .from("quotations")
+      .select("id")
+      .eq("request_id", id)
+
+    if (quotationsFetchError) {
+      logError("[DELETE /api/requests] quotations fetch", quotationsFetchError.message)
+      return NextResponse.json({ error: "Failed to fetch linked quotations" }, { status: 500 })
+    }
+
+    const quotationIds = (quotations || []).map((q) => q.id as string).filter(Boolean)
+    const exportCleanup = await cleanupQuoteExports(supabase, quotationIds, "[DELETE /api/requests]")
+    if (!exportCleanup.ok) {
+      return NextResponse.json({ error: exportCleanup.error }, { status: 500 })
+    }
 
     // RPC 호출 시도 — 단일 트랜잭션으로 안전하게 삭제
     const { data: rpcResult, error: rpcError } = await supabase.rpc(
@@ -146,17 +162,6 @@ export async function DELETE(req: NextRequest) {
     }
 
     const contractId = (targetRequest?.contract_id as string | null) ?? null
-
-    const { data: quotations, error: quotationsFetchError } = await supabase
-      .from("quotations")
-      .select("id")
-      .eq("request_id", id)
-    if (quotationsFetchError) {
-      logError("[DELETE /api/requests] quotations fetch", quotationsFetchError.message)
-      return NextResponse.json({ error: "Failed to fetch linked quotations" }, { status: 500 })
-    }
-
-    const quotationIds = (quotations || []).map((q) => q.id as string).filter(Boolean)
     if (quotationIds.length > 0) {
       const { error: clearConfirmedQuoteError } = await supabase
         .from("requests")
