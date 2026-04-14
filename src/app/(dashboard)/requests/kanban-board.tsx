@@ -694,29 +694,32 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
 
     // 드롭 영역 밖에 놓았으면 무시
     if (!destination) return
-    // 같은 자리에 놓았으면 무시
-    if (source.droppableId === destination.droppableId && source.index === destination.index) return
+    // 현재 보드는 착수일 기준 정렬된 화면을 보여주므로 같은 컬럼 내 재정렬은 지원하지 않음
+    if (source.droppableId === destination.droppableId) return
 
-    // 현재 컬럼 복사
-    const newColumns = columns.map((col) => ({
-      ...col,
-      items: [...col.items],
-    }))
+    const movedItem = columns.flatMap((col) => col.items).find((item) => item.id === draggableId)
+    if (!movedItem) return
 
-    // 출발 컬럼에서 카드 꺼내기
-    const sourceCol = newColumns.find((col) => col.status === source.droppableId)!
-    const [movedItem] = sourceCol.items.splice(source.index, 1)
-    sourceCol.count = sourceCol.items.length
+    const updatedItem = { ...movedItem, status: destination.droppableId }
+    const newColumns = columns.map((col) => {
+      if (col.status === source.droppableId) {
+        const items = col.items.filter((item) => item.id !== draggableId)
+        return { ...col, items, count: items.length }
+      }
 
-    // 도착 컬럼에 카드 넣기
-    const destCol = newColumns.find((col) => col.status === destination.droppableId)!
-    movedItem.status = destination.droppableId
-    destCol.items.splice(destination.index, 0, movedItem)
-    destCol.count = destCol.items.length
+      if (col.status === destination.droppableId) {
+        const items = [updatedItem, ...col.items]
+        return { ...col, items, count: items.length }
+      }
+
+      return col
+    })
 
     // 화면에 바로 반영 (낙관적 업데이트)
     const prevColumns = columns
+    const prevSelectedItem = selectedItem
     setColumns(newColumns)
+    setSelectedItem((prev) => (prev?.id === draggableId ? updatedItem : prev))
 
     // DB에 상태 업데이트 (API 라우트 경유)
     try {
@@ -729,11 +732,13 @@ export function RequestKanbanBoard({ columns: initialColumns, totalCount, custom
       if (!res.ok) {
         // 실패 시 직전 상태로 되돌리기
         setColumns(prevColumns)
+        setSelectedItem(prevSelectedItem)
       } else {
         toast({ title: "완료", description: "상태가 변경되었습니다" })
       }
     } catch {
       setColumns(prevColumns)
+      setSelectedItem(prevSelectedItem)
     }
   }
 
