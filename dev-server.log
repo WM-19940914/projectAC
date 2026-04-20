@@ -1,0 +1,163 @@
+
+> sac-temp@0.1.0 predev
+> npm run check:utf8
+
+
+> sac-temp@0.1.0 check:utf8
+> node scripts/check-utf8-repo.mjs
+
+
+> sac-temp@0.1.0 dev
+> next dev --port 3000
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1411ms
+ ○ Compiling /src/middleware ...
+ ✓ Compiled /src/middleware in 744ms (167 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 4.1s (856 modules)
+ GET / 307 in 4472ms
+ ✓ Compiled in 424ms (401 modules)
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 12.2s (4704 modules)
+ GET /dashboard 200 in 12972ms
+ ✓ Compiled /api/auth/me in 412ms (2740 modules)
+ GET /api/auth/me 200 in 644ms
+ GET /api/auth/me 200 in 123ms
+ GET /api/auth/me 200 in 106ms
+ ○ Compiling /requests ...
+ ✓ Compiled /requests in 2.6s (5311 modules)
+ ✓ Compiled /api/expenses in 388ms (3070 modules)
+ ✓ Compiled (3074 modules)
+ GET /api/attachments?entity_type=request&entity_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 835ms
+ GET /api/expenses?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 805ms
+ GET /api/quotes?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 882ms
+ GET /api/quotes?id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 56ms
+ ✓ Compiled /api/settings in 327ms (3077 modules)
+ ✓ Compiled (3081 modules)
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 747ms
+ GET /api/settings 200 in 726ms
+ GET /api/price-list 200 in 809ms
+ GET /api/settings 200 in 51ms
+ ✓ Compiled in 1232ms (5343 modules)
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 87ms
+ GET /api/settings 200 in 123ms
+ GET /api/auth/me 200 in 134ms
+ GET /api/auth/me 200 in 137ms
+ GET /requests 200 in 567ms
+ GET /api/auth/me 200 in 100ms
+ ○ Compiling /api/quotes ...
+ ✓ Compiled /api/expenses in 1787ms (2582 modules)
+ ✓ Compiled (2597 modules)
+ GET /favicon.ico 200 in 2213ms
+ GET /api/expenses?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 1765ms
+ GET /api/attachments?entity_type=request&entity_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 1769ms
+ GET /api/quotes?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 1928ms
+ GET /api/auth/me 200 in 1984ms
+ ✓ Compiled /api/order-deliveries in 289ms (2599 modules)
+ GET /api/order-deliveries?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 665ms
+ GET /api/auth/me 200 in 575ms
+ GET /api/attachments?entity_type=request&entity_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 54ms
+ GET /api/expenses?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 50ms
+ GET /api/quotes?id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 55ms
+ ✓ Compiled /api/price-list in 261ms (2601 modules)
+ ✓ Compiled (2606 modules)
+ GET /api/settings 200 in 616ms
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 629ms
+ GET /api/price-list 200 in 626ms
+ GET /api/settings 200 in 45ms
+ GET /api/auth/me 200 in 116ms
+ ✓ Compiled in 1295ms (4875 modules)
+ ✓ Compiled in 0ms (2606 modules)
+ ✓ Compiled in 1ms (2606 modules)
+ GET /api/settings 200 in 656ms
+ ✓ Compiled in 0ms (2606 modules)
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 898ms
+ ✓ Compiled /api/quote-template in 399ms (2609 modules)
+ GET /api/quote-template 200 in 1141ms
+ ✓ Compiled /api/excel-to-pdf in 271ms (2572 modules)
+ POST /api/excel-to-pdf 200 in 5460ms
+ GET /api/auth/me 200 in 148ms
+ ✓ Compiled in 1501ms (4841 modules)
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 184ms
+ GET /api/settings 200 in 208ms
+ ✓ Compiled in 1264ms (4782 modules)
+ ○ Compiling /api/price-list ...
+ ✓ Compiled /api/price-list in 1120ms (2562 modules)
+ ✓ Compiled (2567 modules)
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 2005ms
+ GET /api/price-list 200 in 2017ms
+ GET /api/settings 200 in 2049ms
+ GET /api/settings 200 in 72ms
+ ✓ Compiled in 771ms (4836 modules)
+ GET /api/settings 200 in 95ms
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 101ms
+ GET /api/price-list 200 in 123ms
+ GET /api/settings 200 in 53ms
+ ✓ Compiled in 759ms (4836 modules)
+ GET /api/settings 200 in 93ms
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 95ms
+ ✓ Compiled /api/auth/me in 336ms (2569 modules)
+ GET /api/auth/me 200 in 457ms
+ ✓ Compiled in 841ms (4838 modules)
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 114ms
+ GET /api/settings 200 in 126ms
+ ✓ Compiled /api/quote-template in 427ms (2569 modules)
+ GET /api/quote-template 200 in 1038ms
+ ✓ Compiled /api/excel-to-pdf in 283ms (2572 modules)
+ POST /api/excel-to-pdf 200 in 5864ms
+ GET /api/quote-template 200 in 356ms
+ POST /api/excel-to-pdf 200 in 6678ms
+ GET /api/auth/me 200 in 494ms
+ GET /api/auth/me 200 in 200ms
+ GET /api/auth/me 200 in 612ms
+ ○ Compiling /api/quote-exports ...
+ ✓ Compiled /api/quote-exports in 1359ms (2564 modules)
+ ✓ Compiled (2566 modules)
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 1934ms
+ PATCH /api/quotes 200 in 2565ms
+ GET /api/quotes?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 108ms
+ GET /api/quotes?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 99ms
+ ✓ Compiled /api/expenses in 233ms (2568 modules)
+ ✓ Compiled (2570 modules)
+ GET /api/expenses?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 571ms
+ GET /api/attachments?entity_type=request&entity_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 602ms
+ GET /api/quotes?id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 59ms
+ ✓ Compiled /api/price-list in 273ms (2572 modules)
+ ✓ Compiled (2575 modules)
+ GET /api/settings 200 in 787ms
+ GET /api/price-list 200 in 811ms
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 822ms
+ GET /api/settings 200 in 48ms
+ GET /api/quote-exports?quotation_id=fdcce78e-ca49-4dff-853d-2f341f976351 200 in 52ms
+ PATCH /api/quotes 200 in 210ms
+ GET /api/quotes?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 65ms
+ ✓ Compiled /api/expense-reports in 328ms (2577 modules)
+ GET /api/expense-reports?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 424ms
+ GET /api/attachments?entity_type=request&entity_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 53ms
+ GET /api/expenses?request_id=637aa308-dbec-4eab-a600-e824b86ef960 200 in 58ms
+ GET /api/auth/me 200 in 159ms
+ ✓ Compiled in 1540ms (4765 modules)
+ ✓ Compiled in 300ms (4765 modules)
+ ✓ Compiled in 232ms (4765 modules)
+ ✓ Compiled / in 400ms (2520 modules)
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 658ms (4775 modules)
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 1296ms (5001 modules)
+ GET / 404 in 2523ms
+ ✓ Compiled in 1795ms (4991 modules)
+ ✓ Compiled in 520ms (4991 modules)
+ ✓ Compiled in 457ms (4991 modules)
+ ✓ Compiled in 529ms (4991 modules)
+ ✓ Compiled in 464ms (4991 modules)
+ ✓ Compiled in 786ms (4991 modules)
+ ✓ Compiled in 1082ms (4991 modules)
+ ✓ Compiled in 978ms (4991 modules)
+ ✓ Compiled in 419ms (4991 modules)
+ ✓ Compiled in 762ms (2455 modules)
+ ✓ Compiled in 297ms (2455 modules)

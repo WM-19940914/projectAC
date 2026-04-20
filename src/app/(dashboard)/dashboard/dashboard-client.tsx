@@ -9,7 +9,7 @@ import { SmilePlus, Crown, X } from "lucide-react"
 import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { formatCurrency } from "@/lib/format"
 import { useAuth } from "@/providers/auth-provider"
-import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, MonthlyProgressRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo, DashboardKPI } from "./dashboard-types"
+import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, MonthlyProgressRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo, DashboardKPI, CustomerContractDetail } from "./dashboard-types"
 import { SettlementExpenseSection } from "./settlement-expense-section"
 import { RevenueChartSection } from "./revenue-chart-section"
 import { ProgressRevenueSection } from "./progress-revenue-section"
@@ -57,6 +57,7 @@ interface Props {
   currentYear: number
   currentMonth: number
   contractContributions: ContractContribution[]
+  customerContractDetails: CustomerContractDetail[]
   requestInfoMap: Record<string, DashboardRequestInfo>
   initialYear: number
   initialMonth: number
@@ -75,6 +76,7 @@ export function DashboardClient({
   currentYear,
   currentMonth,
   contractContributions,
+  customerContractDetails,
   requestInfoMap,
   initialYear,
   initialMonth,
@@ -169,7 +171,7 @@ export function DashboardClient({
 
       {/* ── 섹션: 고객별 거래액 ── */}
       <div id="section-customers">
-        <TopCustomersCard kpi={kpi} contractContributions={contractContributions} />
+        <TopCustomersCard kpi={kpi} customerContractDetails={customerContractDetails} />
       </div>
     </div>
   )
@@ -178,15 +180,15 @@ export function DashboardClient({
 // ═══════════════════════════════════════
 // 고객별 거래액 TOP 10 (클릭 → 계약 상세 Sheet)
 // ═══════════════════════════════════════
-function TopCustomersCard({ kpi, contractContributions }: { kpi: DashboardKPI; contractContributions: ContractContribution[] }) {
+function TopCustomersCard({ kpi, customerContractDetails }: { kpi: DashboardKPI; customerContractDetails: CustomerContractDetail[] }) {
   const [selectedCustomer, setSelectedCustomer] = useState<{ name: string; id: string } | null>(null)
   const displayCustomers = kpi.topCustomers.slice(0, 10)
 
-  // 선택된 고객의 계약 목록 (순이익 내림차순)
+  // 선택된 고객의 전체 연결 계약 목록
   const customerContracts = selectedCustomer
-    ? contractContributions
-        .filter(c => c.customerName === selectedCustomer.name)
-        .sort((a, b) => b.netProfit - a.netProfit)
+    ? customerContractDetails
+        .filter(c => c.customerId === selectedCustomer.id)
+        .sort((a, b) => b.yearMonth.localeCompare(a.yearMonth) || b.contractAmount - a.contractAmount)
     : []
   const customerTotalPaid = customerContracts.reduce((s, c) => s + c.totalPaid, 0)
   const customerTotalExpense = customerContracts.reduce((s, c) => s + c.totalExpense, 0)
@@ -275,15 +277,33 @@ function TopCustomersCard({ kpi, contractContributions }: { kpi: DashboardKPI; c
                 </div>
               </div>
 
+              <div className="px-5 py-3 border-b border-gray-50">
+                <p className="text-[11px] text-gray-400">전체 연결 계약 기준으로 표시됩니다. 미정산 계약도 함께 보여요.</p>
+              </div>
+
               {/* 계약 목록 */}
-              <div className="px-5 py-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 180px)" }}>
+              <div className="px-5 py-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 220px)" }}>
                 {customerContracts.length === 0 ? (
                   <p className="text-sm text-gray-400 text-center py-8">공헌이익 데이터가 없습니다</p>
                 ) : (
                   <div className="space-y-2">
                     {customerContracts.map(c => (
                       <div key={c.contractId} className="rounded-lg bg-gray-50 px-4 py-3">
-                        <p className="text-xs font-medium text-gray-800 mb-2 truncate">{c.title}</p>
+                        <div className="mb-2 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-gray-800 truncate">{c.title}</p>
+                            <p className="mt-1 text-[10px] text-gray-400">{c.yearMonth}</p>
+                          </div>
+                          {c.isFullyPaid && !c.hasUnpaidExpense ? (
+                            <span className="shrink-0 rounded-full bg-muted-teal/10 px-2 py-0.5 text-[10px] font-medium text-muted-teal">
+                              공헌이익 집계중
+                            </span>
+                          ) : (
+                            <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                              {c.hasUnpaidExpense ? "미지급 지출 있음" : "입금 진행중"}
+                            </span>
+                          )}
+                        </div>
                         <div className="grid grid-cols-2 gap-y-1.5 text-[11px]">
                           <span className="text-gray-400">계약금</span>
                           <span className="text-right tabular-nums text-gray-600">{formatCurrency(c.contractAmount)}</span>

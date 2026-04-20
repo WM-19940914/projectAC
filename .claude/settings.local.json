@@ -4,7 +4,9 @@
       "mcp__supabase__list_tables",
       "mcp__supabase__execute_sql",
       "mcp__supabase__list_projects",
-      "mcp__supabase__apply_migration"
+      "mcp__supabase__apply_migration",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:community.openai.com)"
     ]
   }
 }

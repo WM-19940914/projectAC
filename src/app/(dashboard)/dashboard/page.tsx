@@ -3,7 +3,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { DashboardClient } from "./dashboard-client"
-import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, MonthlyProgressRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo, DashboardKPI, CustomerVolume } from "./dashboard-types"
+import type { SettlementAlert, ExpenseAlert, TaxInvoiceAlert, MonthlyRevenue, MonthlyProgressRevenue, RevenueDetail, ContractContribution, DashboardRequestInfo, DashboardKPI, CustomerVolume, CustomerContractDetail } from "./dashboard-types"
 
 // 캐시 비활성화 — 항상 최신 데이터
 export const dynamic = "force-dynamic"
@@ -716,49 +716,44 @@ export default async function DashboardPage() {
     if (cid) contractHasUnpaidExpense.add(cid)
   }
 
-  // 계약별 공헌이익 항목 생성 (end_date 기준 월 필터링)
-  // 모든 금액 VAT별도 (공급가액 기준) — 칸반보드 수익성 요약과 동일
-  // 조건: 입금 100% 완료 + 미지급 지출 0건인 계약만 표시
-  const contractContributions: ContractContribution[] = contracts
+  const customerContractDetails: CustomerContractDetail[] = contracts
     .filter(c => (Number(c.contract_amount) || 0) > 0)
     .map(c => {
-      const contractAmount = Math.round(Number(c.contract_amount) || 0) // 공급가액 (VAT별도)
-      // 입금 합계: payment_entries 합산 후 VAT 역산 (입금은 VAT포함이므로 /1.1)
+      const contractAmount = Math.round(Number(c.contract_amount) || 0)
       const meta = metaMap.get(c.id)
       const totalPaidVatIncl = getContractTotalPaid(
         (meta?.settlement_status_map as Record<string, unknown>) || null
       )
-      const totalPaid = Math.round(totalPaidVatIncl / 1.1) // VAT별도로 변환
-      // 지출 합계 (VAT별도)
+      const totalPaid = Math.round(totalPaidVatIncl / 1.1)
       const expense = contractExpenseMap.get(c.id) || 0
       const profit = totalPaid - expense
-      // 장려금: 확정 견적서 있으면 견적서 장려금, 없으면 수동 장려금 (VAT별도)
       const req = contractRequestMap.get(c.id)
-      const confirmedQuoteId = (req as Record<string, unknown> | undefined)?.confirmed_quote_id as string | null
-      const manualIncentiveRaw = Number((req as Record<string, unknown> | undefined)?.manual_incentive) || 0
-      // 수동 장려금은 이미 VAT별도 값 → 그대로 사용
-      const incentiveTotal = confirmedQuoteId
-        ? (quoteIncentiveMap.get(confirmedQuoteId) || 0)
-        : manualIncentiveRaw
-      // end_date(계약 종료일) 기준, 없으면 created_at 폴백
-      const dateStr = (c as Record<string, unknown>).end_date as string || c.created_at
-      const d = dateStr ? new Date(dateStr) : new Date(c.created_at!)
-      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-      // 제목: 계약 title → 연결된 의뢰 title → 기본값
-      const title = (c as Record<string, unknown>).title as string || req?.title || "제목 없음"
-      // 연결된 의뢰 ID: contract의 request_id 또는 역매핑
-      const requestId = c.request_id || req?.id || null
-      // 고객명: 연결된 의뢰의 customer에서 추출
+      const customerId = req?.customer_id || null
       const customerName = req
         ? (Array.isArray(req.customer)
             ? (req.customer[0] as { company_name: string } | undefined)?.company_name || ""
             : (req.customer as { company_name: string } | null)?.company_name || "")
         : ""
+      if (!customerId || !customerName) return null
+
+      const confirmedQuoteId = (req as Record<string, unknown> | undefined)?.confirmed_quote_id as string | null
+      const manualIncentiveRaw = Number((req as Record<string, unknown> | undefined)?.manual_incentive) || 0
+      const incentiveTotal = confirmedQuoteId
+        ? (quoteIncentiveMap.get(confirmedQuoteId) || 0)
+        : manualIncentiveRaw
+      const dateStr = (c as Record<string, unknown>).end_date as string || c.created_at
+      const d = dateStr ? new Date(dateStr) : new Date(c.created_at!)
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      const title = (c as Record<string, unknown>).title as string || req?.title || "제목 없음"
+      const requestId = c.request_id || req?.id || null
+      const contractAmountVatIncl = contractAmount + Math.floor(contractAmount * 0.1)
+
       return {
         contractId: c.id,
         requestId,
-        title,
+        customerId,
         customerName,
+        title,
         contractAmount,
         totalPaid,
         totalExpense: expense,
@@ -766,22 +761,18 @@ export default async function DashboardPage() {
         netProfit: profit,
         profitRate: contractAmount > 0 ? (profit / contractAmount) * 100 : 0,
         yearMonth: ym,
-        // 완료 판정용 (필터링에 사용)
-        _totalPaidVatIncl: totalPaidVatIncl,
-        _contractAmountVatIncl: contractAmount + Math.floor(contractAmount * 0.1),
-        _hasUnpaidExpense: contractHasUnpaidExpense.has(c.id),
+        isFullyPaid: totalPaidVatIncl >= contractAmountVatIncl,
+        hasUnpaidExpense: contractHasUnpaidExpense.has(c.id),
       }
     })
-    // 완료된 계약만 표시: 입금 100% + 미지급 지출 0건
-    .filter(c => {
-      // 입금이 예정 총액 이상인지 (VAT포함 기준으로 비교)
-      const fullyPaid = c._totalPaidVatIncl >= c._contractAmountVatIncl
-      // 미지급 지출이 없는지
-      const noUnpaid = !c._hasUnpaidExpense
-      return fullyPaid && noUnpaid
-    })
-    // 내부 필터용 필드 제거
-    .map(({ _totalPaidVatIncl, _contractAmountVatIncl, _hasUnpaidExpense, ...rest }) => rest)
+    .filter((c): c is CustomerContractDetail => c !== null)
+
+  // 계약별 공헌이익 항목 생성 (end_date 기준 월 필터링)
+  // 모든 금액 VAT별도 (공급가액 기준) — 칸반보드 수익성 요약과 동일
+  // 조건: 입금 100% 완료 + 미지급 지출 0건인 계약만 표시
+  const contractContributions: ContractContribution[] = customerContractDetails
+    .filter(c => c.isFullyPaid && !c.hasUnpaidExpense)
+    .map(({ customerId, isFullyPaid, hasUnpaidExpense, ...rest }) => rest)
 
   // ----- KPI 계산 -----
 
@@ -933,6 +924,7 @@ export default async function DashboardPage() {
       currentYear={currentYear}
       currentMonth={currentMonth}
       contractContributions={contractContributions}
+      customerContractDetails={customerContractDetails}
       requestInfoMap={requestInfoMap}
       initialYear={currentYear}
       initialMonth={currentMonth}

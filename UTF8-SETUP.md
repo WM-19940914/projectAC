@@ -81,6 +81,9 @@ X-Charset: UTF-8
 }
 ```
 
+- 프로젝트 기본 터미널은 `PowerShell UTF-8` 프로필을 사용하며, `-NoProfile`로 사용자 PowerShell 프로필 실행을 우회함
+- 실행 정책 때문에 프로필 로드가 막히는 환경에서도 UTF-8 콘솔 초기화가 바로 적용됨
+
 **Git**: [.gitattributes](.gitattributes)
 ```
 *.ts text eol=lf charset=UTF-8
@@ -176,3 +179,14 @@ SELECT repair_broken_korean_data();
 ```
 Content-Type: application/json; charset=utf-8
 ```
+
+### 문제: PowerShell에서만 한글이 깨짐
+→ Windows PowerShell 5는 프로필이 실행되지 않거나 `Get-Content`가 BOM 없는 UTF-8 파일을 ANSI로 읽으면 한글이 깨질 수 있습니다.
+
+다음 중 하나로 확인하세요:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/enable-utf8.ps1
+Get-Content -Encoding utf8 UTF8-SETUP.md
+```
+
+지속 적용이 필요하면 사용자 PowerShell 프로필에 `scripts/enable-utf8.ps1` 내용을 넣고, 필요시 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`로 프로필 실행을 허용합니다.

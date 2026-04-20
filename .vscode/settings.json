@@ -7,6 +7,7 @@
     "PowerShell UTF-8": {
       "source": "PowerShell",
       "args": [
+        "-NoProfile",
         "-NoExit",
         "-Command",
         "[Console]::InputEncoding = [System.Text.UTF8Encoding]::new(); [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); chcp 65001 > $null"

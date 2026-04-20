@@ -118,3 +118,21 @@ export interface ContractContribution {
   profitRate: number       // 이익률 % = 순이익 / 계약금액(VAT별도)
   yearMonth: string        // "2026-01" 형태 — 계약 종료일(end_date) 기준
 }
+
+// 고객 상세 패널용 계약 목록
+export interface CustomerContractDetail {
+  contractId: string
+  requestId: string | null
+  customerId: string
+  customerName: string
+  title: string
+  contractAmount: number
+  totalPaid: number
+  totalExpense: number
+  incentiveTotal: number
+  netProfit: number
+  profitRate: number
+  yearMonth: string
+  isFullyPaid: boolean
+  hasUnpaidExpense: boolean
+}
